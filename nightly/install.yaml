@@ -6957,10 +6957,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260812-8198a880573c
+          value: nightly-20260815-ec50a6057af4
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:52214641f18ee4e95c1b26aa9817d94b4dfb8ee80aeef6ee4c89a9941052e3e3
+        image: ghcr.io/dc-tec/openbao-operator@sha256:b7559f3cfe36925a0e40521acb202e65f1df5f99ce66d8c7326e9d03a286b99b
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7075,8 +7075,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260812-8198a880573c
-        image: ghcr.io/dc-tec/openbao-operator@sha256:52214641f18ee4e95c1b26aa9817d94b4dfb8ee80aeef6ee4c89a9941052e3e3
+          value: nightly-20260815-ec50a6057af4
+        image: ghcr.io/dc-tec/openbao-operator@sha256:b7559f3cfe36925a0e40521acb202e65f1df5f99ce66d8c7326e9d03a286b99b
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7246,6 +7246,8 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  annotations:
+    openbao.org/admission-policy-fingerprint: sha256:da94c35652f641eb4a7767be72ecaeeb0c1cfbf8f82bb17e0ed394a0e1124109
   name: openbao-operator-openbao-lock-managed-resource-mutations
 spec:
   failurePolicy: Fail
@@ -7386,10 +7388,10 @@ spec:
       request.operation == "DELETE")) || (variables.is_statefulset_controller && request.resource.resource
       == "persistentvolumeclaims" && request.operation == "CREATE") || variables.is_storage_pvc_binding_update
       || (variables.is_kube_system_controller && variables.is_endpoints_controller_request)
-      || variables.is_kube_system_service_metadata_update || variables.is_cert_manager_secret_request
-      || (variables.is_pod_request && variables.is_kubelet_node && request.operation
-      == "DELETE") || variables.is_service_registration_label_update || variables.is_kube_system_pod_finalizer_update
-      || variables.is_kube_system_job_finalizer_update || variables.maintenance_authorized'
+      || variables.is_kube_system_service_metadata_update || (variables.is_pod_request
+      && variables.is_kubelet_node && request.operation == "DELETE") || variables.is_service_registration_label_update
+      || variables.is_kube_system_pod_finalizer_update || variables.is_kube_system_job_finalizer_update
+      || variables.maintenance_authorized'
     message: Direct modification of OpenBao-managed resources is prohibited; modify
       the parent OpenBaoCluster/OpenBaoTenant instead.
   variables:
@@ -7480,10 +7482,6 @@ spec:
     name: is_kube_system_controller
   - expression: request.resource.resource in ["endpoints", "endpointslices"]
     name: is_endpoints_controller_request
-  - expression: request.userInfo.username.startsWith("system:serviceaccount:cert-manager:")
-    name: is_cert_manager
-  - expression: variables.is_cert_manager && request.resource.resource == "secrets"
-    name: is_cert_manager_secret_request
   - expression: request.kind.group == "" && request.kind.kind == "Pod"
     name: is_pod_request
   - expression: request.kind.group == "batch" && request.kind.kind == "Job"
@@ -8652,6 +8650,8 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  annotations:
+    openbao.org/admission-policy-fingerprint: sha256:828902329ac47bb74fa1ef8ab7f92d80e1f16b3e2d088b8e585d2dd77b9fd6c1
   name: openbao-operator-openbao-validate-openbaocluster
 spec:
   failurePolicy: Fail
@@ -8686,6 +8686,31 @@ spec:
       || size(object.spec.unseal.transit.token) == 0'
     message: Hardened profile does not allow spec.unseal.transit.token; use spec.unseal.credentialsSecretRef
       instead.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.unseal) || !has(object.spec.unseal.awskms) || !has(object.spec.unseal.awskms.secretKey)
+      || size(object.spec.unseal.awskms.secretKey) == 0'
+    message: Hardened profile does not allow spec.unseal.awskms.secretKey; use spec.unseal.credentialsSecretRef
+      or workload identity instead.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.unseal) || !has(object.spec.unseal.awskms) || !has(object.spec.unseal.awskms.sessionToken)
+      || size(object.spec.unseal.awskms.sessionToken) == 0'
+    message: Hardened profile does not allow spec.unseal.awskms.sessionToken; use
+      spec.unseal.credentialsSecretRef or workload identity instead.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.unseal) || !has(object.spec.unseal.azureKeyVault) || !has(object.spec.unseal.azureKeyVault.clientSecret)
+      || size(object.spec.unseal.azureKeyVault.clientSecret) == 0'
+    message: Hardened profile does not allow spec.unseal.azureKeyVault.clientSecret;
+      use spec.unseal.credentialsSecretRef or managed identity instead.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.unseal) || !has(object.spec.unseal.pkcs11) || !has(object.spec.unseal.pkcs11.pin)
+      || size(object.spec.unseal.pkcs11.pin) == 0'
+    message: Hardened profile does not allow spec.unseal.pkcs11.pin; use spec.unseal.credentialsSecretRef
+      instead.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.unseal) || !has(object.spec.unseal.kms) || !has(object.spec.unseal.kms.config)
+      || size(object.spec.unseal.kms.config) == 0'
+    message: Hardened profile does not allow non-empty spec.unseal.kms.config; use
+      spec.unseal.credentialsSecretRef instead.
   - expression: '!has(object.spec.unseal) || !has(object.spec.unseal.transit) || !has(object.spec.unseal.transit.address)
       || object.spec.unseal.transit.address.startsWith("https://")'
     message: Transit unseal address must use HTTPS.
