@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +15,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -109,8 +109,15 @@ func (m *Manager) cleanupStepDownJobForRetry(ctx context.Context, logger logr.Lo
 	jobName := upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, targetPod, "", "")
 	jobKey := types.NamespacedName{Namespace: cluster.Namespace, Name: jobName}
 
-	job := &batchv1.Job{}
-	if err := m.client.Get(ctx, jobKey, job); err != nil {
+	job, err := opslifecycle.ReadManagedJob(
+		ctx,
+		m.jobReader(),
+		jobKey,
+		cluster,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+		"delete stale step-down",
+	)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

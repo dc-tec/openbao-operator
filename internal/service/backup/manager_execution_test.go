@@ -35,9 +35,7 @@ func TestExecuteAndProcessBackup_FailedCurrentJobSkipsRetention(t *testing.T) {
 
 	jobName := backupJobName(cluster, scheduledTime)
 	failedJob := newBackupJobForCluster(cluster, jobName, scheduledTime)
-	failedJob.Annotations = map[string]string{
-		"openbao.org/backup-key": "backups/default/retention-cluster/2025-01-02T03-00-00Z-partial.snap",
-	}
+	failedJob.Annotations["openbao.org/backup-key"] = "backups/default/retention-cluster/2025-01-02T03-00-00Z-partial.snap"
 	failedJob.Status = batchv1.JobStatus{Failed: 1}
 	credentials := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "backup-creds", Namespace: cluster.Namespace},
@@ -145,7 +143,7 @@ func TestCheckBackupDue_RetriesTransientLockReleaseFailure(t *testing.T) {
 
 	jobName := backupJobName(cluster, completedAt)
 	succeededJob := newBackupJobForCluster(cluster, jobName, completedAt)
-	succeededJob.Annotations = map[string]string{"openbao.org/backup-key": backupKey}
+	succeededJob.Annotations["openbao.org/backup-key"] = backupKey
 	succeededJob.Status = batchv1.JobStatus{Succeeded: 1}
 
 	k8sClient := newTestClient(t, cluster, succeededJob)
@@ -205,9 +203,7 @@ func TestReconcile_ProcessesOwnedBackupBeforePendingOperations(t *testing.T) {
 
 	completedAt := time.Now().UTC().Add(-time.Minute)
 	job := newBackupJobForCluster(cluster, "backup-before-upgrade-complete", completedAt)
-	job.Annotations = map[string]string{
-		"openbao.org/backup-key": "backups/default/backup-before-upgrade/complete.snap",
-	}
+	job.Annotations["openbao.org/backup-key"] = "backups/default/backup-before-upgrade/complete.snap"
 	job.Status = batchv1.JobStatus{Succeeded: 1}
 	restore := &openbaov1alpha1.OpenBaoRestore{
 		ObjectMeta: metav1.ObjectMeta{
@@ -283,9 +279,7 @@ func TestReconcile_ProcessesOwnedTerminalJobFromSingleObservation(t *testing.T) 
 		Holder:    backupOperationLockHolder,
 	}
 	job := newBackupJobForCluster(cluster, "terminal-list-race-complete", time.Now().UTC().Add(-time.Minute))
-	job.Annotations = map[string]string{
-		"openbao.org/backup-key": "backups/default/terminal-list-race/complete.snap",
-	}
+	job.Annotations["openbao.org/backup-key"] = "backups/default/terminal-list-race/complete.snap"
 	job.Status = batchv1.JobStatus{Succeeded: 1}
 
 	k8sClient := newTestClient(t, cluster, job)
@@ -328,9 +322,7 @@ func TestReconcile_OwnedBackupClearsCrashRecoveredManualTrigger(t *testing.T) {
 		Holder:    backupOperationLockHolder,
 	}
 	job := newBackupJobForCluster(cluster, "manual-crash-recovery-complete", time.Now().UTC().Add(-time.Minute))
-	job.Annotations = map[string]string{
-		"openbao.org/backup-key": "backups/default/manual-crash-recovery/complete.snap",
-	}
+	job.Annotations["openbao.org/backup-key"] = "backups/default/manual-crash-recovery/complete.snap"
 	job.Status = batchv1.JobStatus{Succeeded: 1}
 
 	k8sClient := newTestClient(t, cluster, job)
@@ -373,9 +365,7 @@ func TestReconcile_AppliesRetentionOnceForNewSuccessfulJob(t *testing.T) {
 
 	completedAt := time.Now().UTC().Add(-time.Minute)
 	job := newBackupJobForCluster(cluster, "async-retention-complete", completedAt)
-	job.Annotations = map[string]string{
-		"openbao.org/backup-key": "backups/default/async-retention/complete.snap",
-	}
+	job.Annotations["openbao.org/backup-key"] = "backups/default/async-retention/complete.snap"
 	job.Status = batchv1.JobStatus{Succeeded: 1}
 	credentials := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "backup-creds", Namespace: cluster.Namespace},
@@ -440,7 +430,7 @@ func TestReconcile_DisabledBackupFinishesOwnedOperation(t *testing.T) {
 			objects := []client.Object{cluster}
 			if testCase.jobStatus != nil {
 				job := newBackupJobForCluster(cluster, "disabled-backup-complete", time.Now().UTC().Add(-time.Minute))
-				job.Annotations = map[string]string{"openbao.org/backup-key": testCase.wantLastKey}
+				job.Annotations["openbao.org/backup-key"] = testCase.wantLastKey
 				job.Status = *testCase.jobStatus
 				objects = append(objects, job)
 			}

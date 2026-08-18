@@ -13,12 +13,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
 
@@ -198,13 +198,23 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 		}
 
 		// Set OwnerReference for garbage collection
-		if err := controllerutil.SetControllerReference(cluster, job, m.scheme); err != nil {
-			return false, fmt.Errorf("failed to set owner reference on backup Job %s/%s: %w", cluster.Namespace, jobName, err)
+		if err := opslifecycle.PrepareManagedJobOwner(job, cluster, m.scheme); err != nil {
+			return false, fmt.Errorf("failed to prepare backup Job ownership %s/%s: %w", cluster.Namespace, jobName, err)
 		}
 
 		if err := m.client.Create(ctx, job); err != nil {
 			if apierrors.IsAlreadyExists(err) {
-				logger.V(1).Info("Backup Job already exists after create attempt", "job", jobName)
+				if _, readErr := opslifecycle.ReadManagedJob(
+					ctx,
+					m.reader,
+					types.NamespacedName{Namespace: cluster.Namespace, Name: jobName},
+					cluster,
+					openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+					"use existing backup",
+				); readErr != nil {
+					return false, fmt.Errorf("backup Job create collided with an untrusted existing Job: %w", readErr)
+				}
+				logger.V(1).Info("Backup Job already exists after create attempt; ownership verified", "job", jobName)
 				return true, nil
 			}
 			return false, fmt.Errorf("failed to create backup Job %s/%s: %w", cluster.Namespace, jobName, err)
@@ -221,6 +231,14 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 		}
 		m.emitNormalEvent(cluster, ReasonBackupJobCreated, "Created backup Job %s", jobName)
 		return true, nil
+	}
+	if err := opslifecycle.RequireManagedJobOwner(
+		"observe backup",
+		job,
+		cluster,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+	); err != nil {
+		return false, err
 	}
 
 	// Job exists - check its status
@@ -252,12 +270,10 @@ type backupJobProcessResult struct {
 
 // processBackupJobResult processes the result of a completed backup Job and updates cluster status.
 func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (backupJobProcessResult, error) {
-	job := &batchv1.Job{}
-
-	err := m.reader.Get(ctx, types.NamespacedName{
+	job, err := opslifecycle.ReadManagedJob(ctx, m.reader, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      jobName,
-	}, job)
+	}, cluster, openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"), "process backup")
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -278,12 +294,27 @@ func (m *Manager) processBackupJob(
 	if job == nil {
 		return backupJobProcessResult{}, nil
 	}
+	if err := opslifecycle.RequireManagedJobOwner(
+		"process backup",
+		job,
+		cluster,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+	); err != nil {
+		return backupJobProcessResult{}, err
+	}
 	jobName := job.Name
 	// Check Job status
 	if kube.JobSucceeded(job) {
 		// Job succeeded - extract result from Job annotations
 		// The backup key is stored in the Job annotation by the manager when creating the job
-		backupKey := job.Annotations["openbao.org/backup-key"]
+		backupKey := strings.TrimSpace(job.Annotations["openbao.org/backup-key"])
+		if backupKey == "" {
+			return backupJobProcessResult{}, fmt.Errorf(
+				"refusing to process successful backup Job %s/%s without openbao.org/backup-key",
+				job.Namespace,
+				job.Name,
+			)
+		}
 
 		// Check if we've already processed this specific job success
 		// to avoid updating status on every reconcile

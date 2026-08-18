@@ -164,12 +164,12 @@ func TestPrepareFailedUpgradeRetry_EmitsRetryEvents(t *testing.T) {
 	}
 
 	targetPod := fmt.Sprintf("%s-%d", cluster.Name, cluster.Status.Upgrade.CurrentPartition-1)
-	staleJob := &batchv1.Job{
+	staleJob := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, targetPod, "", ""),
 			Namespace: cluster.Namespace,
 		},
-	}
+	}, cluster)
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.Name,
@@ -330,7 +330,7 @@ func TestHandlePreUpgradeSnapshot_EmitsSnapshotEvents(t *testing.T) {
 			},
 		}
 		jobName := (&Manager{}).backupJobName(cluster)
-		job := &batchv1.Job{
+		job := managedRollingJob(&batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      jobName,
 				Namespace: cluster.Namespace,
@@ -345,7 +345,7 @@ func TestHandlePreUpgradeSnapshot_EmitsSnapshotEvents(t *testing.T) {
 			Status: batchv1.JobStatus{
 				Succeeded: 1,
 			},
-		}
+		}, cluster)
 
 		recorder := events.NewFakeRecorder(10)
 		k8sClient := fake.NewClientBuilder().

@@ -13,6 +13,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 )
 
 func (m *Manager) syncBackupMetrics(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics) error {
@@ -77,7 +78,7 @@ func (m *Manager) collectBackupJobMetricsSnapshot(ctx context.Context, cluster *
 		constants.LabelOpenBaoComponent: ComponentBackup,
 	})
 
-	if err := m.client.List(ctx, jobList,
+	if err := m.reader.List(ctx, jobList,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabelsSelector{Selector: labelSelector},
 	); err != nil {
@@ -87,6 +88,14 @@ func (m *Manager) collectBackupJobMetricsSnapshot(ctx context.Context, cluster *
 	var snapshot backupJobMetricsSnapshot
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
+		if err := opslifecycle.RequireManagedJobOwner(
+			"collect backup metrics from",
+			job,
+			cluster,
+			openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+		); err != nil {
+			return backupJobMetricsSnapshot{}, err
+		}
 
 		switch {
 		case kube.JobSucceeded(job):

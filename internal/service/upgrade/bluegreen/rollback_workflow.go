@@ -26,6 +26,7 @@ func (m *Manager) ensureRollbackExecutorJob(
 	result, err := upgrade.EnsureExecutorJob(
 		ctx,
 		m.client,
+		m.reader,
 		m.scheme,
 		logger,
 		cluster,

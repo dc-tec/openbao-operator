@@ -79,6 +79,13 @@ func (m *Manager) WithReader(reader client.Reader) *Manager {
 	return m
 }
 
+func (m *Manager) jobReader() client.Reader {
+	if m.reader != nil {
+		return m.reader
+	}
+	return m.client
+}
+
 // WithAdminOpsStatusMutator configures the adminops-plane status persistence hook.
 func (m *Manager) WithAdminOpsStatusMutator(mutator adminOpsStatusMutator) *Manager {
 	if mutator != nil {

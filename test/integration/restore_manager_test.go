@@ -603,7 +603,7 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 		t.Fatalf("expected restore phase Running before failed job processing, got %s", latest.Status.Phase)
 	}
 
-	createRestoreJobWithStatus(t, namespace, restore.RestoreJobNamePrefix+restoreObj.Name, 0, 1)
+	createRestoreJobWithStatus(t, restoreObj, restore.RestoreJobNamePrefix+restoreObj.Name, 0, 1)
 
 	if _, err := mgr.Reconcile(ctx, logr.Discard(), latest); err != nil {
 		t.Fatalf("reconcile running with failed job: %v", err)
@@ -644,13 +644,35 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 	}
 }
 
-func createRestoreJobWithStatus(t *testing.T, namespace, name string, succeeded, failed int32) {
+func createRestoreJobWithStatus(
+	t *testing.T,
+	restoreObj *openbaov1alpha1.OpenBaoRestore,
+	name string,
+	succeeded, failed int32,
+) {
 	t.Helper()
+
+	owner := &openbaov1alpha1.OpenBaoRestore{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: restoreObj.Namespace,
+		Name:      restoreObj.Name,
+	}, owner); err != nil {
+		t.Fatalf("get OpenBaoRestore %q: %v", restoreObj.Name, err)
+	}
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: owner.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(
+					owner,
+					openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"),
+				),
+			},
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: string(owner.UID),
+			},
 		},
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
@@ -667,12 +689,13 @@ func createRestoreJobWithStatus(t *testing.T, namespace, name string, succeeded,
 			},
 		},
 	}
-	if err := k8sClient.Create(ctx, job); err != nil {
+	controllerClient := newControllerClient(t)
+	if err := controllerClient.Create(ctx, job); err != nil {
 		t.Fatalf("create restore job %q: %v", name, err)
 	}
 
 	latest := &batchv1.Job{}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, latest); err != nil {
+	if err := controllerClient.Get(ctx, types.NamespacedName{Namespace: owner.Namespace, Name: name}, latest); err != nil {
 		t.Fatalf("get restore job %q: %v", name, err)
 	}
 
@@ -680,7 +703,7 @@ func createRestoreJobWithStatus(t *testing.T, namespace, name string, succeeded,
 	latest.Status.Failed = failed
 	now := metav1.Now()
 	latest.Status.StartTime = &now
-	if err := k8sClient.Status().Update(ctx, latest); err != nil {
+	if err := controllerClient.Status().Update(ctx, latest); err != nil {
 		t.Fatalf("update restore job status %q: %v", name, err)
 	}
 }

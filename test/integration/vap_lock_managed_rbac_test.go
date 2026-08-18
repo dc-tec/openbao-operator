@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -229,6 +230,45 @@ func grantServiceAccountWriteAccess(t *testing.T, namespace, username string) {
 	}
 	if err := k8sClient.Create(ctx, binding); err != nil {
 		t.Fatalf("create serviceaccount write binding: %v", err)
+	}
+}
+
+func grantJobCreateAccess(t *testing.T, namespace, username string) {
+	t.Helper()
+
+	role := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "lifecycle-job-create",
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{{
+			APIGroups: []string{"batch"},
+			Resources: []string{"jobs"},
+			Verbs:     []string{"create"},
+		}},
+	}
+	if err := k8sClient.Create(ctx, role); err != nil {
+		t.Fatalf("create Job writer role: %v", err)
+	}
+
+	binding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "lifecycle-job-create-binding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{{
+			Kind:     "User",
+			Name:     username,
+			APIGroup: "rbac.authorization.k8s.io",
+		}},
+	}
+	if err := k8sClient.Create(ctx, binding); err != nil {
+		t.Fatalf("create Job writer binding: %v", err)
 	}
 }
 
@@ -556,6 +596,60 @@ func TestVAP_LockManagedRBAC_DeniesForgedServiceAccountOwnerUID(t *testing.T) {
 	}
 
 	t.Fatalf("expected VAP to deny forged ServiceAccount owner UID provenance")
+}
+
+func TestVAP_LockManagedRBAC_DeniesForgedLifecycleJobOwnerUID(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+	username := "lifecycle-job-creator"
+	grantJobCreateAccess(t, namespace, username)
+	cluster := createMinimalCluster(t, namespace, "lifecycle-owner-proof")
+	jobCreator := newImpersonatedClient(t, username)
+	ownerRef := *metav1.NewControllerRef(
+		cluster,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+	)
+
+	ownerReferenceOnly := newLifecycleCollisionJob(namespace, "owner-reference-only", ownerRef)
+	if err := jobCreator.Create(ctx, ownerReferenceOnly); err != nil {
+		t.Fatalf("create Job with owner reference only: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(ctx, ownerReferenceOnly)
+	})
+
+	forged := newLifecycleCollisionJob(namespace, "forged-owner-proof", ownerRef)
+	forged.Annotations = map[string]string{
+		constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
+	}
+	err := jobCreator.Create(ctx, forged)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "openbao.org/owner-uid annotation is reserved") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func newLifecycleCollisionJob(
+	namespace string,
+	name string,
+	ownerRef metav1.OwnerReference,
+) *batchv1.Job {
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            name,
+			Namespace:       namespace,
+			OwnerReferences: []metav1.OwnerReference{ownerRef},
+		},
+		Spec: batchv1.JobSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			Containers: []corev1.Container{{
+				Name:    "collision",
+				Image:   "example.invalid/collision:latest",
+				Command: []string{"true"},
+			}},
+		}}},
+	}
 }
 
 func TestVAP_LockManagedRBAC_AllowsStatefulSetControllerManagedPVC(t *testing.T) {

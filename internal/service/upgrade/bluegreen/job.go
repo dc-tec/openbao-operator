@@ -13,10 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -32,6 +32,7 @@ type buildJobFunc func(jobName string) (*batchv1.Job, error)
 func ensureJob(
 	ctx context.Context,
 	c client.Client,
+	reader client.Reader,
 	scheme *runtime.Scheme,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
@@ -42,6 +43,9 @@ func ensureJob(
 	if cluster == nil {
 		return nil, fmt.Errorf("cluster is required")
 	}
+	if reader == nil {
+		reader = c
+	}
 	if jobName == "" {
 		return nil, fmt.Errorf("jobName is required")
 	}
@@ -50,8 +54,15 @@ func ensureJob(
 	}
 
 	jobKey := types.NamespacedName{Namespace: cluster.Namespace, Name: jobName}
-	job := &batchv1.Job{}
-	if err := c.Get(ctx, jobKey, job); err != nil {
+	job, err := opslifecycle.ReadManagedJob(
+		ctx,
+		reader,
+		jobKey,
+		cluster,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+		"observe blue-green upgrade",
+	)
+	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to get Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
@@ -61,19 +72,26 @@ func ensureJob(
 			return nil, err
 		}
 
-		if err := controllerutil.SetControllerReference(cluster, built, scheme); err != nil {
-			return nil, fmt.Errorf("failed to set owner reference on Job %s/%s: %w", cluster.Namespace, jobName, err)
+		if err := opslifecycle.PrepareManagedJobOwner(built, cluster, scheme); err != nil {
+			return nil, fmt.Errorf("failed to prepare Job ownership %s/%s: %w", cluster.Namespace, jobName, err)
 		}
 
 		logger.Info("Creating Job", append([]any{"job", jobName}, createLogKeysAndValues...)...)
 		if err := c.Create(ctx, built); err != nil {
 			if apierrors.IsAlreadyExists(err) {
-				logger.V(1).Info("Job already exists after create attempt", "job", jobName)
-				return &JobResult{
-					Name:    jobName,
-					Exists:  true,
-					Running: true,
-				}, nil
+				existing, readErr := opslifecycle.ReadManagedJob(
+					ctx,
+					reader,
+					jobKey,
+					cluster,
+					openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+					"use existing blue-green upgrade",
+				)
+				if readErr != nil {
+					return nil, fmt.Errorf("job create collided with an untrusted existing Job: %w", readErr)
+				}
+				logger.V(1).Info("Job already exists after create attempt; ownership verified", "job", jobName)
+				return jobResultFromJob(existing), nil
 			}
 			return nil, fmt.Errorf("failed to create Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
@@ -85,12 +103,17 @@ func ensureJob(
 		}, nil
 	}
 
+	return jobResultFromJob(job), nil
+}
+
+func jobResultFromJob(job *batchv1.Job) *JobResult {
+	jobName := job.Name
 	if kube.JobSucceeded(job) {
 		return &JobResult{
 			Name:      jobName,
 			Exists:    true,
 			Succeeded: true,
-		}, nil
+		}
 	}
 
 	if kube.JobFailed(job) {
@@ -98,17 +121,17 @@ func ensureJob(
 			Name:   jobName,
 			Exists: true,
 			Failed: true,
-		}, nil
+		}
 	}
 
 	return &JobResult{
 		Name:    jobName,
 		Exists:  true,
 		Running: true,
-	}, nil
+	}
 }
 
-func getJobStatus(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*JobResult, error) {
+func getJobStatus(ctx context.Context, reader client.Reader, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (*JobResult, error) {
 	if cluster == nil {
 		return nil, fmt.Errorf("cluster is required")
 	}
@@ -117,21 +140,22 @@ func getJobStatus(ctx context.Context, c client.Client, cluster *openbaov1alpha1
 	}
 
 	jobKey := types.NamespacedName{Namespace: cluster.Namespace, Name: jobName}
-	job := &batchv1.Job{}
-	if err := c.Get(ctx, jobKey, job); err != nil {
+	job, err := opslifecycle.ReadManagedJob(
+		ctx,
+		reader,
+		jobKey,
+		cluster,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+		"observe blue-green upgrade",
+	)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return &JobResult{Name: jobName, Exists: false}, nil
 		}
 		return nil, fmt.Errorf("failed to get Job %s/%s: %w", cluster.Namespace, jobName, err)
 	}
 
-	if kube.JobSucceeded(job) {
-		return &JobResult{Name: jobName, Exists: true, Succeeded: true}, nil
-	}
-	if kube.JobFailed(job) {
-		return &JobResult{Name: jobName, Exists: true, Failed: true}, nil
-	}
-	return &JobResult{Name: jobName, Exists: true, Running: true}, nil
+	return jobResultFromJob(job), nil
 }
 
 func preUpgradeSnapshotJobName(cluster *openbaov1alpha1.OpenBaoCluster) string {

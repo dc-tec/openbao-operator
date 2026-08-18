@@ -690,7 +690,8 @@ suites:
       - tls-passthrough
       - rollback
       - chaos
-    coverage: []
+    coverage:
+      - lifecycle-job-owner-proof
     runtime:
       observed: 36m39.240s
       budget: 55m
@@ -800,7 +801,8 @@ suites:
       - read-replicas
       - read-replicas-restore
       - failure-injection
-    coverage: []
+    coverage:
+      - lifecycle-job-owner-proof
     runtime:
       observed: 9m32.724s
       budget: 15m

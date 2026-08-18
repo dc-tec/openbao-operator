@@ -17,7 +17,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935` | triggers late-phase rollback after promotion failures and recovers when auth is restored | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `rollback` |
 | `upgrade-strategies-recovers-a-failed-rolling-upgrade-after-5a3c4b87` | recovers a failed rolling upgrade after a retry request clears stale state | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `recovery` |
 | `upgrade-strategies-retries-a-failed-rolling-pre-upgrade-fade7ad8` | retries a failed rolling pre-upgrade snapshot before starting rollout | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `snapshot`, `recovery` |
-| `upgrade-rolling-happy-path` | performs rolling upgrade | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `e2e-anchor`, `read-replicas`, `read-replicas-rolling` |
+| `upgrade-rolling-happy-path` | performs rolling upgrade | active | `lifecycle-job-owner-proof` | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `e2e-anchor`, `read-replicas`, `read-replicas-rolling` |
 | `upgrade-bluegreen-safe-mode-break-glass-recovery` | acknowledges break glass and resumes rollback after the upgrade policy is repaired | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 | `upgrade-bluegreen-safe-mode-consensus-repair-failure` | enters safe mode when rollback consensus repair job fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 
@@ -212,7 +212,7 @@ State: `active`
 
 Generated fallback ID: `upgrade-strategies-performs-rolling-upgrade-2302a23d`
 
-Covers: _none_
+Covers: `lifecycle-job-owner-proof`
 
 Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `e2e-anchor`, `read-replicas`, `read-replicas-rolling`
 

@@ -13,6 +13,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
@@ -76,7 +77,7 @@ func withTestAdminOpsStatusPersistence(manager *Manager, k8sClient client.Client
 }
 
 func newBackupJobForCluster(cluster *openbaov1alpha1.OpenBaoCluster, name string, createdAt time.Time) *batchv1.Job {
-	return &batchv1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			Namespace:         cluster.Namespace,
@@ -85,6 +86,27 @@ func newBackupJobForCluster(cluster *openbaov1alpha1.OpenBaoCluster, name string
 			Labels:            backupLabels(cluster),
 		},
 	}
+	job.Labels[constants.LabelOpenBaoBackupType] = string(JobTypeScheduled)
+	return managedBackupJobForCluster(job, cluster)
+}
+
+func managedBackupJobForCluster(
+	job *batchv1.Job,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) *batchv1.Job {
+	controller := true
+	job.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: openbaov1alpha1.GroupVersion.String(),
+		Kind:       "OpenBaoCluster",
+		Name:       cluster.Name,
+		UID:        cluster.UID,
+		Controller: &controller,
+	}}
+	if job.Annotations == nil {
+		job.Annotations = map[string]string{}
+	}
+	job.Annotations[constants.AnnotationOpenBaoOwnerUID] = string(cluster.UID)
+	return job
 }
 
 func ptrToTime(value time.Time) *metav1.Time {

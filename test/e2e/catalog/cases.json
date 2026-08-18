@@ -2538,6 +2538,9 @@
     "id": "upgrade-rolling-happy-path",
     "generatedId": "upgrade-strategies-performs-rolling-upgrade-2302a23d",
     "caseLabel": "upgrade-rolling-happy-path",
+    "coverage": [
+      "lifecycle-job-owner-proof"
+    ],
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "performs rolling upgrade",
@@ -2554,6 +2557,7 @@
       "rolling",
       "e2e-anchor",
       "case:upgrade-rolling-happy-path",
+      "covers:lifecycle-job-owner-proof",
       "read-replicas",
       "read-replicas-rolling"
     ],
@@ -2999,6 +3003,9 @@
     "id": "dr-s3-restorable-backup",
     "generatedId": "backup-restore-creates-a-restorable-s3-backup-44a8d036",
     "caseLabel": "dr-s3-restorable-backup",
+    "coverage": [
+      "lifecycle-job-owner-proof"
+    ],
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
     "name": "creates a restorable S3 backup",
@@ -3016,6 +3023,7 @@
       "slow",
       "e2e-anchor",
       "case:dr-s3-restorable-backup",
+      "covers:lifecycle-job-owner-proof",
       "read-replicas",
       "read-replicas-restore"
     ],

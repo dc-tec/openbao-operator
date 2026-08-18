@@ -96,7 +96,7 @@ func TestProcessBackupJobResult_EmitsCompletedEvent(t *testing.T) {
 	cluster := newTestClusterWithBackup("backup-events-success", "default")
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
-	job := &batchv1.Job{
+	job := managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
@@ -107,7 +107,7 @@ func TestProcessBackupJobResult_EmitsCompletedEvent(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Succeeded: 1,
 		},
-	}
+	}, cluster)
 
 	recorder := events.NewFakeRecorder(10)
 	k8sClient := newTestClient(t, cluster, job)
@@ -140,7 +140,7 @@ func TestProcessBackupJobResult_EmitsFailedEvent(t *testing.T) {
 	cluster := newTestClusterWithBackup("backup-events-failed", "default")
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
-	job := &batchv1.Job{
+	job := managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
@@ -148,7 +148,7 @@ func TestProcessBackupJobResult_EmitsFailedEvent(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Failed: 1,
 		},
-	}
+	}, cluster)
 
 	recorder := events.NewFakeRecorder(10)
 	k8sClient := newTestClient(t, cluster, job)

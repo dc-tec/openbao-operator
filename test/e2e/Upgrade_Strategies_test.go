@@ -621,6 +621,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		It("performs rolling upgrade", Label(
 			"e2e-anchor",
 			"case:upgrade-rolling-happy-path",
+			"covers:lifecycle-job-owner-proof",
 			"read-replicas",
 			"read-replicas-rolling",
 		), func() {
@@ -872,6 +873,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				if job.Annotations[upgradeActionAnnotationKey] != string(upgrade.ExecutorActionRollingStepDownLeader) {
 					continue
 				}
+				Expect(validateManagedLifecycleJobOwnerProof(job, upgradeCluster)).To(Succeed())
 
 				Expect(job.Status.Failed).To(Equal(int32(0)), "step-down job should not fail: %s", job.Name)
 

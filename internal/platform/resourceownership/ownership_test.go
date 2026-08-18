@@ -3,6 +3,7 @@ package resourceownership
 import (
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -91,5 +92,101 @@ func TestSetOwnerUIDAnnotation(t *testing.T) {
 	}
 	if got := obj.Annotations[constants.AnnotationOpenBaoOwnerUID]; got != string(owner.UID) {
 		t.Fatalf("owner UID annotation = %q, want %q", got, owner.UID)
+	}
+}
+
+func TestHasManagedControllerOwnerProof(t *testing.T) {
+	owner := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "default", UID: types.UID("cluster-uid")},
+	}
+	ownerGVK := openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster")
+	controller := true
+	exactRef := metav1.OwnerReference{
+		APIVersion: ownerGVK.GroupVersion().String(),
+		Kind:       ownerGVK.Kind,
+		Name:       owner.Name,
+		UID:        owner.UID,
+		Controller: &controller,
+	}
+
+	tests := []struct {
+		name        string
+		namespace   string
+		ownerRef    *metav1.OwnerReference
+		annotations map[string]string
+		want        bool
+	}{
+		{
+			name:        "exact controller reference and reserved annotation",
+			namespace:   owner.Namespace,
+			ownerRef:    &exactRef,
+			annotations: map[string]string{constants.AnnotationOpenBaoOwnerUID: string(owner.UID)},
+			want:        true,
+		},
+		{
+			name:      "controller reference without reserved annotation",
+			namespace: owner.Namespace,
+			ownerRef:  &exactRef,
+		},
+		{
+			name:        "reserved annotation without controller reference",
+			namespace:   owner.Namespace,
+			annotations: map[string]string{constants.AnnotationOpenBaoOwnerUID: string(owner.UID)},
+		},
+		{
+			name:      "different namespace",
+			namespace: "other",
+			ownerRef:  &exactRef,
+			annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: string(owner.UID),
+			},
+		},
+		{
+			name:      "wrong controller kind",
+			namespace: owner.Namespace,
+			ownerRef: func() *metav1.OwnerReference {
+				ref := exactRef
+				ref.Kind = "OpenBaoRestore"
+				return &ref
+			}(),
+			annotations: map[string]string{constants.AnnotationOpenBaoOwnerUID: string(owner.UID)},
+		},
+		{
+			name:      "wrong controller name",
+			namespace: owner.Namespace,
+			ownerRef: func() *metav1.OwnerReference {
+				ref := exactRef
+				ref.Name = "other"
+				return &ref
+			}(),
+			annotations: map[string]string{constants.AnnotationOpenBaoOwnerUID: string(owner.UID)},
+		},
+		{
+			name:      "wrong controller UID",
+			namespace: owner.Namespace,
+			ownerRef: func() *metav1.OwnerReference {
+				ref := exactRef
+				ref.UID = "other-uid"
+				return &ref
+			}(),
+			annotations: map[string]string{constants.AnnotationOpenBaoOwnerUID: string(owner.UID)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{
+				Name:        "job",
+				Namespace:   tt.namespace,
+				Annotations: tt.annotations,
+			}}
+			if tt.ownerRef != nil {
+				job.OwnerReferences = []metav1.OwnerReference{*tt.ownerRef}
+			}
+
+			if got := HasManagedControllerOwnerProof(job, owner, ownerGVK); got != tt.want {
+				t.Fatalf("HasManagedControllerOwnerProof() = %t, want %t", got, tt.want)
+			}
+		})
 	}
 }

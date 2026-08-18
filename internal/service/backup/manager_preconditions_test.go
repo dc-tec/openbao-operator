@@ -26,6 +26,7 @@ func basePreconditionsCluster() *openbaov1alpha1.OpenBaoCluster {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "cluster-a",
 			Namespace: "tenant-a",
+			UID:       "cluster-a-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version: "2.4.4",
@@ -56,19 +57,20 @@ func backupJobForCluster(cluster *openbaov1alpha1.OpenBaoCluster, name string, p
 		labels[constants.LabelOpenBaoBackupType] = "pre-upgrade"
 	}
 
-	return &batchv1.Job{
+	return managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			Namespace:         cluster.Namespace,
 			Labels:            labels,
 			CreationTimestamp: metav1.NewTime(time.Now().UTC()),
 		},
-	}
+	}, cluster)
 }
 
 func newManagerWithClient(c client.Client) *Manager {
 	return &Manager{
 		client: c,
+		reader: c,
 		scheme: testScheme,
 	}
 }

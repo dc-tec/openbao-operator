@@ -42,7 +42,7 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 		return nil, err
 	}
 
-	return ensureJob(ctx, m.client, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
+	return ensureJob(ctx, m.client, m.reader, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
 		verifiedExecutorDigest, err := snapshothelpers.ResolvePreUpgradeSnapshotExecutorDigest(
 			ctx,
 			logger,

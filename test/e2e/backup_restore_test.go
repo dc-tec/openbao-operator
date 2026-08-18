@@ -159,6 +159,9 @@ func triggerManualBackup(ctx context.Context, c client.Client, namespace, cluste
 
 func waitForBackupJobCreated(ctx context.Context, c client.Client, namespace, clusterName string) {
 	Eventually(func(g Gomega) {
+		cluster := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespace}, cluster)).To(Succeed())
+
 		var jobs batchv1.JobList
 		err := c.List(ctx, &jobs, client.InNamespace(namespace), client.MatchingLabels{
 			constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
@@ -167,7 +170,44 @@ func waitForBackupJobCreated(ctx context.Context, c client.Client, namespace, cl
 		})
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(jobs.Items).ToNot(BeEmpty())
+		for i := range jobs.Items {
+			g.Expect(validateManagedLifecycleJobOwnerProof(&jobs.Items[i], cluster)).To(Succeed())
+		}
 	}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+}
+
+func validateManagedLifecycleJobOwnerProof(
+	job *batchv1.Job,
+	owner *openbaov1alpha1.OpenBaoCluster,
+) error {
+	if job == nil || owner == nil || owner.UID == "" {
+		return fmt.Errorf("job and owner with UID are required")
+	}
+	if got := job.Annotations[constants.AnnotationOpenBaoOwnerUID]; got != string(owner.UID) {
+		return fmt.Errorf("job %s/%s owner UID annotation = %q, want %q", job.Namespace, job.Name, got, owner.UID)
+	}
+	controllerRef := metav1.GetControllerOfNoCopy(job)
+	if controllerRef == nil {
+		return fmt.Errorf("job %s/%s has no controller owner reference", job.Namespace, job.Name)
+	}
+	if controllerRef.APIVersion != openbaov1alpha1.GroupVersion.String() ||
+		controllerRef.Kind != "OpenBaoCluster" ||
+		controllerRef.Name != owner.Name ||
+		controllerRef.UID != owner.UID {
+		return fmt.Errorf(
+			"job %s/%s controller owner = %s %s/%s with UID %q, want OpenBaoCluster %s/%s with UID %q",
+			job.Namespace,
+			job.Name,
+			controllerRef.Kind,
+			owner.Namespace,
+			controllerRef.Name,
+			controllerRef.UID,
+			owner.Namespace,
+			owner.Name,
+			owner.UID,
+		)
+	}
+	return nil
 }
 
 func waitForSuccessfulBackupJob(ctx context.Context, c client.Client, namespace, clusterName string) {
@@ -498,6 +538,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		It("creates a restorable S3 backup", Label(
 			"e2e-anchor",
 			"case:dr-s3-restorable-backup",
+			"covers:lifecycle-job-owner-proof",
 			"read-replicas",
 			"read-replicas-restore",
 		), func() {

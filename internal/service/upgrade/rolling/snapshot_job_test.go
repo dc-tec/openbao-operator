@@ -75,8 +75,30 @@ func newPreUpgradeSnapshotCluster() *openbaov1alpha1.OpenBaoCluster {
 	}
 }
 
-func newPreUpgradeSnapshotJob(status batchv1.JobStatus) *batchv1.Job {
-	return &batchv1.Job{
+func managedRollingJob(
+	job *batchv1.Job,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) *batchv1.Job {
+	if cluster.UID == "" {
+		cluster.UID = types.UID(cluster.Name + "-uid")
+	}
+	controller := true
+	job.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: openbaov1alpha1.GroupVersion.String(),
+		Kind:       "OpenBaoCluster",
+		Name:       cluster.Name,
+		UID:        cluster.UID,
+		Controller: &controller,
+	}}
+	if job.Annotations == nil {
+		job.Annotations = map[string]string{}
+	}
+	job.Annotations[constants.AnnotationOpenBaoOwnerUID] = string(cluster.UID)
+	return job
+}
+
+func newPreUpgradeSnapshotJob(cluster *openbaov1alpha1.OpenBaoCluster, status batchv1.JobStatus) *batchv1.Job {
+	return managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pre-upgrade-backup-test-cluster-gen0",
 			Namespace: "test-ns",
@@ -89,7 +111,7 @@ func newPreUpgradeSnapshotJob(status batchv1.JobStatus) *batchv1.Job {
 			},
 		},
 		Status: status,
-	}
+	}, cluster)
 }
 
 func newPreUpgradeSnapshotManager(cluster *openbaov1alpha1.OpenBaoCluster, objects ...client.Object) *Manager {
@@ -381,6 +403,9 @@ func TestHandlePreUpgradeSnapshot_CreateAlreadyExists(t *testing.T) {
 		WithInterceptorFuncs(interceptor.Funcs{
 			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 				if _, ok := obj.(*batchv1.Job); ok {
+					if err := c.Create(ctx, obj, opts...); err != nil {
+						return err
+					}
 					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
 				}
 				return c.Create(ctx, obj, opts...)
@@ -393,6 +418,69 @@ func TestHandlePreUpgradeSnapshot_CreateAlreadyExists(t *testing.T) {
 	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 	assert.NoError(t, err, "AlreadyExists on create should be treated as idempotent")
 	assert.False(t, complete, "snapshot should remain in-progress when create races")
+}
+
+func TestHandlePreUpgradeSnapshot_RejectsForeignSucceededJob(t *testing.T) {
+	cluster := newPreUpgradeSnapshotCluster()
+	scheme := runtime.NewScheme()
+	require.NoError(t, batchv1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, rbacv1.AddToScheme(scheme))
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	foreignJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      (&Manager{}).backupJobName(cluster),
+			Namespace: cluster.Namespace,
+		},
+		Status: batchv1.JobStatus{Succeeded: 1},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, foreignJob).
+		Build()
+	manager := NewManager(
+		k8sClient,
+		scheme,
+		backup.NewUpgradeStrategyRuntime(k8sClient, scheme),
+		portopenbao.ClientConfig{},
+		security.NewImageVerifier(testLogger(), k8sClient, nil),
+		"",
+	)
+
+	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+	assert.False(t, complete)
+	assert.ErrorContains(t, err, "requires managed controller owner OpenBaoCluster")
+}
+
+func TestDeletePreUpgradeBackupJob_RejectsAndPreservesForeignJob(t *testing.T) {
+	cluster := newPreUpgradeSnapshotCluster()
+	scheme := runtime.NewScheme()
+	require.NoError(t, batchv1.AddToScheme(scheme))
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	foreignJob := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{
+		Name:      (&Manager{}).backupJobName(cluster),
+		Namespace: cluster.Namespace,
+	}}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(foreignJob).
+		Build()
+	manager := NewManager(
+		k8sClient,
+		scheme,
+		backup.NewUpgradeStrategyRuntime(k8sClient, scheme),
+		portopenbao.ClientConfig{},
+		security.NewImageVerifier(testLogger(), k8sClient, nil),
+		"",
+	)
+
+	err := manager.deletePreUpgradeBackupJob(context.Background(), cluster, foreignJob.Name)
+	assert.ErrorContains(t, err, "requires managed controller owner OpenBaoCluster")
+
+	preserved := &batchv1.Job{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(foreignJob), preserved))
 }
 
 func TestHandlePreUpgradeSnapshot_CreatesJobWithOIDCDefaultRole(t *testing.T) {
@@ -543,7 +631,7 @@ func TestHandlePreUpgradeSnapshot_ExistingJobStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cluster := newPreUpgradeSnapshotCluster()
-			manager := newPreUpgradeSnapshotManager(cluster, newPreUpgradeSnapshotJob(tt.jobStatus))
+			manager := newPreUpgradeSnapshotManager(cluster, newPreUpgradeSnapshotJob(cluster, tt.jobStatus))
 
 			complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
 			assert.NoError(t, err)
@@ -590,7 +678,7 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 			// Exact name is required for strict lookup in findExistingPreUpgradeBackupJob.
 			name = "pre-upgrade-backup-test-cluster-gen0"
 		}
-		failedJobs = append(failedJobs, &batchv1.Job{
+		failedJobs = append(failedJobs, managedRollingJob(&batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: "test-ns",
@@ -607,7 +695,7 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 				Succeeded: 0,
 				Failed:    1,
 			},
-		})
+		}, cluster))
 	}
 
 	scheme := runtime.NewScheme()
@@ -664,7 +752,7 @@ func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
 	}
 
 	// Create single failed backup job - should trigger retry, not error
-	failedJob := &batchv1.Job{
+	failedJob := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pre-upgrade-backup-test-cluster-gen0",
 			Namespace: "test-ns",
@@ -681,7 +769,7 @@ func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
 			Succeeded: 0,
 			Failed:    1,
 		},
-	}
+	}, cluster)
 
 	scheme := runtime.NewScheme()
 	_ = batchv1.AddToScheme(scheme)
@@ -737,7 +825,7 @@ func TestHandlePreUpgradeSnapshot_IgnoresFailedJobsFromPreviousGenerations(t *te
 		},
 	}
 
-	currentFailedJob := &batchv1.Job{
+	currentFailedJob := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pre-upgrade-backup-test-cluster-gen7",
 			Namespace: "test-ns",
@@ -752,9 +840,9 @@ func TestHandlePreUpgradeSnapshot_IgnoresFailedJobsFromPreviousGenerations(t *te
 		Status: batchv1.JobStatus{
 			Failed: 1,
 		},
-	}
+	}, cluster)
 
-	staleFailedJob1 := &batchv1.Job{
+	staleFailedJob1 := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pre-upgrade-backup-test-cluster-gen6",
 			Namespace: "test-ns",
@@ -769,9 +857,9 @@ func TestHandlePreUpgradeSnapshot_IgnoresFailedJobsFromPreviousGenerations(t *te
 		Status: batchv1.JobStatus{
 			Failed: 1,
 		},
-	}
+	}, cluster)
 
-	staleFailedJob2 := &batchv1.Job{
+	staleFailedJob2 := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pre-upgrade-backup-test-cluster-gen5-attempt-1",
 			Namespace: "test-ns",
@@ -786,7 +874,7 @@ func TestHandlePreUpgradeSnapshot_IgnoresFailedJobsFromPreviousGenerations(t *te
 		Status: batchv1.JobStatus{
 			Failed: 1,
 		},
-	}
+	}, cluster)
 
 	scheme := runtime.NewScheme()
 	_ = batchv1.AddToScheme(scheme)
@@ -851,7 +939,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 	}
 
 	// Create a running backup job
-	runningJob := &batchv1.Job{
+	runningJob := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			// Name must match the expected format: pre-upgrade-backup-<cluster>-gen<generation>
 			// Cluster generation defaults to 0 in tests unless specified
@@ -870,7 +958,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 			Succeeded: 0,
 			Failed:    0,
 		},
-	}
+	}, cluster)
 
 	scheme := runtime.NewScheme()
 	_ = batchv1.AddToScheme(scheme)

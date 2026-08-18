@@ -114,6 +114,7 @@ func TestEnsurePrePromotionHookJob_ImageVerification(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
 					Namespace: "default",
+					UID:       "test-cluster-uid",
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					OperatorImageVerification: tt.config,
@@ -183,6 +184,7 @@ func TestEnsurePrePromotionHookJob_AppliesRestrictedPodSecurityDefaults(t *testi
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       "test-cluster-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			ImagePullSecrets: []corev1.LocalObjectReference{
