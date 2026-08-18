@@ -44,7 +44,8 @@ CLUSTER_RESOURCE="openbaocluster/operator-upgrade"
 PVC_RESOURCE="persistentvolumeclaim/data-operator-upgrade-0"
 TRANSIT_CLUSTER_RESOURCE="openbaocluster/operator-upgrade-transit"
 HARDENED_CLUSTER_RESOURCE="openbaocluster/operator-upgrade-hardened"
-DEFAULT_HARDENED_INIT_IMAGE="ghcr.io/dc-tec/openbao-init@sha256:e08e55a017a2594434dfa8f72860f4185bd4f82cebc3d09eb2e8310c819c4119"
+HARDENED_INIT_IMAGE_REPOSITORY="ghcr.io/dc-tec/openbao-init"
+DEFAULT_HARDENED_INIT_IMAGE="${HARDENED_INIT_IMAGE_REPOSITORY}@sha256:94fd43850f0e7ba9b101f513004668598823f319964abb94e56f5b8195fe25e4"
 HARDENED_INIT_IMAGE="${OPERATOR_UPGRADE_E2E_HARDENED_INIT_IMAGE:-${DEFAULT_HARDENED_INIT_IMAGE}}"
 
 require_command() {
@@ -53,6 +54,42 @@ require_command() {
     echo "${command_name} is required" >&2
     exit 1
   fi
+}
+
+verify_hardened_init_image() {
+  local baseline_ref="${HARDENED_INIT_IMAGE_REPOSITORY}:${FROM_VERSION}"
+  local baseline_digest=""
+  local expected_image=""
+
+  if [[ -n "${OPERATOR_UPGRADE_E2E_HARDENED_INIT_IMAGE:-}" ]]; then
+    if ! "${DOCKER_BIN}" buildx imagetools inspect "${HARDENED_INIT_IMAGE}" >/dev/null; then
+      echo "hardened upgrade helper does not resolve: ${HARDENED_INIT_IMAGE}" >&2
+      return 1
+    fi
+    echo "Verified overridden Hardened upgrade helper: ${HARDENED_INIT_IMAGE}"
+    return 0
+  fi
+
+  if ! baseline_digest="$(
+    "${DOCKER_BIN}" buildx imagetools inspect "${baseline_ref}" \
+      --format '{{json .Manifest.Digest}}' | tr -d '"'
+  )"; then
+    echo "failed to resolve baseline Hardened upgrade helper: ${baseline_ref}" >&2
+    return 1
+  fi
+  if ! [[ "${baseline_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "baseline Hardened upgrade helper returned an invalid digest: ${baseline_digest}" >&2
+    return 1
+  fi
+
+  expected_image="${HARDENED_INIT_IMAGE_REPOSITORY}@${baseline_digest}"
+  if [[ "${DEFAULT_HARDENED_INIT_IMAGE}" != "${expected_image}" ]]; then
+    echo "default Hardened upgrade helper does not match ${baseline_ref}" >&2
+    echo "expected ${expected_image}, got ${DEFAULT_HARDENED_INIT_IMAGE}" >&2
+    return 1
+  fi
+
+  echo "Verified baseline Hardened upgrade helper: ${DEFAULT_HARDENED_INIT_IMAGE}"
 }
 
 assert_equal() {
@@ -305,6 +342,7 @@ fi
 for command_name in "${KIND_BIN}" "${KUBECTL_BIN}" "${HELM_INSTALL_BIN}" "${HELM_BIN}" "${DOCKER_BIN}" jq python3; do
   require_command "${command_name}"
 done
+verify_hardened_init_image
 
 WORK_DIR="$(mktemp -d)"
 KUBECONFIG_PATH="${WORK_DIR}/kubeconfig"
