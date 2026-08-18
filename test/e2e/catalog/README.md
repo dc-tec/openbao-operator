@@ -14,7 +14,7 @@ Notes:
 - Files: `20`
 - Specs: `85`
 - Explicit case IDs: `36`
-- Coverage tags: `48`
+- Coverage tags: `49`
 
 ## Suites
 
@@ -49,6 +49,7 @@ Notes:
 | `operation-lock` | 3 |
 | `anti-tamper` | 2 |
 | `backup-owner-first` | 2 |
+| `lifecycle-job-owner-proof` | 2 |
 | `pvc-cleanup` | 2 |
 | `recoverability-secret-cleanup` | 2 |
 | `rolling-upgrade` | 2 |

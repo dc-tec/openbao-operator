@@ -16,6 +16,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
@@ -55,9 +56,17 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	jobName := upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
 	jobKey := types.NamespacedName{Namespace: cluster.Namespace, Name: jobName}
 
-	stepDownJob := &batchv1.Job{}
+	var stepDownJob *batchv1.Job
 	jobExists := true
-	if err := m.client.Get(ctx, jobKey, stepDownJob); err != nil {
+	stepDownJob, err := opslifecycle.ReadManagedJob(
+		ctx,
+		m.jobReader(),
+		jobKey,
+		cluster,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+		"observe rolling step-down",
+	)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			jobExists = false
 		} else {
@@ -91,6 +100,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	result, err := upgrade.EnsureExecutorJob(
 		ctx,
 		m.client,
+		m.jobReader(),
 		m.scheme,
 		logger,
 		cluster,

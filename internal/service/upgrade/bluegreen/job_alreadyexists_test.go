@@ -28,6 +28,7 @@ func TestEnsureJob_CreateAlreadyExists(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       "test-cluster-uid",
 		},
 	}
 
@@ -36,6 +37,9 @@ func TestEnsureJob_CreateAlreadyExists(t *testing.T) {
 		WithInterceptorFuncs(interceptor.Funcs{
 			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 				if _, ok := obj.(*batchv1.Job); ok {
+					if err := c.Create(ctx, obj, opts...); err != nil {
+						return err
+					}
 					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
 				}
 				return c.Create(ctx, obj, opts...)
@@ -46,6 +50,7 @@ func TestEnsureJob_CreateAlreadyExists(t *testing.T) {
 	jobName := "upgrade-test-job"
 	result, err := ensureJob(
 		context.Background(),
+		k8sClient,
 		k8sClient,
 		scheme,
 		logr.Discard(),
@@ -68,4 +73,27 @@ func TestEnsureJob_CreateAlreadyExists(t *testing.T) {
 	assert.True(t, result.Running)
 	assert.False(t, result.Succeeded)
 	assert.False(t, result.Failed)
+}
+
+func TestGetJobStatusRejectsForeignSucceededJob(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, batchv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{ObjectMeta: metav1.ObjectMeta{
+		Name:      "test-cluster",
+		Namespace: "default",
+		UID:       "test-cluster-uid",
+	}}
+	foreignJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "upgrade-test-job",
+			Namespace: cluster.Namespace,
+		},
+		Status: batchv1.JobStatus{Succeeded: 1},
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(foreignJob).Build()
+
+	result, err := getJobStatus(context.Background(), k8sClient, cluster, foreignJob.Name)
+	require.Nil(t, result)
+	assert.ErrorContains(t, err, "requires managed controller owner OpenBaoCluster")
 }

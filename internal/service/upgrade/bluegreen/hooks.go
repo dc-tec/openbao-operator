@@ -38,7 +38,7 @@ func (m *Manager) ensureValidationHookJob(
 	backoffLimit := int32(0)
 	ttlSeconds := ptr.To(int32(jobTTLSeconds))
 
-	return ensureJob(ctx, m.client, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
+	return ensureJob(ctx, m.client, m.reader, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
 		image := hook.Image
 		verifiedDigest, err := m.verifyOperatorImageDigest(
 			ctx,

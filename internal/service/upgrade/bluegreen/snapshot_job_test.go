@@ -356,6 +356,7 @@ func TestHandlePhaseIdle_RespectsTopLevelPreUpgradeSnapshot(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       "test-cluster-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.5.0",
@@ -384,12 +385,12 @@ func TestHandlePhaseIdle_RespectsTopLevelPreUpgradeSnapshot(t *testing.T) {
 
 	jobName := preUpgradeSnapshotJobName(cluster)
 	cluster.Status.BlueGreen.PreUpgradeSnapshotJobName = jobName
-	runningJob := &batchv1.Job{
+	runningJob := managedBlueGreenJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
 		},
-	}
+	}, cluster)
 	require.NoError(t, fakeClient.Create(context.Background(), runningJob))
 
 	outcome, err := mgr.handlePhaseIdle(context.Background(), testLogger(), cluster, "")

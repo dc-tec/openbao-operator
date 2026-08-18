@@ -56,7 +56,7 @@ func TestStepDownLeader_DoesNotTimeoutFromUpgradeStart(t *testing.T) {
 	}
 
 	jobName := upgrade.ExecutorJobName(name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
-	job := &batchv1.Job{
+	job := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              jobName,
 			Namespace:         ns,
@@ -65,7 +65,7 @@ func TestStepDownLeader_DoesNotTimeoutFromUpgradeStart(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Active: 1,
 		},
-	}
+	}, cluster)
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
 	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
@@ -108,7 +108,7 @@ func TestStepDownLeader_TimesOutBasedOnJobAge(t *testing.T) {
 	}
 
 	jobName := upgrade.ExecutorJobName(name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
-	job := &batchv1.Job{
+	job := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              jobName,
 			Namespace:         ns,
@@ -117,7 +117,7 @@ func TestStepDownLeader_TimesOutBasedOnJobAge(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Active: 1,
 		},
-	}
+	}, cluster)
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
 	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
@@ -169,7 +169,7 @@ func TestStepDownLeader_FailsWhenSucceededJobStillLeavesTargetAsLeader(t *testin
 	}
 
 	jobName := upgrade.ExecutorJobName(name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
-	job := &batchv1.Job{
+	job := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              jobName,
 			Namespace:         ns,
@@ -178,7 +178,7 @@ func TestStepDownLeader_FailsWhenSucceededJobStillLeavesTargetAsLeader(t *testin
 		Status: batchv1.JobStatus{
 			Succeeded: 1,
 		},
-	}
+	}, cluster)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -251,7 +251,7 @@ func TestStepDownLeader_VerifiesTransferViaAPIWhenLabelsLag(t *testing.T) {
 	}
 
 	jobName := upgrade.ExecutorJobName(name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
-	job := &batchv1.Job{
+	job := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              jobName,
 			Namespace:         ns,
@@ -260,7 +260,7 @@ func TestStepDownLeader_VerifiesTransferViaAPIWhenLabelsLag(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Succeeded: 1,
 		},
-	}
+	}, cluster)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

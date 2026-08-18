@@ -261,12 +261,12 @@ func TestPrepareFailedUpgradeRetry_WaitsForStatefulSetTemplateToMatchRetryTarget
 
 	targetPod := "test-cluster-1"
 	jobName := upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, targetPod, "", "")
-	staleJob := &batchv1.Job{
+	staleJob := managedRollingJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
 		},
-	}
+	}, cluster)
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cluster.Name,
@@ -706,12 +706,12 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			}
 
 			jobName := upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, targetPod, "", "")
-			staleJob := &batchv1.Job{
+			staleJob := managedRollingJob(&batchv1.Job{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      jobName,
 					Namespace: cluster.Namespace,
 				},
-			}
+			}, cluster)
 			sts := &appsv1.StatefulSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      cluster.Name,

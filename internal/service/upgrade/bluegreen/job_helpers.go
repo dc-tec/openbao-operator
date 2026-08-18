@@ -52,6 +52,7 @@ func (m *Manager) runExecutorJobStep(ctx context.Context, logger logr.Logger, cl
 	result, err := upgrade.EnsureExecutorJob(
 		ctx,
 		m.client,
+		m.reader,
 		m.scheme,
 		logger,
 		cluster,

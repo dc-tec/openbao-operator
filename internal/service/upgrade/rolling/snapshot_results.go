@@ -68,7 +68,7 @@ func (m *Manager) handleFailedPreUpgradeBackupJob(
 		"job", jobName,
 		"attempt", failedCount+1,
 		"maxRetries", maxRetries)
-	if err := m.deletePreUpgradeBackupJob(ctx, jobName, cluster.Namespace); err != nil {
+	if err := m.deletePreUpgradeBackupJob(ctx, cluster, jobName); err != nil {
 		return false, fmt.Errorf("failed to delete failed backup job %s: %w", jobName, err)
 	}
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -182,28 +181,20 @@ func (m *Manager) handleDeletion(ctx context.Context, logger logr.Logger, restor
 }
 
 func (m *Manager) deleteRestoreJob(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (bool, error) {
-	job := &batchv1.Job{}
 	jobKey := types.NamespacedName{Namespace: restore.Namespace, Name: restoreJobName(restore)}
-	if err := m.reader.Get(ctx, jobKey, job); err != nil {
+	job, err := opslifecycle.ReadManagedJob(
+		ctx,
+		m.reader,
+		jobKey,
+		restore,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"),
+		"delete restore",
+	)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return true, nil
 		}
 		return false, fmt.Errorf("failed to get restore Job during deletion: %w", err)
-	}
-	if !metav1.IsControlledBy(job, restore) {
-		controllerOwner := "none"
-		if ref := metav1.GetControllerOfNoCopy(job); ref != nil {
-			controllerOwner = fmt.Sprintf("%s %s with UID %q", ref.Kind, ref.Name, ref.UID)
-		}
-		return false, fmt.Errorf(
-			"refusing to delete restore Job %s/%s because it is not controlled by the current OpenBaoRestore %s/%s with UID %q; found controller owner %s; delete or rename the foreign Job, then retry restore deletion",
-			job.Namespace,
-			job.Name,
-			restore.Namespace,
-			restore.Name,
-			restore.UID,
-			controllerOwner,
-		)
 	}
 
 	if job.DeletionTimestamp.IsZero() {

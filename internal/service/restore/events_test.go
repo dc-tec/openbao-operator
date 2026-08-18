@@ -72,6 +72,7 @@ func newRestoreEventCluster() *openbaov1alpha1.OpenBaoCluster {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       "test-cluster-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Replicas: 3,
@@ -84,6 +85,7 @@ func newRestoreEventResource() *openbaov1alpha1.OpenBaoRestore {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "test-restore",
 			Namespace:       "default",
+			UID:             "test-restore-uid",
 			ResourceVersion: "1",
 		},
 		Spec: openbaov1alpha1.OpenBaoRestoreSpec{

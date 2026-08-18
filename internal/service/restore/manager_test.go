@@ -24,7 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
@@ -82,6 +81,28 @@ func setTestResourceVersion(obj metav1.Object) {
 	if obj.GetResourceVersion() == "" {
 		obj.SetResourceVersion("1")
 	}
+	if obj.GetUID() == "" {
+		obj.SetUID(types.UID(obj.GetName() + "-uid"))
+	}
+}
+
+func managedRestoreJobForRestore(
+	job *batchv1.Job,
+	restore *openbaov1alpha1.OpenBaoRestore,
+) *batchv1.Job {
+	controller := true
+	job.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: openbaov1alpha1.GroupVersion.String(),
+		Kind:       "OpenBaoRestore",
+		Name:       restore.Name,
+		UID:        restore.UID,
+		Controller: &controller,
+	}}
+	if job.Annotations == nil {
+		job.Annotations = map[string]string{}
+	}
+	job.Annotations[constants.AnnotationOpenBaoOwnerUID] = string(restore.UID)
+	return job
 }
 
 // TestRestoreJobName tests the deterministic job name generation.
@@ -826,6 +847,9 @@ func TestHandleRunning_RestoreJobAlreadyExistsDuringCreate(t *testing.T) {
 		WithInterceptorFuncs(interceptor.Funcs{
 			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 				if _, ok := obj.(*batchv1.Job); ok {
+					if err := c.Create(ctx, obj, opts...); err != nil {
+						return err
+					}
 					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
 				}
 				return c.Create(ctx, obj, opts...)
@@ -839,6 +863,48 @@ func TestHandleRunning_RestoreJobAlreadyExistsDuringCreate(t *testing.T) {
 	result, err := mgr.handleRunning(context.Background(), testLogger(), restore)
 	require.NoError(t, err)
 	assert.Equal(t, 10*time.Second, result.RequeueAfter)
+}
+
+func TestHandleRunning_RejectsForeignSucceededJob(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{ObjectMeta: metav1.ObjectMeta{
+		Name:      "test-cluster",
+		Namespace: "default",
+	}}
+	setTestResourceVersion(cluster)
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{Cluster: cluster.Name},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseRunning,
+		},
+	}
+	setTestResourceVersion(restore)
+	foreignJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      restoreJobName(restore),
+			Namespace: restore.Namespace,
+		},
+		Status: batchv1.JobStatus{Succeeded: 1},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore, foreignJob).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
+		Build()
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	_, err := mgr.handleRunning(context.Background(), testLogger(), restore)
+	require.ErrorContains(t, err, "requires managed controller owner OpenBaoRestore")
+	assert.Equal(t, openbaov1alpha1.RestorePhaseRunning, restore.Status.Phase)
+	assert.Nil(t, restore.Status.CompletionTime)
 }
 
 func TestHandleRunning_FailedJobSetsActionableMessage(t *testing.T) {
@@ -878,7 +944,7 @@ func TestHandleRunning_FailedJobSetsActionableMessage(t *testing.T) {
 	}
 	setTestResourceVersion(restore)
 
-	job := &batchv1.Job{
+	job := managedRestoreJobForRestore(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      restoreJobName(restore),
 			Namespace: "default",
@@ -893,7 +959,7 @@ func TestHandleRunning_FailedJobSetsActionableMessage(t *testing.T) {
 				},
 			},
 		},
-	}
+	}, restore)
 
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -963,7 +1029,7 @@ func TestHandleRunning_SucceededJobWaitsForSteadyReadReplicaRestore(t *testing.T
 	}
 	setTestResourceVersion(restore)
 
-	job := &batchv1.Job{
+	job := managedRestoreJobForRestore(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      restoreJobName(restore),
 			Namespace: "default",
@@ -971,7 +1037,7 @@ func TestHandleRunning_SucceededJobWaitsForSteadyReadReplicaRestore(t *testing.T
 		Status: batchv1.JobStatus{
 			Succeeded: 1,
 		},
-	}
+	}, restore)
 
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -1046,7 +1112,7 @@ func TestHandleRunning_SucceededJobCompletesAfterSteadyReadReplicaRestore(t *tes
 	}
 	setTestResourceVersion(restore)
 
-	job := &batchv1.Job{
+	job := managedRestoreJobForRestore(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      restoreJobName(restore),
 			Namespace: "default",
@@ -1054,7 +1120,7 @@ func TestHandleRunning_SucceededJobCompletesAfterSteadyReadReplicaRestore(t *tes
 		Status: batchv1.JobStatus{
 			Succeeded: 1,
 		},
-	}
+	}, restore)
 
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -1925,8 +1991,10 @@ func TestHandleDeletion_WaitsForRestoreJobBeforeLockRelease(t *testing.T) {
 		},
 	}
 	setTestResourceVersion(cluster)
-	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: restoreJobName(restore), Namespace: restore.Namespace}}
-	require.NoError(t, controllerutil.SetControllerReference(restore, job, scheme))
+	job := managedRestoreJobForRestore(
+		&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: restoreJobName(restore), Namespace: restore.Namespace}},
+		restore,
+	)
 
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -2011,8 +2079,7 @@ func TestHandleDeletion_RejectsForeignRestoreJob(t *testing.T) {
 
 	_, err := mgr.handleDeletion(context.Background(), testLogger(), restore)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "not controlled by the current OpenBaoRestore")
-	assert.ErrorContains(t, err, "delete or rename the foreign Job")
+	assert.ErrorContains(t, err, "requires managed controller owner OpenBaoRestore")
 
 	currentJob := &batchv1.Job{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(job), currentJob))

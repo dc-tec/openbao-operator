@@ -15,6 +15,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	snapshothelpers "github.com/dc-tec/openbao-operator/internal/service/upgrade/snapshot"
 )
 
@@ -22,12 +23,11 @@ import (
 // It returns the job name and classified state when present, or an empty name when no current-attempt Job exists.
 func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, snapshothelpers.JobState, error) {
 	expectedJobName := m.backupJobName(cluster)
-	job := &batchv1.Job{}
-
-	if err := m.client.Get(ctx, types.NamespacedName{
+	job, err := opslifecycle.ReadManagedJob(ctx, m.jobReader(), types.NamespacedName{
 		Name:      expectedJobName,
 		Namespace: cluster.Namespace,
-	}, job); err != nil {
+	}, cluster, openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"), "observe pre-upgrade backup")
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return "", snapshothelpers.JobStateNone, nil
 		}
@@ -55,7 +55,7 @@ func (m *Manager) countFailedPreUpgradeBackupJobs(ctx context.Context, cluster *
 		constants.LabelOpenBaoBackupType: constants.BackupTypePreUpgrade,
 	})
 
-	if err := m.client.List(ctx, jobList,
+	if err := m.jobReader().List(ctx, jobList,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabelsSelector{Selector: labelSelector},
 	); err != nil {
@@ -67,6 +67,14 @@ func (m *Manager) countFailedPreUpgradeBackupJobs(ctx context.Context, cluster *
 		job := &jobList.Items[i]
 		if !isCurrentAttemptPreUpgradeBackupJobName(job.Name, expectedJobName) {
 			continue
+		}
+		if err := opslifecycle.RequireManagedJobOwner(
+			"count failed pre-upgrade backup",
+			job,
+			cluster,
+			openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+		); err != nil {
+			return 0, err
 		}
 		if kube.JobFailed(job) {
 			count++
@@ -88,12 +96,16 @@ func isCurrentAttemptPreUpgradeBackupJobName(name string, expected string) bool 
 }
 
 // deletePreUpgradeBackupJob deletes a specific pre-upgrade backup job.
-func (m *Manager) deletePreUpgradeBackupJob(ctx context.Context, jobName, namespace string) error {
-	job := &batchv1.Job{}
-	if err := m.client.Get(ctx, types.NamespacedName{
+func (m *Manager) deletePreUpgradeBackupJob(
+	ctx context.Context,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	jobName string,
+) error {
+	job, err := opslifecycle.ReadManagedJob(ctx, m.jobReader(), types.NamespacedName{
 		Name:      jobName,
-		Namespace: namespace,
-	}, job); err != nil {
+		Namespace: cluster.Namespace,
+	}, cluster, openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"), "delete pre-upgrade backup")
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil // Already deleted
 		}

@@ -35,6 +35,7 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "default",
+			UID:       "test-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version: "2.4.4",
@@ -63,13 +64,13 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 	}
 
 	jobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
-	job := &batchv1.Job{
+	job := managedBlueGreenJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
 		},
 		Status: batchv1.JobStatus{Failed: 1},
-	}
+	}, cluster)
 
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -126,6 +127,7 @@ func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testin
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "default",
+			UID:       "test-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version: "2.4.4",
@@ -157,13 +159,13 @@ func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testin
 	}
 
 	jobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
-	job := &batchv1.Job{
+	job := managedBlueGreenJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
 		},
 		Status: batchv1.JobStatus{Failed: 1},
-	}
+	}, cluster)
 
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -216,6 +218,7 @@ func TestRunExecutorJob_FailedJob_TriggersAbortWhenMaxFailuresReached(t *testing
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "default",
+			UID:       "test-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version: "2.4.4",
@@ -244,13 +247,13 @@ func TestRunExecutorJob_FailedJob_TriggersAbortWhenMaxFailuresReached(t *testing
 	}
 
 	jobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
-	job := &batchv1.Job{
+	job := managedBlueGreenJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
 		},
 		Status: batchv1.JobStatus{Failed: 1},
-	}
+	}, cluster)
 
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).

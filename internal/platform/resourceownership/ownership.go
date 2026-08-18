@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -36,6 +38,34 @@ func HasControllerOwnerReference(obj client.Object, owner client.Object) bool {
 		}
 	}
 	return false
+}
+
+// HasManagedControllerOwnerProof reports whether obj has both the exact
+// controller owner reference and the reserved owner UID annotation for owner.
+// The annotation prevents namespace users from claiming operator ownership
+// when the managed-resource admission policy is enforced.
+func HasManagedControllerOwnerProof(
+	obj client.Object,
+	owner client.Object,
+	ownerGVK schema.GroupVersionKind,
+) bool {
+	if obj == nil || owner == nil || owner.GetUID() == "" || ownerGVK.Empty() {
+		return false
+	}
+	if obj.GetNamespace() != owner.GetNamespace() {
+		return false
+	}
+
+	ref := metav1.GetControllerOfNoCopy(obj)
+	if ref == nil ||
+		ref.APIVersion != ownerGVK.GroupVersion().String() ||
+		ref.Kind != ownerGVK.Kind ||
+		ref.Name != owner.GetName() ||
+		ref.UID != owner.GetUID() {
+		return false
+	}
+
+	return HasOwnerUIDAnnotation(obj, owner)
 }
 
 // HasOwnerUIDAnnotation reports whether obj carries the retained-resource
@@ -90,6 +120,42 @@ func RequireOwnerProof(action string, obj client.Object, owner client.Object) er
 		name = obj.GetName()
 	}
 	return fmt.Errorf("%s %s %s/%s requires OpenBaoCluster owner proof", strings.TrimSpace(action), kindOf(obj), namespace, name)
+}
+
+// RequireManagedControllerOwnerProof rejects an object that does not have the
+// exact managed controller ownership proof for owner.
+func RequireManagedControllerOwnerProof(
+	action string,
+	obj client.Object,
+	owner client.Object,
+	ownerGVK schema.GroupVersionKind,
+) error {
+	if HasManagedControllerOwnerProof(obj, owner, ownerGVK) {
+		return nil
+	}
+
+	namespace, name := "", ""
+	if obj != nil {
+		namespace = obj.GetNamespace()
+		name = obj.GetName()
+	}
+	ownerNamespace, ownerName, ownerUID := "", "", ""
+	if owner != nil {
+		ownerNamespace = owner.GetNamespace()
+		ownerName = owner.GetName()
+		ownerUID = string(owner.GetUID())
+	}
+	return fmt.Errorf(
+		"%s %s %s/%s requires managed controller owner %s %s/%s with UID %q",
+		strings.TrimSpace(action),
+		kindOf(obj),
+		namespace,
+		name,
+		ownerGVK.Kind,
+		ownerNamespace,
+		ownerName,
+		ownerUID,
+	)
 }
 
 func kindOf(obj client.Object) string {

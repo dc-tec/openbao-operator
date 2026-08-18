@@ -722,6 +722,9 @@ func TestEnsureBackupJob_CreateAlreadyExists(t *testing.T) {
 		WithInterceptorFuncs(interceptor.Funcs{
 			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 				if _, ok := obj.(*batchv1.Job); ok {
+					if err := c.Create(ctx, obj, opts...); err != nil {
+						return err
+					}
 					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
 				}
 				return c.Create(ctx, obj, opts...)
@@ -743,12 +746,59 @@ func TestEnsureBackupJob_CreateAlreadyExists(t *testing.T) {
 	}
 }
 
+func TestEnsureBackupJob_CreateAlreadyExistsRejectsForeignJob(t *testing.T) {
+	ctx := context.Background()
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+	jobName := backupJobName(cluster, scheduled)
+	foreignJob := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{
+		Name:      jobName,
+		Namespace: cluster.Namespace,
+	}}
+	firstJobRead := true
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster, foreignJob).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*batchv1.Job); ok && firstJobRead {
+					firstJobRead = false
+					return apierrors.NewNotFound(schema.GroupResource{Group: "batch", Resource: "jobs"}, key.Name)
+				}
+				return c.Get(ctx, key, obj, opts...)
+			},
+			Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
+				if _, ok := obj.(*batchv1.Job); ok {
+					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
+				}
+				return nil
+			},
+		}).
+		Build()
+	manager := NewManager(
+		k8sClient,
+		testScheme,
+		portopenbao.ClientConfig{},
+		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+		"",
+	)
+
+	created, err := manager.ensureBackupJob(ctx, logr.Discard(), cluster, jobName, scheduled)
+	assert.False(t, created)
+	assert.ErrorContains(t, err, "collided with an untrusted existing Job")
+	assert.ErrorContains(t, err, "requires managed controller owner OpenBaoCluster")
+
+	preserved := &batchv1.Job{}
+	assert.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(foreignJob), preserved))
+}
+
 func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
 
-	runningJob := &batchv1.Job{
+	runningJob := managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
@@ -756,7 +806,7 @@ func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Active: 1,
 		},
-	}
+	}, cluster)
 
 	ctx := context.Background()
 	logger := logr.Discard()
@@ -781,7 +831,7 @@ func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
 
-	completedJob := &batchv1.Job{
+	completedJob := managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
@@ -789,7 +839,7 @@ func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Succeeded: 1,
 		},
-	}
+	}, cluster)
 
 	ctx := context.Background()
 	logger := logr.Discard()
@@ -814,7 +864,7 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
 
-	failedJob := &batchv1.Job{
+	failedJob := managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
@@ -829,7 +879,7 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 				},
 			},
 		},
-	}
+	}, cluster)
 
 	ctx := context.Background()
 	logger := logr.Discard()
@@ -854,7 +904,7 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
 
-	succeededJob := &batchv1.Job{
+	succeededJob := managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
@@ -865,7 +915,7 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Succeeded: 1,
 		},
-	}
+	}, cluster)
 
 	ctx := context.Background()
 	logger := logr.Discard()
@@ -911,13 +961,62 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	}
 }
 
+func TestProcessBackupJobResult_RejectsForeignSucceededJob(t *testing.T) {
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	jobName := backupJobName(cluster, time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC))
+	foreignJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: cluster.Namespace,
+			Annotations: map[string]string{
+				"openbao.org/backup-key": "attacker-controlled-key",
+			},
+		},
+		Status: batchv1.JobStatus{Succeeded: 1},
+	}
+	k8sClient := newTestClient(t, cluster, foreignJob)
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
+
+	result, err := manager.processBackupJobResult(context.Background(), logr.Discard(), cluster, jobName)
+	assert.Equal(t, backupJobProcessResult{}, result)
+	assert.ErrorContains(t, err, "requires managed controller owner OpenBaoCluster")
+	assert.Nil(t, cluster.Status.Backup.LastBackupTime)
+	assert.Empty(t, cluster.Status.Backup.LastBackupName)
+}
+
+func TestProcessBackupJobResult_RejectsSuccessfulJobWithoutBackupKey(t *testing.T) {
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	jobName := backupJobName(cluster, time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC))
+	succeededJob := managedBackupJobForCluster(&batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: cluster.Namespace,
+		},
+		Status: batchv1.JobStatus{Succeeded: 1},
+	}, cluster)
+	k8sClient := newTestClient(t, cluster, succeededJob)
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
+
+	result, err := manager.processBackupJobResult(context.Background(), logr.Discard(), cluster, jobName)
+	assert.Equal(t, backupJobProcessResult{}, result)
+	assert.ErrorContains(t, err, "without openbao.org/backup-key")
+	assert.Nil(t, cluster.Status.Backup.LastBackupTime)
+	assert.Empty(t, cluster.Status.Backup.LastBackupName)
+}
+
 func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	cluster.Status.Backup.ConsecutiveFailures = 0
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
 
-	failedJob := &batchv1.Job{
+	failedJob := managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
@@ -925,7 +1024,7 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Failed: 1,
 		},
-	}
+	}, cluster)
 
 	ctx := context.Background()
 	logger := logr.Discard()
@@ -998,7 +1097,7 @@ func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
 
-	failedJob := &batchv1.Job{
+	failedJob := managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
@@ -1006,7 +1105,7 @@ func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Failed: 1,
 		},
-	}
+	}, cluster)
 
 	ctx := context.Background()
 	logger := logr.Discard()
@@ -1093,7 +1192,7 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
 	jobName := backupJobName(cluster, scheduled)
 
-	runningJob := &batchv1.Job{
+	runningJob := managedBackupJobForCluster(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: cluster.Namespace,
@@ -1101,7 +1200,7 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 		Status: batchv1.JobStatus{
 			Active: 1,
 		},
-	}
+	}, cluster)
 
 	ctx := context.Background()
 	logger := logr.Discard()

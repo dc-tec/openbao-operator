@@ -61,7 +61,11 @@ func (m *Manager) ensureBlueGreenPreUpgradeSnapshotComplete(
 		return requeueAfterOutcome(constants.RequeueShort), true, nil
 	}
 
-	jobStatus, err := getJobStatus(ctx, m.client, cluster, jobName)
+	reader := m.reader
+	if reader == nil {
+		reader = m.client
+	}
+	jobStatus, err := getJobStatus(ctx, reader, cluster, jobName)
 	if err != nil {
 		return phaseOutcome{}, true, fmt.Errorf("failed to check pre-upgrade snapshot job status: %w", err)
 	}

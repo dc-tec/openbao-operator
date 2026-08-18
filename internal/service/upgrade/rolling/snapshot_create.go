@@ -7,13 +7,14 @@ import (
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	snapshothelpers "github.com/dc-tec/openbao-operator/internal/service/upgrade/snapshot"
 )
@@ -38,7 +39,17 @@ func (m *Manager) createPreUpgradeBackupJob(ctx context.Context, logger logr.Log
 
 	if err := m.client.Create(ctx, job); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			logger.V(1).Info("Pre-upgrade backup job already exists after create attempt", "job", jobName)
+			if _, readErr := opslifecycle.ReadManagedJob(
+				ctx,
+				m.jobReader(),
+				client.ObjectKey{Namespace: cluster.Namespace, Name: jobName},
+				cluster,
+				openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+				"use existing pre-upgrade backup",
+			); readErr != nil {
+				return false, fmt.Errorf("pre-upgrade backup Job create collided with an untrusted existing Job: %w", readErr)
+			}
+			logger.V(1).Info("Pre-upgrade backup job already exists after create attempt; ownership verified", "job", jobName)
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to create backup job: %w", err)
@@ -97,10 +108,8 @@ func (m *Manager) buildPreUpgradeBackupJob(
 		return nil, fmt.Errorf("failed to build backup job: %w", err)
 	}
 
-	if m.scheme != nil {
-		if err := controllerutil.SetControllerReference(cluster, job, m.scheme); err != nil {
-			return nil, fmt.Errorf("failed to set owner reference on backup job: %w", err)
-		}
+	if err := opslifecycle.PrepareManagedJobOwner(job, cluster, m.scheme); err != nil {
+		return nil, fmt.Errorf("failed to prepare backup Job ownership: %w", err)
 	}
 
 	return job, nil

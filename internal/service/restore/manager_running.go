@@ -5,11 +5,9 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
@@ -33,11 +31,10 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 	// Check if job already exists
 	jobName := restoreJobName(restore)
-	job := &batchv1.Job{}
-	err := m.client.Get(ctx, types.NamespacedName{
+	job, err := opslifecycle.ReadManagedJob(ctx, m.reader, types.NamespacedName{
 		Namespace: restore.Namespace,
 		Name:      jobName,
-	}, job)
+	}, restore, openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"), "observe restore")
 
 	if apierrors.IsNotFound(err) {
 		done, err := m.renewRunningRestoreLock(ctx, logger, restore, cluster)
@@ -222,14 +219,23 @@ func (m *Manager) createRestoreJob(
 		return m.failRestore(ctx, logger, restore, fmt.Sprintf("failed to build restore job: %v", err))
 	}
 
-	// Set owner reference.
-	if err := controllerutil.SetControllerReference(restore, job, m.scheme); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to set controller reference: %w", err)
+	if err := opslifecycle.PrepareManagedJobOwner(job, restore, m.scheme); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to prepare restore Job ownership: %w", err)
 	}
 
 	if err := m.client.Create(ctx, job); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			logger.V(1).Info("Restore job already exists after create attempt; proceeding", "job", jobName)
+			if _, readErr := opslifecycle.ReadManagedJob(
+				ctx,
+				m.reader,
+				types.NamespacedName{Namespace: restore.Namespace, Name: jobName},
+				restore,
+				openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"),
+				"use existing restore",
+			); readErr != nil {
+				return ctrl.Result{}, fmt.Errorf("restore Job create collided with an untrusted existing Job: %w", readErr)
+			}
+			logger.V(1).Info("Restore job already exists after create attempt; ownership verified", "job", jobName)
 			return ctrl.Result{RequeueAfter: restoreRequeueJobCheck}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to create restore job: %w", err)

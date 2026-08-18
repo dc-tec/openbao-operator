@@ -60,7 +60,7 @@ func markPodReadyUnsealed(pod *corev1.Pod) {
 }
 
 func succeededExecutorJob(cluster *openbaov1alpha1.OpenBaoCluster, action upgrade.ExecutorAction) *batchv1.Job {
-	return &batchv1.Job{
+	return managedBlueGreenJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      upgrade.ExecutorJobName(cluster.Name, action, "", cluster.Status.BlueGreen.BlueRevision, cluster.Status.BlueGreen.GreenRevision),
 			Namespace: cluster.Namespace,
@@ -72,11 +72,11 @@ func succeededExecutorJob(cluster *openbaov1alpha1.OpenBaoCluster, action upgrad
 			}},
 			Succeeded: 1,
 		},
-	}
+	}, cluster)
 }
 
 func succeededExecutorJobWithRunID(cluster *openbaov1alpha1.OpenBaoCluster, action upgrade.ExecutorAction, runID string) *batchv1.Job {
-	return &batchv1.Job{
+	return managedBlueGreenJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      upgrade.ExecutorJobName(cluster.Name, action, runID, cluster.Status.BlueGreen.BlueRevision, cluster.Status.BlueGreen.GreenRevision),
 			Namespace: cluster.Namespace,
@@ -88,11 +88,11 @@ func succeededExecutorJobWithRunID(cluster *openbaov1alpha1.OpenBaoCluster, acti
 			}},
 			Succeeded: 1,
 		},
-	}
+	}, cluster)
 }
 
 func failedExecutorJobWithRunID(cluster *openbaov1alpha1.OpenBaoCluster, action upgrade.ExecutorAction, runID string) *batchv1.Job {
-	return &batchv1.Job{
+	return managedBlueGreenJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      upgrade.ExecutorJobName(cluster.Name, action, runID, cluster.Status.BlueGreen.BlueRevision, cluster.Status.BlueGreen.GreenRevision),
 			Namespace: cluster.Namespace,
@@ -104,7 +104,7 @@ func failedExecutorJobWithRunID(cluster *openbaov1alpha1.OpenBaoCluster, action 
 			}},
 			Failed: 1,
 		},
-	}
+	}, cluster)
 }
 
 type clusterOpsStub struct {
@@ -535,7 +535,7 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 		blueRevision := cluster.Status.BlueGreen.BlueRevision
 		greenRevision := cluster.Status.BlueGreen.GreenRevision
 		waitSyncedJob := succeededExecutorJob(cluster, ActionWaitGreenSynced)
-		hookJob := &batchv1.Job{
+		hookJob := managedBlueGreenJob(&batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name + "-validation-hook",
 				Namespace: cluster.Namespace,
@@ -547,7 +547,7 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 				}},
 				Failed: 1,
 			},
-		}
+		}, cluster)
 		greenStatefulSet := &appsv1.StatefulSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name + "-" + cluster.Status.BlueGreen.GreenRevision,

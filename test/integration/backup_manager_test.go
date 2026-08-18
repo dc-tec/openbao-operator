@@ -448,18 +448,30 @@ func createCompletedBackupJobForCluster(
 	succeeded, failed int32,
 ) {
 	t.Helper()
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: clusterName}, cluster); err != nil {
+		t.Fatalf("get OpenBaoCluster %q: %v", clusterName, err)
+	}
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(
+					cluster,
+					openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+				),
+			},
 			Labels: map[string]string{
 				constants.LabelAppInstance:      clusterName,
 				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
 				constants.LabelOpenBaoCluster:   clusterName,
 				constants.LabelOpenBaoComponent: backup.ComponentBackup,
 			},
-			Annotations: map[string]string{},
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
+			},
 		},
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
@@ -480,12 +492,13 @@ func createCompletedBackupJobForCluster(
 		job.Annotations["openbao.org/backup-key"] = backupKey
 	}
 
-	if err := k8sClient.Create(ctx, job); err != nil {
+	controllerClient := newControllerClient(t)
+	if err := controllerClient.Create(ctx, job); err != nil {
 		t.Fatalf("create backup job %q: %v", jobName, err)
 	}
 
 	var latest batchv1.Job
-	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(job), &latest); err != nil {
+	if err := controllerClient.Get(ctx, client.ObjectKeyFromObject(job), &latest); err != nil {
 		t.Fatalf("get backup job %q: %v", jobName, err)
 	}
 
@@ -493,7 +506,7 @@ func createCompletedBackupJobForCluster(
 	latest.Status.Failed = failed
 	now := metav1.Now()
 	latest.Status.StartTime = &now
-	if err := k8sClient.Status().Update(ctx, &latest); err != nil {
+	if err := controllerClient.Status().Update(ctx, &latest); err != nil {
 		t.Fatalf("update backup job status %q: %v", jobName, err)
 	}
 }

@@ -44,6 +44,7 @@ func TestBuildUpgradeExecutorJob_SecurityContext(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       "test-cluster-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Upgrade: &openbaov1alpha1.UpgradeConfig{
@@ -125,6 +126,7 @@ func TestBuildUpgradeExecutorJob_AllowsOIDCWithoutUpgradeConfig(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       "test-cluster-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Replicas: 3,
@@ -186,6 +188,7 @@ func TestBuildUpgradeExecutorJob_SetsResourceRequirements(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       "test-cluster-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Upgrade: &openbaov1alpha1.UpgradeConfig{
@@ -325,6 +328,7 @@ func TestEnsureExecutorJob_CreateAlreadyExists(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       "test-cluster-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Replicas: 3,
@@ -340,6 +344,9 @@ func TestEnsureExecutorJob_CreateAlreadyExists(t *testing.T) {
 		WithInterceptorFuncs(interceptor.Funcs{
 			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 				if _, ok := obj.(*batchv1.Job); ok {
+					if err := c.Create(ctx, obj, opts...); err != nil {
+						return err
+					}
 					return apierrors.NewAlreadyExists(schema.GroupResource{Group: "batch", Resource: "jobs"}, obj.GetName())
 				}
 				return c.Create(ctx, obj, opts...)
@@ -349,6 +356,7 @@ func TestEnsureExecutorJob_CreateAlreadyExists(t *testing.T) {
 
 	result, err := EnsureExecutorJob(
 		context.Background(),
+		k8sClient,
 		k8sClient,
 		scheme,
 		logr.Discard(),
@@ -371,6 +379,48 @@ func TestEnsureExecutorJob_CreateAlreadyExists(t *testing.T) {
 	assert.False(t, result.Failed)
 }
 
+func TestEnsureExecutorJob_RejectsForeignSucceededJob(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{ObjectMeta: metav1.ObjectMeta{
+		Name:      "test-cluster",
+		Namespace: "default",
+		UID:       "test-cluster-uid",
+	}}
+	jobName := ExecutorJobName(
+		cluster.Name,
+		ExecutorActionRollingStepDownLeader,
+		"run-1",
+		"",
+		"",
+	)
+	foreignJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: cluster.Namespace},
+		Status:     batchv1.JobStatus{Succeeded: 1},
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(foreignJob).Build()
+
+	result, err := EnsureExecutorJob(
+		context.Background(),
+		k8sClient,
+		k8sClient,
+		scheme,
+		logr.Discard(),
+		cluster,
+		ExecutorActionRollingStepDownLeader,
+		"run-1",
+		"",
+		"",
+		portopenbao.ClientConfig{},
+		nil,
+		"",
+	)
+	require.Nil(t, result)
+	assert.ErrorContains(t, err, "requires managed controller owner OpenBaoCluster")
+}
+
 func TestEnsureExecutorJob_VerifiesDefaultUpgradeExecutorImageForHardenedCluster(t *testing.T) {
 	t.Setenv(constants.EnvOperatorVersion, "0.1.0")
 
@@ -382,6 +432,7 @@ func TestEnsureExecutorJob_VerifiesDefaultUpgradeExecutorImageForHardenedCluster
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       "test-cluster-uid",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile:  openbaov1alpha1.ProfileHardened,
@@ -399,6 +450,7 @@ func TestEnsureExecutorJob_VerifiesDefaultUpgradeExecutorImageForHardenedCluster
 
 	result, err := EnsureExecutorJob(
 		context.Background(),
+		k8sClient,
 		k8sClient,
 		scheme,
 		logr.Discard(),

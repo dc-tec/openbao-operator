@@ -12,6 +12,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 )
 
 // hasPreUpgradeBackupJob checks if there's a pre-upgrade backup job running or pending for this cluster.
@@ -26,7 +27,7 @@ func (m *Manager) hasPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1
 		constants.LabelOpenBaoBackupType: "pre-upgrade",
 	})
 
-	if err := m.client.List(ctx, jobList,
+	if err := m.reader.List(ctx, jobList,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabelsSelector{Selector: labelSelector},
 	); err != nil {
@@ -36,6 +37,14 @@ func (m *Manager) hasPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1
 	// Check if there's a running or pending job (not yet succeeded or failed).
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
+		if err := opslifecycle.RequireManagedJobOwner(
+			"observe pre-upgrade backup",
+			job,
+			cluster,
+			openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+		); err != nil {
+			return false, err
+		}
 		// If job hasn't succeeded or failed, it's still running or pending.
 		if !kube.JobSucceeded(job) && !kube.JobFailed(job) {
 			return true, nil
@@ -70,6 +79,14 @@ func (m *Manager) observeBackupJobs(ctx context.Context, cluster *openbaov1alpha
 	observation := backupJobObservation{}
 	for i := range jobList.Items {
 		job := &jobList.Items[i]
+		if err := opslifecycle.RequireManagedJobOwner(
+			"observe backup",
+			job,
+			cluster,
+			openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+		); err != nil {
+			return backupJobObservation{}, err
+		}
 		if !kube.JobSucceeded(job) && !kube.JobFailed(job) {
 			observation.hasActive = true
 			continue

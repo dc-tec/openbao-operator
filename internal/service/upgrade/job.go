@@ -10,12 +10,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 )
 
 const (
@@ -50,6 +50,7 @@ type executorJobResult struct {
 func EnsureExecutorJob(
 	ctx context.Context,
 	c client.Client,
+	reader client.Reader,
 	scheme *runtime.Scheme,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
@@ -61,7 +62,7 @@ func EnsureExecutorJob(
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
 ) (*JobResult, error) {
-	result, err := ensureUpgradeExecutorJob(ctx, c, scheme, logger, cluster, action, runID, blueRevision, greenRevision, clientConfig, operatorImageVerifier, platform)
+	result, err := ensureUpgradeExecutorJob(ctx, c, reader, scheme, logger, cluster, action, runID, blueRevision, greenRevision, clientConfig, operatorImageVerifier, platform)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +84,7 @@ func ExecutorJobName(clusterName string, action ExecutorAction, runID string, bl
 func ensureUpgradeExecutorJob(
 	ctx context.Context,
 	c client.Client,
+	reader client.Reader,
 	scheme *runtime.Scheme,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
@@ -97,12 +99,22 @@ func ensureUpgradeExecutorJob(
 	if cluster == nil {
 		return nil, fmt.Errorf("cluster is required")
 	}
+	if reader == nil {
+		reader = c
+	}
 
 	jobName := upgradeExecutorJobName(cluster.Name, action, runID, blueRevision, greenRevision)
 	jobKey := types.NamespacedName{Namespace: cluster.Namespace, Name: jobName}
 
-	job := &batchv1.Job{}
-	if err := c.Get(ctx, jobKey, job); err != nil {
+	job, err := opslifecycle.ReadManagedJob(
+		ctx,
+		reader,
+		jobKey,
+		cluster,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+		"observe upgrade",
+	)
+	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to get upgrade Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
@@ -131,18 +143,26 @@ func ensureUpgradeExecutorJob(
 			return nil, fmt.Errorf("failed to build upgrade Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
 
-		if err := controllerutil.SetControllerReference(cluster, job, scheme); err != nil {
-			return nil, fmt.Errorf("failed to set owner reference on upgrade Job %s/%s: %w", cluster.Namespace, jobName, err)
+		if err := opslifecycle.PrepareManagedJobOwner(job, cluster, scheme); err != nil {
+			return nil, fmt.Errorf("failed to prepare upgrade Job ownership %s/%s: %w", cluster.Namespace, jobName, err)
 		}
 
 		logger.Info("Creating upgrade executor Job", "job", jobName, "action", action, "runID", runID)
 		if err := c.Create(ctx, job); err != nil {
 			if apierrors.IsAlreadyExists(err) {
-				logger.V(1).Info("Upgrade executor Job already exists after create attempt", "job", jobName)
-				return &executorJobResult{
-					Name:    jobName,
-					Running: true,
-				}, nil
+				existing, readErr := opslifecycle.ReadManagedJob(
+					ctx,
+					reader,
+					jobKey,
+					cluster,
+					openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"),
+					"use existing upgrade",
+				)
+				if readErr != nil {
+					return nil, fmt.Errorf("upgrade Job create collided with an untrusted existing Job: %w", readErr)
+				}
+				logger.V(1).Info("Upgrade executor Job already exists after create attempt; ownership verified", "job", jobName)
+				return executorResultFromJob(existing), nil
 			}
 			return nil, fmt.Errorf("failed to create upgrade Job %s/%s: %w", cluster.Namespace, jobName, err)
 		}
@@ -153,22 +173,27 @@ func ensureUpgradeExecutorJob(
 		}, nil
 	}
 
+	return executorResultFromJob(job), nil
+}
+
+func executorResultFromJob(job *batchv1.Job) *executorJobResult {
+	jobName := job.Name
 	if kube.JobSucceeded(job) {
 		return &executorJobResult{
 			Name:      jobName,
 			Succeeded: true,
-		}, nil
+		}
 	}
 
 	if kube.JobFailed(job) {
 		return &executorJobResult{
 			Name:   jobName,
 			Failed: true,
-		}, nil
+		}
 	}
 
 	return &executorJobResult{
 		Name:    jobName,
 		Running: true,
-	}, nil
+	}
 }
