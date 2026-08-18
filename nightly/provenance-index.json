@@ -1,14 +1,14 @@
 {
   "channel": "nightly",
   "checksums": {
-    "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:18901c468acb1a9f1ac4ed1a81d1ee752629f9b3e9de4761de580c7484125145",
-    "digest": "sha256:18901c468acb1a9f1ac4ed1a81d1ee752629f9b3e9de4761de580c7484125145",
+    "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:0001b5f011e582b8867176467cea7eb214f7386397fd4b4ed1348b0ba6fac75c",
+    "digest": "sha256:0001b5f011e582b8867176467cea7eb214f7386397fd4b4ed1348b0ba6fac75c",
     "path": "../dist/checksums.txt",
-    "signature_bundle_digest": "sha256:0aeb1839fb203331db3c6d93d74aaf40a3a0174b97702387b51f895a6c88cfcd",
+    "signature_bundle_digest": "sha256:53c9f3ce66c50e66a0ec018cc4e5d129466ded0fe7b5bc104d1c5d68d4f60855",
     "signature_bundle_path": "../dist/checksums.txt.bundle"
   },
-  "commit": "ec50a6057af45b587843d1beab6d1c48afb1b645",
-  "generated_at_utc": "2026-08-14T19:31:53+00:00",
+  "commit": "0cab98705effb197abde94efc062544ed048bb3a",
+  "generated_at_utc": "2026-08-17T19:44:11+00:00",
   "identity_constraints": {
     "checksums_signer_workflow": "dc-tec/openbao-operator/.github/workflows/publish-nightly.yml",
     "deny_self_hosted_runners": true,
@@ -17,38 +17,38 @@
   },
   "images": [
     {
-      "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:b7559f3cfe36925a0e40521acb202e65f1df5f99ce66d8c7326e9d03a286b99b",
+      "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:5391832d3763477844e29bfb114893eb34385028aeb5419a6aa888e2fa7c0fa0",
       "attestation_signer_workflow": "dc-tec/openbao-operator/.github/workflows/reusable-build.yml",
-      "digest": "sha256:b7559f3cfe36925a0e40521acb202e65f1df5f99ce66d8c7326e9d03a286b99b",
+      "digest": "sha256:5391832d3763477844e29bfb114893eb34385028aeb5419a6aa888e2fa7c0fa0",
       "name": "openbao-operator",
-      "oci_subject": "ghcr.io/dc-tec/openbao-operator@sha256:b7559f3cfe36925a0e40521acb202e65f1df5f99ce66d8c7326e9d03a286b99b",
+      "oci_subject": "ghcr.io/dc-tec/openbao-operator@sha256:5391832d3763477844e29bfb114893eb34385028aeb5419a6aa888e2fa7c0fa0",
       "ref": "ghcr.io/dc-tec/openbao-operator",
       "source_ref": "refs/heads/main"
     },
     {
-      "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:a9184aabd7f594a8d2fb13936c8423ff2342696989e223bb4709cd341c204bb8",
+      "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:bba40a52c985b3af7c10c8b563b0495cd85f4ead916741ccff1466d92bd88bb1",
       "attestation_signer_workflow": "dc-tec/openbao-operator/.github/workflows/reusable-build.yml",
-      "digest": "sha256:a9184aabd7f594a8d2fb13936c8423ff2342696989e223bb4709cd341c204bb8",
+      "digest": "sha256:bba40a52c985b3af7c10c8b563b0495cd85f4ead916741ccff1466d92bd88bb1",
       "name": "openbao-init",
-      "oci_subject": "ghcr.io/dc-tec/openbao-init@sha256:a9184aabd7f594a8d2fb13936c8423ff2342696989e223bb4709cd341c204bb8",
+      "oci_subject": "ghcr.io/dc-tec/openbao-init@sha256:bba40a52c985b3af7c10c8b563b0495cd85f4ead916741ccff1466d92bd88bb1",
       "ref": "ghcr.io/dc-tec/openbao-init",
       "source_ref": "refs/heads/main"
     },
     {
-      "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:be613afc1d3eb991ab35311d7bcb046213f8ab6fb2ce6db727dbde221605b3dd",
+      "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:b05fcda0ed690f1307ca955b733a6b21b0087d0ff269a3440387c1210b0fab6d",
       "attestation_signer_workflow": "dc-tec/openbao-operator/.github/workflows/reusable-build.yml",
-      "digest": "sha256:be613afc1d3eb991ab35311d7bcb046213f8ab6fb2ce6db727dbde221605b3dd",
+      "digest": "sha256:b05fcda0ed690f1307ca955b733a6b21b0087d0ff269a3440387c1210b0fab6d",
       "name": "openbao-backup",
-      "oci_subject": "ghcr.io/dc-tec/openbao-backup@sha256:be613afc1d3eb991ab35311d7bcb046213f8ab6fb2ce6db727dbde221605b3dd",
+      "oci_subject": "ghcr.io/dc-tec/openbao-backup@sha256:b05fcda0ed690f1307ca955b733a6b21b0087d0ff269a3440387c1210b0fab6d",
       "ref": "ghcr.io/dc-tec/openbao-backup",
       "source_ref": "refs/heads/main"
     },
     {
-      "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:90d70918e6fd2b0f9e9343f68b975e2a2135f9f2bc7ae5bd0f5a95b6197371bf",
+      "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:cb9fa391d7cd5c7afcdc419d885873de0ea44adeb2c362af6d597cac54fe0927",
       "attestation_signer_workflow": "dc-tec/openbao-operator/.github/workflows/reusable-build.yml",
-      "digest": "sha256:90d70918e6fd2b0f9e9343f68b975e2a2135f9f2bc7ae5bd0f5a95b6197371bf",
+      "digest": "sha256:cb9fa391d7cd5c7afcdc419d885873de0ea44adeb2c362af6d597cac54fe0927",
       "name": "openbao-upgrade",
-      "oci_subject": "ghcr.io/dc-tec/openbao-upgrade@sha256:90d70918e6fd2b0f9e9343f68b975e2a2135f9f2bc7ae5bd0f5a95b6197371bf",
+      "oci_subject": "ghcr.io/dc-tec/openbao-upgrade@sha256:cb9fa391d7cd5c7afcdc419d885873de0ea44adeb2c362af6d597cac54fe0927",
       "ref": "ghcr.io/dc-tec/openbao-upgrade",
       "source_ref": "refs/heads/main"
     }
@@ -59,7 +59,7 @@
       "path": "../dist/crds.yaml"
     },
     "install_yaml": {
-      "digest": "sha256:f17de3e9aa1d7c6e87c206428d94ba28b94b2f97a83749dd567411f7268187f3",
+      "digest": "sha256:a9137b3079cfcf497f4ca822ddeaf9d925aec2eda07e70f924cca8ddeb3b29bd",
       "path": "../dist/install.yaml"
     }
   },
@@ -67,9 +67,9 @@
   "repository": "dc-tec/openbao-operator",
   "run": {
     "attempt": "1",
-    "id": "31992654818"
+    "id": "32097489959"
   },
   "schema_version": "v1alpha1",
   "source_ref": "refs/heads/main",
-  "version": "nightly-20260817-ec50a6057af4"
+  "version": "nightly-20260818-0cab98705eff"
 }
