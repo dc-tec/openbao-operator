@@ -2455,6 +2455,9 @@
   {
     "id": "upgrade-strategies-recovers-a-failed-rolling-upgrade-after-5a3c4b87",
     "generatedId": "upgrade-strategies-recovers-a-failed-rolling-upgrade-after-5a3c4b87",
+    "coverage": [
+      "lifecycle-job-owner-proof"
+    ],
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "recovers a failed rolling upgrade after a retry request clears stale state",
@@ -2469,7 +2472,9 @@
       "cluster",
       "slow",
       "rolling",
-      "recovery"
+      "recovery",
+      "e2e-anchor",
+      "covers:lifecycle-job-owner-proof"
     ],
     "domainLabels": [
       "upgrade",
@@ -2477,7 +2482,8 @@
       "cluster",
       "slow",
       "rolling",
-      "recovery"
+      "recovery",
+      "e2e-anchor"
     ],
     "steps": [
       "Triggering a rolling upgrade with a bad non-semver image tag",
