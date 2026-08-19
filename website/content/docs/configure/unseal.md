@@ -143,7 +143,7 @@ configuration must reference the declared plugin by name. `Development` can pass
 {{< command label="configure" title="Use a KMS seal plugin in Development" >}}
 spec:
   profile: Development
-  version: "2.6.1"
+  version: "2.6.2"
   configuration:
     plugin:
       autoDownload: true
@@ -213,7 +213,7 @@ Prepare the HSM and runtime before creating the cluster:
 
 {{< command label="configure" title="Wire a PKCS#11 runtime" >}}
 spec:
-  image: registry.example.com/openbao-hsm-vendor:2.6.1
+  image: registry.example.com/openbao-hsm-vendor:2.6.2
   unseal:
     type: pkcs11
     credentialsSecretRef:

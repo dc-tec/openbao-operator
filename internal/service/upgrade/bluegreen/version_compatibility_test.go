@@ -20,7 +20,7 @@ func TestValidateVersionCompatibility(t *testing.T) {
 		{name: "known incompatible transition", current: "2.5.5", target: "2.6.0", wantErr: true},
 		{name: "v-prefixed target", current: "v2.4.4", target: "v2.6.0", wantErr: true},
 		{name: "prerelease target remains incompatible", current: "2.5.5", target: "2.6.0-rc1", wantErr: true},
-		{name: "latest patch remains incompatible", current: "2.5.5", target: "2.6.1", wantErr: true},
+		{name: "latest patch remains incompatible", current: "2.5.5", target: "2.6.2", wantErr: true},
 		{name: "same forwarding generation", current: "2.6.0-beta20260622", target: "2.6.0"},
 		{name: "compatible older transition", current: "2.4.4", target: "2.5.5"},
 		{name: "invalid current version is handled elsewhere", current: "unknown", target: "2.6.0"},

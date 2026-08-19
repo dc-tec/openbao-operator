@@ -469,14 +469,14 @@ func TestCRD_OpenBaoCluster_ValidatesSemanticVersion(t *testing.T) {
 		version string
 		valid   bool
 	}{
-		{name: "release", version: "2.6.1", valid: true},
-		{name: "lowercase v prefix", version: "v2.6.1", valid: true},
+		{name: "release", version: "2.6.2", valid: true},
+		{name: "lowercase v prefix", version: "v2.6.2", valid: true},
 		{name: "prerelease and build", version: "2.7.0-rc.1+build.7", valid: true},
 		{name: "missing patch", version: "2.6", valid: false},
 		{name: "leading zero segment", version: "2.06.1", valid: false},
 		{name: "leading zero numeric prerelease", version: "2.7.0-rc.01", valid: false},
-		{name: "uppercase v prefix", version: "V2.6.1", valid: false},
-		{name: "surrounding whitespace", version: " 2.6.1 ", valid: false},
+		{name: "uppercase v prefix", version: "V2.6.2", valid: false},
+		{name: "surrounding whitespace", version: " 2.6.2 ", valid: false},
 		{name: "image tag alias", version: "latest", valid: false},
 	}
 

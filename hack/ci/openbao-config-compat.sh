@@ -15,7 +15,7 @@ fi
 
 VERSIONS=("$@")
 if [ ${#VERSIONS[@]} -eq 0 ]; then
-  VERSIONS=("2.4.4" "2.5.5" "2.6.1")
+  VERSIONS=("2.4.4" "2.5.5" "2.6.2")
 fi
 
 FILES=( "$ROOT_DIR"/internal/adapter/config/testdata/*.hcl )
@@ -86,13 +86,33 @@ GO
   (
     cd "${tmpdir}"
     go mod init tmp.example/openbao-config-compat >/dev/null 2>&1
-    # OpenBao's root module is not a supported consumer module and uses a local
-    # replace for sdk/v2. Module consumers do not inherit that replace, so pin
-    # the SDK to the same commit as the server source. This keeps the parser and
-    # its request types aligned across release tags (notably OpenBao 2.6+).
-    GOFLAGS="${TMPMODULE_GOFLAGS}" go get \
+
+    # OpenBao tags submodules separately from the server module. Prefer the
+    # exact SDK release tag when it exists, but use its VCS commit instead of
+    # its SemVer name. A root tag with the same SemVer can otherwise cause Go
+    # to resolve the SDK path against the root module. Older patch releases do
+    # not always have a matching SDK tag, so retain the server SHA fallback.
+    sdk_ref="${sha}"
+    sdk_metadata="$(
+      GOFLAGS="${TMPMODULE_GOFLAGS}" go mod download -json \
+        "github.com/openbao/openbao/sdk/v2@v${version}" 2>/dev/null || true
+    )"
+    sdk_tag_sha="$(
+      printf '%s\n' "${sdk_metadata}" \
+        | sed -n 's/.*"Hash": "\([0-9a-f]\{40\}\)".*/\1/p' \
+        | head -n 1
+    )"
+    if [ -n "${sdk_tag_sha}" ]; then
+      sdk_ref="${sdk_tag_sha}"
+    fi
+
+    go_get_log="${tmpdir}/go-get.log"
+    if ! GOFLAGS="${TMPMODULE_GOFLAGS}" go get \
       "github.com/openbao/openbao@${sha}" \
-      "github.com/openbao/openbao/sdk/v2@${sha}" >/dev/null 2>&1
+      "github.com/openbao/openbao/sdk/v2@${sdk_ref}" >"${go_get_log}" 2>&1; then
+      cat "${go_get_log}" >&2
+      exit 1
+    fi
     GOFLAGS="${TMPMODULE_GOFLAGS}" go mod tidy >/dev/null 2>&1
     GOFLAGS="${TMPMODULE_GOFLAGS}" go run . "${FILES[@]}"
 

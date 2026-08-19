@@ -20,7 +20,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: bao
-          image: ghcr.io/openbao/openbao:2.6.1
+          image: ghcr.io/openbao/openbao:2.6.2
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh

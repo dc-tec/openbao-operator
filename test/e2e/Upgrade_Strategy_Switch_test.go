@@ -205,7 +205,7 @@ var _ = Describe("Upgrade Strategy Switching", Label("upgrade", "rolling", "blue
 			g.Expect(stable.Spec.UpdateStrategy.Type).To(Equal(appsv1.RollingUpdateStatefulSetStrategyType))
 		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-		By("performing a rolling upgrade from 2.5.5 to 2.6.1 against the same StatefulSet")
+		By("performing a rolling upgrade from 2.5.5 to 2.6.2 against the same StatefulSet")
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoCluster{}
 			g.Expect(admin.Get(ctx, key, updated)).To(Succeed())

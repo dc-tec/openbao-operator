@@ -67,7 +67,7 @@ and digests.
 
 {{< command label="configure" title="Use a private registry for one cluster" >}}
 spec:
-  version: "2.6.1"
+  version: "2.6.2"
   imagePullSecrets:
     - name: registry-creds
   imageVerification:

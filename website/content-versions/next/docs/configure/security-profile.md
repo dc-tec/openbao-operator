@@ -43,7 +43,7 @@ metadata:
   name: dev-cluster
   namespace: openbao-demo
 spec:
-  version: "2.6.1"
+  version: "2.6.2"
   profile: Development
   replicas: 1
   tls:
