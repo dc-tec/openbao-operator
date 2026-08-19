@@ -420,17 +420,30 @@ bao policy write %s /tmp/policy.hcl
 `, policy, policyName)
 }
 
-func newStaleRollingStepDownJob(namespace, clusterName, podName, image string) *batchv1.Job {
+func newStaleRollingStepDownJob(cluster *openbaov1alpha1.OpenBaoCluster, podName, image string) *batchv1.Job {
 	var backoffLimit int32
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      upgrade.ExecutorJobName(clusterName, upgrade.ExecutorActionRollingStepDownLeader, podName, "", ""),
-			Namespace: namespace,
+			Name:      upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", ""),
+			Namespace: cluster.Namespace,
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
+			},
 			Labels: map[string]string{
-				constants.LabelOpenBaoCluster:        clusterName,
+				constants.LabelOpenBaoCluster:        cluster.Name,
 				constants.LabelOpenBaoComponent:      upgrade.ComponentUpgrade,
 				"e2e.openbao.org/stale-stepdown-job": "true",
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         openbaov1alpha1.GroupVersion.String(),
+					Kind:               "OpenBaoCluster",
+					Name:               cluster.Name,
+					UID:                cluster.UID,
+					Controller:         ptrTo(true),
+					BlockOwnerDeletion: ptrTo(true),
+				},
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -1324,7 +1337,10 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			dumpRollingUpgradeDiagnostics(ctx, admin, tenantNamespace, recoveryCluster.Name)
 		})
 
-		It("recovers a failed rolling upgrade after a retry request clears stale state", func() {
+		It("recovers a failed rolling upgrade after a retry request clears stale state", Label(
+			"e2e-anchor",
+			"covers:lifecycle-job-owner-proof",
+		), func() {
 			var failedPartition int32
 
 			By("Triggering a rolling upgrade with a bad non-semver image tag")
@@ -1365,8 +1381,29 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 
 			By("Injecting a stale deterministic step-down job for the retry cleanup path")
 			targetPod := fmt.Sprintf("%s-%d", recoveryCluster.Name, failedPartition-1)
-			staleJob := newStaleRollingStepDownJob(tenantNamespace, recoveryCluster.Name, targetPod, initialImage)
-			Expect(admin.Create(ctx, staleJob)).To(Succeed())
+			staleJob := newStaleRollingStepDownJob(recoveryCluster, targetPod, initialImage)
+			Expect(validateManagedLifecycleJobOwnerProof(staleJob, recoveryCluster)).To(Succeed())
+			cfg, err := ctrlconfig.GetConfig()
+			Expect(err).NotTo(HaveOccurred())
+			controllerUser := fmt.Sprintf(
+				"system:serviceaccount:%s:openbao-operator-controller",
+				operatorNamespace,
+			)
+			controllerGroups := []string{
+				"system:serviceaccounts",
+				fmt.Sprintf("system:serviceaccounts:%s", operatorNamespace),
+				"system:authenticated",
+			}
+			Expect(e2ehelpers.RunWithImpersonation(
+				ctx,
+				cfg,
+				admin.Scheme(),
+				controllerUser,
+				controllerGroups,
+				func(controllerClient client.Client) error {
+					return controllerClient.Create(ctx, staleJob)
+				},
+			)).To(Succeed())
 			staleJobUID := staleJob.UID
 
 			By("Restoring the target image and requesting a rolling retry")
