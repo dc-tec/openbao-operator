@@ -4,8 +4,8 @@ metadata:
   name: operator-upgrade-hardened
   namespace: openbao-upgrade-e2e
 spec:
-  version: "2.6.1"
-  image: "ghcr.io/openbao/openbao:2.6.1"
+  version: "2.6.2"
+  image: "ghcr.io/openbao/openbao:2.6.2"
   replicas: 3
   profile: Hardened
   initContainer:

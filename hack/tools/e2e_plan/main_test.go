@@ -18,7 +18,7 @@ const (
 func testVersionPolicy() versionPolicy {
 	return versionPolicy{
 		OpenBao: openBaoVersionPolicy{
-			DefaultImage: "ghcr.io/openbao/openbao:2.6.1",
+			DefaultImage: "ghcr.io/openbao/openbao:2.6.2",
 		},
 		StorageEmulators: storageEmulatorVersionPolicy{
 			RustFSImage:  "docker.io/rustfs/rustfs@sha256:test-rustfs",
@@ -75,7 +75,7 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 	if row.ID != "backup-restore" {
 		t.Fatalf("id = %q, want backup-restore", row.ID)
 	}
-	if row.OpenBaoImage != "ghcr.io/openbao/openbao:2.6.1" {
+	if row.OpenBaoImage != "ghcr.io/openbao/openbao:2.6.2" {
 		t.Fatalf("openbao image = %q, want central default", row.OpenBaoImage)
 	}
 	if row.KindNodeImage != "kindest/node:v1.35.1" {

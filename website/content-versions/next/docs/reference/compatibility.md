@@ -24,7 +24,7 @@ The operator requires Kubernetes 1.33 or newer. The rows below describe the curr
 
 | Version | Validation | Production note |
 | --- | --- | --- |
-| 2.6.1 | Primary CI, nightly, release, and rolling-upgrade coverage | Primary validated target for 0.5.x |
+| 2.6.2 | Primary CI, nightly, release, and rolling-upgrade coverage | Primary validated target for 0.5.x |
 | Other 2.6.x | Best-effort support on the latest stable line; not release-gated by 0.5.0 | Validate the exact patch in staging |
 | 2.5.x | Config compatibility and rolling-upgrade source coverage | Validate the transition in staging |
 | 2.4.x | Config compatibility | Upgrade before a new production rollout |
@@ -32,7 +32,7 @@ The operator requires Kubernetes 1.33 or newer. The rows below describe the curr
 
 {{< callout type="warning" title="OpenBao 2.6 BlueGreen limitation" >}}
 OpenBao 2.6 changed its internal request-forwarding gRPC service name. The operator blocks pre-2.6 to 2.6-or-newer
-`BlueGreen` transitions until a compatible target is qualified. Fresh 2.6.x clusters and rolling upgrades to 2.6.1
+`BlueGreen` transitions until a compatible target is qualified. Fresh 2.6.x clusters and rolling upgrades to 2.6.2
 are the release-validated paths.
 {{< /callout >}}
 

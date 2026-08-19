@@ -586,7 +586,7 @@ jobs:
       - name: Run OpenBao config compatibility
         uses: ./.github/actions/run-openbao-config-compat
         with:
-          versions: 2.4.4 2.5.5 2.6.1
+          versions: 2.4.4 2.5.5 2.6.2
 
   docs:
     name: Docs Build

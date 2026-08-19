@@ -112,7 +112,7 @@ func TestWorkloadObservabilityMetricsOnlyListenerIsVersionAware(t *testing.T) {
 		},
 		{
 			name:            "existing cluster leaves observability unmanaged",
-			version:         "2.6.1",
+			version:         "2.6.2",
 			existingContext: "kind-existing",
 			wantConfig:      false,
 			wantListener:    false,
@@ -166,8 +166,8 @@ func TestRollingUpgradeClusterEnablesPublicService(t *testing.T) {
 		namespace: "perf-test",
 		runID:     "rolling-probe",
 		opts: Config{
-			UpgradeFromVersion:   "2.6.0",
-			UpgradeFromImage:     "ghcr.io/openbao/openbao:2.6.0",
+			UpgradeFromVersion:   "2.6.1",
+			UpgradeFromImage:     "ghcr.io/openbao/openbao:2.6.1",
 			UpgradeExecutorImage: "ghcr.io/dc-tec/openbao-operator-upgrade:dev",
 			ConfigInitImage:      "ghcr.io/dc-tec/openbao-operator-config-init:dev",
 		},

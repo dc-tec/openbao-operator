@@ -101,7 +101,7 @@ runtime image or another deliberately managed path.
 
 {{< command label="configure" title="Register an OCI plugin" >}}
 spec:
-  version: "2.6.1"
+  version: "2.6.2"
   configuration:
     plugin:
       autoDownload: true

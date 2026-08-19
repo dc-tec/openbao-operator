@@ -46,7 +46,7 @@ Create a disposable Development cluster for evaluation. Do not create a producti
      name: dev-cluster
      namespace: openbao-demo
    spec:
-    version: "2.6.1"
+    version: "2.6.2"
      replicas: 1
      profile: Development
      tls:
