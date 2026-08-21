@@ -138,13 +138,14 @@ var _ = Describe("Cluster Lifecycle: Deletion Policy", Label("lifecycle", "clust
 	assertDeletionPolicy := func(clusterName string, policy openbaov1alpha1.DeletionPolicy, want deletionExpectations) {
 		By(fmt.Sprintf("creating development cluster %q with deletionPolicy=%s", clusterName, policy))
 		cluster, err := f.CreateDevelopmentCluster(ctx, framework.DevelopmentClusterConfig{
-			Name:           clusterName,
-			Replicas:       1,
-			Version:        openBaoVersion,
-			Image:          openBaoImage,
-			ConfigInitImg:  configInitImage,
-			APIServerCIDR:  apiServerCIDR,
-			DeletionPolicy: policy,
+			Name:                 clusterName,
+			Replicas:             1,
+			Version:              openBaoVersion,
+			Image:                openBaoImage,
+			ConfigInitImg:        configInitImage,
+			APIServerCIDR:        apiServerCIDR,
+			APIServerEndpointIPs: apiServerEndpointIPs,
+			DeletionPolicy:       policy,
 		})
 		Expect(err).NotTo(HaveOccurred())
 

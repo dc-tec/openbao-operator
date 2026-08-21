@@ -277,7 +277,10 @@ func newBackupFirstUpgradeCluster(
 				RotationPeriod: backupFirstTLSRotationPeriod,
 			},
 			Storage: openbaov1alpha1.StorageConfig{Size: backupFirstStorageSize},
-			Network: &openbaov1alpha1.NetworkConfig{APIServerCIDR: apiServerCIDR},
+			Network: &openbaov1alpha1.NetworkConfig{
+				APIServerCIDR:        apiServerCIDR,
+				APIServerEndpointIPs: apiServerEndpointIPs,
+			},
 			Upgrade: upgradeConfig,
 			Backup: &openbaov1alpha1.BackupSchedule{
 				Schedule: "0 5 * * *",
@@ -459,7 +462,8 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: apiServerCIDR,
+					APIServerCIDR:        apiServerCIDR,
+					APIServerEndpointIPs: apiServerEndpointIPs,
 				},
 				Upgrade: &openbaov1alpha1.UpgradeConfig{
 					Image: upgradeExecutorImage,

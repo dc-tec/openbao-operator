@@ -163,6 +163,26 @@ render_hardened_fixture() {
     ' "${FIXTURE_DIR}/hardened-cluster.yaml"
 }
 
+discover_api_server_endpoint_ips() {
+  "${KUBECTL_BIN}" get endpointslices.discovery.k8s.io \
+    -n default \
+    -l kubernetes.io/service-name=kubernetes \
+    -o json | \
+    jq -ce '[
+      .items[].endpoints[]? |
+      select(.conditions.ready != false) |
+      .addresses[]?
+    ] | unique | select(length > 0)'
+}
+
+inject_api_server_endpoint_ips() {
+  local endpoint_ips="$1"
+
+  "${KUBECTL_BIN}" create --dry-run=client -f - -o json | \
+    jq --argjson endpoint_ips "${endpoint_ips}" \
+      '.spec.network.apiServerEndpointIPs = $endpoint_ips'
+}
+
 wait_for_hardened_cluster() {
   "${KUBECTL_BIN}" wait "${HARDENED_CLUSTER_RESOURCE}" \
     -n "${TENANT_NAMESPACE}" \
@@ -401,6 +421,9 @@ echo "Creating Kind ${KUBERNETES_VERSION} cluster ${CLUSTER_NAME}..." >&2
 CLUSTER_CREATED=true
 export KUBECONFIG="${KUBECONFIG_PATH}"
 
+api_server_endpoint_ips="$(discover_api_server_endpoint_ips)"
+echo "Kubernetes API server endpoint IPs: ${api_server_endpoint_ips}" >&2
+
 prepare_candidate_image() {
   local source_image="$1"
   local local_image="$2"
@@ -443,7 +466,8 @@ echo "Install client: $("${HELM_INSTALL_BIN}" version --short)" >&2
   --for=jsonpath='{.status.provisioned}'=true \
   --timeout=5m >/dev/null
 
-"${KUBECTL_BIN}" apply -f "${FIXTURE_DIR}/cluster.yaml" >/dev/null
+inject_api_server_endpoint_ips "${api_server_endpoint_ips}" < "${FIXTURE_DIR}/cluster.yaml" | \
+  "${KUBECTL_BIN}" apply -f - >/dev/null
 "${KUBECTL_BIN}" wait "${CLUSTER_RESOURCE}" \
   -n "${TENANT_NAMESPACE}" \
   --for=condition=Available \
@@ -472,7 +496,8 @@ echo "Seeding OpenBao data before the operator handoff..." >&2
   --timeout=5m >/dev/null
 
 echo "Provisioning the Transit unseal backend for the Hardened profile..." >&2
-"${KUBECTL_BIN}" apply -f "${FIXTURE_DIR}/transit-cluster.yaml" >/dev/null
+inject_api_server_endpoint_ips "${api_server_endpoint_ips}" < "${FIXTURE_DIR}/transit-cluster.yaml" | \
+  "${KUBECTL_BIN}" apply -f - >/dev/null
 "${KUBECTL_BIN}" wait "${TRANSIT_CLUSTER_RESOURCE}" \
   -n "${TENANT_NAMESPACE}" \
   --for=condition=Available \
@@ -508,7 +533,9 @@ echo "Issuing External TLS material for the Hardened profile..." >&2
 create_external_tls_secrets
 
 echo "Provisioning a signed, self-initialized Hardened cluster..." >&2
-render_hardened_fixture | "${KUBECTL_BIN}" apply -f - >/dev/null
+render_hardened_fixture | \
+  inject_api_server_endpoint_ips "${api_server_endpoint_ips}" | \
+  "${KUBECTL_BIN}" apply -f - >/dev/null
 wait_for_statefulset_init_image operator-upgrade-hardened "${HARDENED_INIT_IMAGE}"
 wait_for_hardened_cluster
 assert_resource_absent secret/operator-upgrade-hardened-root-token

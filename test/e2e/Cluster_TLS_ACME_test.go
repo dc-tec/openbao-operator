@@ -322,7 +322,8 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: apiServerCIDR,
+					APIServerCIDR:        apiServerCIDR,
+					APIServerEndpointIPs: apiServerEndpointIPs,
 					TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
 						{
 							// Allow ingress from infra-bao for ACME validation.

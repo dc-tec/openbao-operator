@@ -20,7 +20,7 @@ The core procedure uses Helm in the chart's default multi-tenant mode.
 ## Before you begin
 
 - Confirm that the cluster meets the [compatibility requirements](../../reference/compatibility/). Kubernetes 1.33
-  satisfies the chart constraint, while current release gates validate Kubernetes 1.34 and 1.35.
+  satisfies the chart constraint, while current release gates validate Kubernetes 1.34, 1.35, and 1.36.
 - Use an identity that can create cluster-scoped CRDs, RBAC, and ValidatingAdmissionPolicies.
 - Decide whether Helm, a release manifest, or a maintained Kustomize overlay owns future upgrades.
 - Decide the tenancy model. Use the separate [single-tenant procedure](../single-tenant/) for one watched namespace.

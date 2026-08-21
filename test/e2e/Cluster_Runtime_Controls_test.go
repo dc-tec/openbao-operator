@@ -64,7 +64,8 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: apiServerCIDR,
+					APIServerCIDR:        apiServerCIDR,
+					APIServerEndpointIPs: apiServerEndpointIPs,
 				},
 				DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 			},
@@ -234,13 +235,11 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 			Host:    host,
 			Path:    "/",
 		}
-		cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
-			TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"kubernetes.io/metadata.name": "ingress-system",
-						},
+		cluster.Spec.Network.TrustedIngressPeers = []networkingv1.NetworkPolicyPeer{
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": "ingress-system",
 					},
 				},
 			},

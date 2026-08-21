@@ -129,7 +129,8 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: apiServerCIDR,
+					APIServerCIDR:        apiServerCIDR,
+					APIServerEndpointIPs: apiServerEndpointIPs,
 				},
 				DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 			},
@@ -214,12 +215,13 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 		const clusterName = "manager-failover-cluster"
 
 		cluster, err := f.CreateDevelopmentCluster(ctx, framework.DevelopmentClusterConfig{
-			Name:          clusterName,
-			Replicas:      1,
-			Version:       openBaoVersion,
-			Image:         openBaoImage,
-			ConfigInitImg: configInitImage,
-			APIServerCIDR: apiServerCIDR,
+			Name:                 clusterName,
+			Replicas:             1,
+			Version:              openBaoVersion,
+			Image:                openBaoImage,
+			ConfigInitImg:        configInitImage,
+			APIServerCIDR:        apiServerCIDR,
+			APIServerEndpointIPs: apiServerEndpointIPs,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		DeferCleanup(func() { _ = c.Delete(ctx, cluster) })
@@ -310,12 +312,13 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 		const clusterName = "manager-adoption-cluster"
 
 		cluster, err := f.CreateDevelopmentCluster(ctx, framework.DevelopmentClusterConfig{
-			Name:          clusterName,
-			Replicas:      1,
-			Version:       openBaoVersion,
-			Image:         openBaoImage,
-			ConfigInitImg: configInitImage,
-			APIServerCIDR: apiServerCIDR,
+			Name:                 clusterName,
+			Replicas:             1,
+			Version:              openBaoVersion,
+			Image:                openBaoImage,
+			ConfigInitImg:        configInitImage,
+			APIServerCIDR:        apiServerCIDR,
+			APIServerEndpointIPs: apiServerEndpointIPs,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		DeferCleanup(func() { _ = c.Delete(ctx, cluster) })

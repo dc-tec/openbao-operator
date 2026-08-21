@@ -17,16 +17,18 @@ const defaultManifestPath = "test/e2e/suites.yaml"
 var idPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 type options struct {
-	ManifestPath string
-	Format       string
-	Profile      string
-	Lane         string
-	Kubernetes   string
+	ManifestPath               string
+	Format                     string
+	Profile                    string
+	Lane                       string
+	Kubernetes                 string
+	CompatibilityRotationIndex int
 }
 
 type nightlyFilters struct {
-	Lane       string
-	Kubernetes string
+	Lane                       string
+	Kubernetes                 string
+	CompatibilityRotationIndex int
 }
 
 type manifest struct {
@@ -77,11 +79,12 @@ type nightlyProfile struct {
 }
 
 type nightlyLaneSet struct {
-	Coverage       string   `yaml:"coverage"`
-	Kubernetes     []string `yaml:"kubernetes"`
-	Lanes          []string `yaml:"lanes"`
-	TimeoutMinutes int      `yaml:"timeoutMinutes"`
-	E2ETimeout     string   `yaml:"e2eTimeout"`
+	Coverage            string   `yaml:"coverage"`
+	Kubernetes          []string `yaml:"kubernetes"`
+	RotateCompatibility bool     `yaml:"rotateCompatibility"`
+	Lanes               []string `yaml:"lanes"`
+	TimeoutMinutes      int      `yaml:"timeoutMinutes"`
+	E2ETimeout          string   `yaml:"e2eTimeout"`
 }
 
 type nightlyRowConfig struct {
@@ -179,8 +182,9 @@ func main() {
 		}
 	case "github-nightly-matrix":
 		matrix, err := buildGithubNightlyMatrix(m, opts.Profile, nightlyFilters{
-			Lane:       opts.Lane,
-			Kubernetes: opts.Kubernetes,
+			Lane:                       opts.Lane,
+			Kubernetes:                 opts.Kubernetes,
+			CompatibilityRotationIndex: opts.CompatibilityRotationIndex,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "e2e_plan: %v\n", err)
@@ -203,10 +207,19 @@ func parseOptions() (options, error) {
 	flag.StringVar(&opts.Profile, "profile", "daily", "nightly profile for github-nightly-matrix")
 	flag.StringVar(&opts.Lane, "lane", "", "optional nightly lane id filter for github-nightly-matrix")
 	flag.StringVar(&opts.Kubernetes, "kubernetes", "", "optional Kubernetes version filter for github-nightly-matrix")
+	flag.IntVar(
+		&opts.CompatibilityRotationIndex,
+		"compatibility-rotation-index",
+		0,
+		"compatibility version rotation index for rotating nightly lane sets",
+	)
 	flag.Parse()
 
 	if strings.TrimSpace(opts.ManifestPath) == "" {
 		return options{}, fmt.Errorf("manifest path is required")
+	}
+	if opts.CompatibilityRotationIndex < 0 {
+		return options{}, fmt.Errorf("compatibility rotation index must be >= 0")
 	}
 	opts.Profile = strings.TrimSpace(opts.Profile)
 	opts.Lane = strings.TrimSpace(opts.Lane)
@@ -257,6 +270,9 @@ func buildGithubMatrix(m manifest) (githubMatrix, error) {
 func buildGithubNightlyMatrix(m manifest, profileID string, filters nightlyFilters) (githubMatrix, error) {
 	lanes, errs := validateLanes(m)
 	errs = append(errs, validateVersionPolicy(m.Versions)...)
+	if filters.CompatibilityRotationIndex < 0 {
+		errs = append(errs, "compatibility rotation index must be >= 0")
+	}
 	profile, ok := findNightlyProfile(m.Nightly.Profiles, profileID)
 	if !ok {
 		errs = append(errs, fmt.Sprintf("nightly profile %q is not defined", profileID))
@@ -276,6 +292,17 @@ func buildGithubNightlyMatrix(m manifest, profileID string, filters nightlyFilte
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("nightly profile %s lane set %q: %v", profile.ID, set.Coverage, err))
 			continue
+		}
+		if set.RotateCompatibility && filters.Kubernetes == "" {
+			versions, err = rotateCompatibilityVersions(
+				m.Versions.Kubernetes,
+				versions,
+				filters.CompatibilityRotationIndex,
+			)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("nightly profile %s lane set %q: %v", profile.ID, set.Coverage, err))
+				continue
+			}
 		}
 		for _, version := range versions {
 			if filters.Kubernetes != "" && version != filters.Kubernetes {
@@ -535,6 +562,38 @@ func normalizeVersions(versions []string) []string {
 		}
 	}
 	return out
+}
+
+func rotateCompatibilityVersions(
+	policy kubernetesVersionPolicy,
+	versions []string,
+	rotationIndex int,
+) ([]string, error) {
+	compatibility := normalizeVersions(policy.Compatibility)
+	if len(compatibility) == 0 {
+		return nil, fmt.Errorf("cannot rotate an empty compatibility version set")
+	}
+
+	selected := compatibility[rotationIndex%len(compatibility)]
+	compatibilitySet := make(map[string]bool, len(compatibility))
+	for _, version := range compatibility {
+		compatibilitySet[version] = true
+	}
+
+	selectedFound := false
+	rotated := make([]string, 0, len(versions))
+	for _, version := range versions {
+		if !compatibilitySet[version] || version == selected {
+			rotated = append(rotated, version)
+		}
+		if version == selected {
+			selectedFound = true
+		}
+	}
+	if !selectedFound {
+		return nil, fmt.Errorf("rotating lane set must reference @compatibility")
+	}
+	return rotated, nil
 }
 
 func matrixRowFromLane(policy versionPolicy, parallelism parallelismPolicy, lane ciLaneConfig) matrixRow {

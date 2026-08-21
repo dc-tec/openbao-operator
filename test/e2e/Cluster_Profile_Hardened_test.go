@@ -407,7 +407,8 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: apiServerCIDR,
+					APIServerCIDR:        apiServerCIDR,
+					APIServerEndpointIPs: apiServerEndpointIPs,
 					EgressRules: []networkingv1.NetworkPolicyEgressRule{
 						{
 							// Allow egress to infra-bao in the same namespace for transit seal backend
@@ -796,7 +797,8 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 						EgressRules: []networkingv1.NetworkPolicyEgressRule{
 							{
 								To: []networkingv1.NetworkPolicyPeer{
@@ -1031,7 +1033,8 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 						EgressRules: []networkingv1.NetworkPolicyEgressRule{
 							{
 								To: []networkingv1.NetworkPolicyPeer{

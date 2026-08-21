@@ -68,7 +68,8 @@ var _ = Describe("Tenant Data Isolation", Label("security", "tenant", "tenancy")
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: apiServerCIDR,
+					APIServerCIDR:        apiServerCIDR,
+					APIServerEndpointIPs: apiServerEndpointIPs,
 				},
 				DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 			},

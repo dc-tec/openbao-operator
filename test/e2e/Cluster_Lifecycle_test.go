@@ -121,7 +121,8 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 						Enabled: true,
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 						IngressRules: []networkingv1.NetworkPolicyIngressRule{
 							{
 								From: []networkingv1.NetworkPolicyPeer{
@@ -383,12 +384,13 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 		It("creates a cluster with self-init disabled and produces expected Secrets", func() {
 			By(fmt.Sprintf("creating OpenBaoCluster %q", clusterName))
 			cluster, err := f.CreateDevelopmentCluster(ctx, framework.DevelopmentClusterConfig{
-				Name:          clusterName,
-				Replicas:      3,
-				Version:       openBaoVersion,
-				Image:         openBaoImage,
-				ConfigInitImg: configInitImage,
-				APIServerCIDR: apiServerCIDR,
+				Name:                 clusterName,
+				Replicas:             3,
+				Version:              openBaoVersion,
+				Image:                openBaoImage,
+				ConfigInitImg:        configInitImage,
+				APIServerCIDR:        apiServerCIDR,
+				APIServerEndpointIPs: apiServerEndpointIPs,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func() {
@@ -529,7 +531,8 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 						IngressRules: []networkingv1.NetworkPolicyIngressRule{
 							{
 								From: []networkingv1.NetworkPolicyPeer{

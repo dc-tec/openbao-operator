@@ -646,7 +646,7 @@ e2e-ci-matrix: ## Generate the GitHub Actions E2E matrix from test/e2e/suites.ya
 		--format github-matrix
 
 .PHONY: e2e-nightly-matrix
-e2e-nightly-matrix: ## Generate the GitHub Actions nightly E2E matrix. Set E2E_NIGHTLY_PROFILE, E2E_NIGHTLY_LANE, or E2E_NIGHTLY_KUBERNETES.
+e2e-nightly-matrix: ## Generate the GitHub Actions nightly E2E matrix. Set E2E_NIGHTLY_PROFILE, E2E_NIGHTLY_LANE, E2E_NIGHTLY_KUBERNETES, or E2E_NIGHTLY_COMPATIBILITY_ROTATION_INDEX.
 	@args=""; \
 	if [ -n "$(E2E_NIGHTLY_LANE)" ] && [ "$(E2E_NIGHTLY_LANE)" != "all" ]; then args="$${args} --lane $(E2E_NIGHTLY_LANE)"; fi; \
 	if [ -n "$(E2E_NIGHTLY_KUBERNETES)" ] && [ "$(E2E_NIGHTLY_KUBERNETES)" != "all" ]; then args="$${args} --kubernetes $(E2E_NIGHTLY_KUBERNETES)"; fi; \
@@ -654,6 +654,7 @@ e2e-nightly-matrix: ## Generate the GitHub Actions nightly E2E matrix. Set E2E_N
 		--manifest test/e2e/suites.yaml \
 		--format github-nightly-matrix \
 		--profile "$(or $(E2E_NIGHTLY_PROFILE),daily)" \
+		--compatibility-rotation-index "$(or $(E2E_NIGHTLY_COMPATIBILITY_ROTATION_INDEX),0)" \
 		$${args}
 
 .PHONY: e2e-release-matrix
@@ -682,7 +683,13 @@ e2e-nightly-matrix-validate: ## Validate that the nightly E2E matrices can be ge
 	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
 		--manifest test/e2e/suites.yaml \
 		--format github-nightly-matrix \
-		--profile weekly-full >/dev/null
+		--profile weekly-full \
+		--compatibility-rotation-index 0 >/dev/null
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile weekly-full \
+		--compatibility-rotation-index 1 >/dev/null
 
 .PHONY: e2e-release-matrix-validate
 e2e-release-matrix-validate: ## Validate that the release-gate E2E matrix can be generated.
@@ -695,7 +702,7 @@ e2e-release-matrix-validate: ## Validate that the release-gate E2E matrix can be
 		--format github-nightly-matrix \
 		--profile release-gate \
 		--lane core \
-		--kubernetes 1.35.1 >/dev/null
+		--kubernetes 1.36.1 >/dev/null
 
 .PHONY: verify-e2e-manifest
 verify-e2e-manifest: e2e-catalog e2e-manifest-validate e2e-ci-matrix-validate e2e-nightly-matrix-validate e2e-release-matrix-validate ## Verify the E2E catalog and suite manifest are up-to-date.
