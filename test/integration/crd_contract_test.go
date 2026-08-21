@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -57,6 +58,44 @@ func requireInvalidRequest(t *testing.T, err error) {
 	}
 
 	t.Fatalf("expected invalid request error, got %T: %v", err, err)
+}
+
+func waitForResourceAuthorization(t *testing.T, username, namespace, apiGroup, resourceName, objectName, verb string) {
+	t.Helper()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		review := &authorizationv1.SubjectAccessReview{
+			Spec: authorizationv1.SubjectAccessReviewSpec{
+				User: username,
+				ResourceAttributes: &authorizationv1.ResourceAttributes{
+					Namespace: namespace,
+					Verb:      verb,
+					Group:     apiGroup,
+					Resource:  resourceName,
+					Name:      objectName,
+				},
+			},
+		}
+		if err := k8sClient.Create(ctx, review); err != nil {
+			t.Fatalf("create SubjectAccessReview for %s %s/%s: %v", verb, resourceName, objectName, err)
+		}
+		if review.Status.Allowed {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf(
+				"wait for %s authorization to %s %s/%s: reason=%q evaluationError=%q",
+				username,
+				verb,
+				resourceName,
+				objectName,
+				review.Status.Reason,
+				review.Status.EvaluationError,
+			)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func grantTenantOpenBaoWriteAccess(t *testing.T, namespace, username string) {
@@ -108,6 +147,7 @@ func grantTenantOpenBaoWriteAccess(t *testing.T, namespace, username string) {
 	if err := k8sClient.Create(ctx, binding); err != nil {
 		t.Fatalf("create tenant writer rolebinding: %v", err)
 	}
+	waitForResourceAuthorization(t, username, namespace, "openbao.org", "openbaoclusters", "", "create")
 }
 
 func grantClusterOpenBaoVerbs(t *testing.T, namespace, clusterName, username, roleName string, verbs ...string) {
@@ -159,6 +199,9 @@ func grantClusterOpenBaoVerbs(t *testing.T, namespace, clusterName, username, ro
 	}
 	if err := k8sClient.Create(ctx, binding); err != nil {
 		t.Fatalf("create delegated OpenBao rolebinding: %v", err)
+	}
+	for _, verb := range verbs {
+		waitForResourceAuthorization(t, username, namespace, "openbao.org", "openbaoclusters", clusterName, verb)
 	}
 }
 
@@ -242,6 +285,11 @@ func grantNamespacedResourceVerbs(t *testing.T, namespace, username, roleName, a
 	if err := k8sClient.Create(ctx, binding); err != nil {
 		t.Fatalf("create delegated reference rolebinding: %v", err)
 	}
+	for _, verb := range verbs {
+		for _, objectName := range resourceNames {
+			waitForResourceAuthorization(t, username, namespace, apiGroup, resourceName, objectName, verb)
+		}
+	}
 }
 
 func grantClusterScopedResourceVerbs(t *testing.T, username, roleName, apiGroup, resourceName string, resourceNames []string, verbs ...string) {
@@ -291,6 +339,11 @@ func grantClusterScopedResourceVerbs(t *testing.T, username, roleName, apiGroup,
 	}
 	if err := k8sClient.Create(ctx, binding); err != nil {
 		t.Fatalf("create delegated cluster reference rolebinding: %v", err)
+	}
+	for _, verb := range verbs {
+		for _, objectName := range resourceNames {
+			waitForResourceAuthorization(t, username, "", apiGroup, resourceName, objectName, verb)
+		}
 	}
 }
 
