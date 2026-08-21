@@ -308,8 +308,12 @@ jobs:
                 ;;
             esac
           fi
+          week_number="$(date -u +%V)"
+          compatibility_rotation_index="$((10#${week_number}))"
           echo "value=${profile}" >> "${GITHUB_OUTPUT}"
+          echo "compatibility_rotation_index=${compatibility_rotation_index}" >> "${GITHUB_OUTPUT}"
           echo "::notice::Nightly E2E profile: ${profile}"
+          echo "::notice::Compatibility rotation index: ${compatibility_rotation_index} (ISO week ${week_number})"
 
       - name: Setup repo tools
         uses: ./.github/actions/setup-repo-tools
@@ -323,12 +327,14 @@ jobs:
           E2E_PROFILE: ${{ steps.profile.outputs.value }}
           E2E_LANE: ${{ inputs.e2e_lane || 'all' }}
           E2E_KUBERNETES: ${{ inputs.e2e_kubernetes || 'all' }}
+          E2E_COMPATIBILITY_ROTATION_INDEX: ${{ steps.profile.outputs.compatibility_rotation_index }}
         run: |
           set -euo pipefail
           args=(
             --manifest test/e2e/suites.yaml
             --format github-nightly-matrix
             --profile "${E2E_PROFILE}"
+            --compatibility-rotation-index "${E2E_COMPATIBILITY_ROTATION_INDEX}"
           )
           if [[ "${E2E_LANE}" != "all" ]]; then
             args+=(--lane "${E2E_LANE}")
@@ -344,6 +350,7 @@ jobs:
             echo "Profile: \`${E2E_PROFILE}\`"
             echo "Lane filter: \`${E2E_LANE}\`"
             echo "Kubernetes filter: \`${E2E_KUBERNETES}\`"
+            echo "Compatibility rotation index: \`${E2E_COMPATIBILITY_ROTATION_INDEX}\`"
             echo
             echo '```json'
             echo "${matrix}"

@@ -87,7 +87,8 @@ var _ = Describe("Security: Anti-Tamper Policy", Label("security", "tamper", "cl
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},

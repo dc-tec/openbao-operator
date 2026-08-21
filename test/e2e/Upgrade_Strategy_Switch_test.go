@@ -87,7 +87,10 @@ var _ = Describe("Upgrade Strategy Switching", Label("upgrade", "rolling", "blue
 					RotationPeriod: "720h",
 				},
 				Storage: openbaov1alpha1.StorageConfig{Size: "1Gi"},
-				Network: &openbaov1alpha1.NetworkConfig{APIServerCIDR: apiServerCIDR},
+				Network: &openbaov1alpha1.NetworkConfig{
+					APIServerCIDR:        apiServerCIDR,
+					APIServerEndpointIPs: apiServerEndpointIPs,
+				},
 				Upgrade: &openbaov1alpha1.UpgradeConfig{
 					Strategy:    openbaov1alpha1.UpdateStrategyRollingUpdate,
 					Image:       upgradeExecutorImage,

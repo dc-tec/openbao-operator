@@ -7,15 +7,17 @@ versions:
     fakeGCSImage: "docker.io/fsouza/fake-gcs-server@sha256:3730da0e31f7e5186a90ec4899dc2c336104e7599df400411392ef17e684c31f"
     azuriteImage: "mcr.microsoft.com/azure-storage/azurite@sha256:647c63a91102a9d8e8000aab803436e1fc85fbb285e7ce830a82ee5d6661cf37"
   kubernetes:
-    primary: "1.35.1"
+    primary: "1.36.1"
     compatibility:
       - "1.34.3"
+      - "1.35.1"
     releaseGate:
       - "1.34.3"
       - "1.35.1"
-    # Kubernetes 1.36.0 is the next candidate once controller-runtime,
+      - "1.36.1"
+    # Kubernetes 1.37.0 is the next candidate once controller-runtime,
     # k8s.io dependencies, Kind images, and release-gate coverage are ready.
-    nextCandidate: "1.36.0"
+    nextCandidate: "1.37.0"
 
 parallelism:
   defaultNodes: 1
@@ -247,11 +249,13 @@ nightly:
           e2eTimeout: 40m
 
     - id: weekly-full
-      description: "Full compatibility coverage across supported Kubernetes versions."
+      description: "Full primary coverage plus alternating full compatibility coverage."
       laneSets:
         - coverage: full
           kubernetes:
-            - "@releaseGate"
+            - "@primary"
+            - "@compatibility"
+          rotateCompatibility: true
           lanes:
             - core
             - security

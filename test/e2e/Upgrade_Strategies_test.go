@@ -551,7 +551,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						Image: upgradeExecutorImage,
@@ -1019,7 +1020,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					Backup: &openbaov1alpha1.BackupSchedule{
 						Schedule: "*/5 * * * *",
@@ -1296,7 +1298,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						Image: upgradeExecutorImage,
@@ -1574,7 +1577,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -2041,7 +2045,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -2226,7 +2231,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -2419,7 +2425,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -2604,7 +2611,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -2844,7 +2852,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						Size: "1Gi",
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
+						APIServerCIDR:        apiServerCIDR,
+						APIServerEndpointIPs: apiServerEndpointIPs,
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -3179,7 +3188,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 							Size: "1Gi",
 						},
 						Network: &openbaov1alpha1.NetworkConfig{
-							APIServerCIDR: apiServerCIDR,
+							APIServerCIDR:        apiServerCIDR,
+							APIServerEndpointIPs: apiServerEndpointIPs,
 						},
 						Gateway: &openbaov1alpha1.GatewayConfig{
 							Enabled: true,
@@ -3434,7 +3444,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 							Size: "1Gi",
 						},
 						Network: &openbaov1alpha1.NetworkConfig{
-							APIServerCIDR: apiServerCIDR,
+							APIServerCIDR:        apiServerCIDR,
+							APIServerEndpointIPs: apiServerEndpointIPs,
 						},
 						Gateway: &openbaov1alpha1.GatewayConfig{
 							Enabled:        true,

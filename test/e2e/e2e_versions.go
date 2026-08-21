@@ -30,9 +30,10 @@ const (
 )
 
 var (
-	openBaoVersion string
-	openBaoImage   string
-	apiServerCIDR  string
+	openBaoVersion       string
+	openBaoImage         string
+	apiServerCIDR        string
+	apiServerEndpointIPs []string
 )
 
 // kindDefaultServiceCIDR is the default service CIDR used by kind clusters.

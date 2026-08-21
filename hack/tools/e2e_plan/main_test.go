@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -26,10 +27,10 @@ func testVersionPolicy() versionPolicy {
 			AzuriteImage: "mcr.microsoft.com/azure-storage/azurite@sha256:test-azurite",
 		},
 		Kubernetes: kubernetesVersionPolicy{
-			Primary:       "1.35.1",
-			Compatibility: []string{"1.34.3"},
-			ReleaseGate:   []string{"1.34.3", "1.35.1"},
-			NextCandidate: "1.36.0",
+			Primary:       "1.36.1",
+			Compatibility: []string{"1.34.3", "1.35.1"},
+			ReleaseGate:   []string{"1.34.3", "1.35.1", "1.36.1"},
+			NextCandidate: "1.37.0",
 		},
 	}
 }
@@ -78,7 +79,7 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 	if row.OpenBaoImage != "ghcr.io/openbao/openbao:2.6.2" {
 		t.Fatalf("openbao image = %q, want central default", row.OpenBaoImage)
 	}
-	if row.KindNodeImage != "kindest/node:v1.35.1" {
+	if row.KindNodeImage != "kindest/node:v1.36.1" {
 		t.Fatalf("kind node image = %q, want central primary", row.KindNodeImage)
 	}
 	if row.PRLabelFilter != "((dr && e2e-anchor) && !openshift)" {
@@ -229,10 +230,10 @@ func TestBuildGithubNightlyMatrixExpandsLaneSetsAndRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildGithubNightlyMatrix() error = %v", err)
 	}
-	if got := len(matrix.Include); got != 3 {
-		t.Fatalf("matrix rows = %d, want 3", got)
+	if got := len(matrix.Include); got != 4 {
+		t.Fatalf("matrix rows = %d, want 4", got)
 	}
-	if matrix.Include[0].KindNodeImage != "kindest/node:v1.35.1" {
+	if matrix.Include[0].KindNodeImage != "kindest/node:v1.36.1" {
 		t.Fatalf("kind node image = %q, want primary image", matrix.Include[0].KindNodeImage)
 	}
 	if matrix.Include[0].ParallelNodes != 2 {
@@ -249,6 +250,81 @@ func TestBuildGithubNightlyMatrixExpandsLaneSetsAndRows(t *testing.T) {
 	}
 	if matrix.Include[2].Coverage != compatibilitySmokeCoverage {
 		t.Fatalf("coverage = %q, want %s", matrix.Include[2].Coverage, compatibilitySmokeCoverage)
+	}
+	if matrix.Include[3].KindNodeImage != "kindest/node:v1.35.1" {
+		t.Fatalf("second smoke kind node image = %q, want compatibility image", matrix.Include[3].KindNodeImage)
+	}
+	if matrix.Include[3].LabelFilter != "lifecycle && smoke" {
+		t.Fatalf("second smoke label filter = %q, want override", matrix.Include[3].LabelFilter)
+	}
+	if matrix.Include[3].Coverage != compatibilitySmokeCoverage {
+		t.Fatalf("second smoke coverage = %q, want %s", matrix.Include[3].Coverage, compatibilitySmokeCoverage)
+	}
+}
+
+func TestBuildGithubNightlyMatrixRotatesCompatibilityVersions(t *testing.T) {
+	t.Parallel()
+
+	m := manifest{
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
+		CILanes: []ciLaneConfig{
+			{
+				ID:             "core",
+				Name:           "Core",
+				LabelFilter:    "lifecycle",
+				PRScope:        "always",
+				TimeoutMinutes: 45,
+				E2ETimeout:     "40m",
+			},
+		},
+		Nightly: nightlyConfig{
+			Profiles: []nightlyProfile{
+				{
+					ID: "weekly-full",
+					LaneSets: []nightlyLaneSet{
+						{
+							Coverage:            "full",
+							Kubernetes:          []string{"@primary", "@compatibility"},
+							RotateCompatibility: true,
+							Lanes:               []string{"core"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	matrix, err := buildGithubNightlyMatrix(m, "weekly-full", nightlyFilters{
+		CompatibilityRotationIndex: 1,
+	})
+	if err != nil {
+		t.Fatalf("buildGithubNightlyMatrix() error = %v", err)
+	}
+	if got := len(matrix.Include); got != 2 {
+		t.Fatalf("matrix rows = %d, want 2", got)
+	}
+	if matrix.Include[0].Kubernetes != "1.36.1" || matrix.Include[1].Kubernetes != "1.35.1" {
+		t.Fatalf(
+			"rotated Kubernetes versions = %q, %q; want 1.36.1, 1.35.1",
+			matrix.Include[0].Kubernetes,
+			matrix.Include[1].Kubernetes,
+		)
+	}
+
+	filtered, err := buildGithubNightlyMatrix(m, "weekly-full", nightlyFilters{
+		Kubernetes:                 "1.34.3",
+		CompatibilityRotationIndex: 1,
+	})
+	if err != nil {
+		t.Fatalf("buildGithubNightlyMatrix() with explicit Kubernetes filter error = %v", err)
+	}
+	if got := len(filtered.Include); got != 1 {
+		t.Fatalf("filtered matrix rows = %d, want 1", got)
+	}
+	if filtered.Include[0].Kubernetes != "1.34.3" {
+		t.Fatalf("filtered Kubernetes version = %q, want 1.34.3", filtered.Include[0].Kubernetes)
 	}
 }
 
@@ -308,7 +384,7 @@ func TestBuildGithubNightlyMatrixFiltersRows(t *testing.T) {
 		t.Fatalf("filtered row = %#v, want security release-gate on 1.35.1", row)
 	}
 
-	_, err = buildGithubNightlyMatrix(m, "release-gate", nightlyFilters{Kubernetes: "1.36.0"})
+	_, err = buildGithubNightlyMatrix(m, "release-gate", nightlyFilters{Kubernetes: "1.37.0"})
 	if err == nil {
 		t.Fatalf("buildGithubNightlyMatrix() error = nil, want empty filter failure")
 	}
@@ -400,6 +476,60 @@ func TestRepoManifestNightlyRoutingUsesCanonicalLaneFilters(t *testing.T) {
 	releaseGateVersion := firstVersion(t, m.Versions.Kubernetes.ReleaseGate, "releaseGate")
 	assertProfileUsesCanonicalLaneFilters(t, m, lanes, "weekly-full", "full", releaseGateVersion)
 	assertProfileUsesCanonicalLaneFilters(t, m, lanes, "release-gate", "release-gate", releaseGateVersion)
+}
+
+func TestRepoManifestKubernetesMatrixPolicy(t *testing.T) {
+	t.Parallel()
+
+	m := loadRepoManifest(t)
+
+	ciMatrix, err := buildGithubMatrix(m)
+	if err != nil {
+		t.Fatalf("build CI matrix: %v", err)
+	}
+	assertKubernetesRowCounts(t, ciMatrix, map[string]int{"1.36.1": 10})
+
+	dailyMatrix, err := buildGithubNightlyMatrix(m, "daily", nightlyFilters{})
+	if err != nil {
+		t.Fatalf("build daily matrix: %v", err)
+	}
+	assertKubernetesRowCounts(t, dailyMatrix, map[string]int{
+		"1.34.3": 2,
+		"1.35.1": 2,
+		"1.36.1": 9,
+	})
+
+	weeklyFirst, err := buildGithubNightlyMatrix(m, "weekly-full", nightlyFilters{
+		CompatibilityRotationIndex: 0,
+	})
+	if err != nil {
+		t.Fatalf("build first weekly rotation: %v", err)
+	}
+	assertKubernetesRowCounts(t, weeklyFirst, map[string]int{
+		"1.34.3": 9,
+		"1.36.1": 9,
+	})
+
+	weeklySecond, err := buildGithubNightlyMatrix(m, "weekly-full", nightlyFilters{
+		CompatibilityRotationIndex: 1,
+	})
+	if err != nil {
+		t.Fatalf("build second weekly rotation: %v", err)
+	}
+	assertKubernetesRowCounts(t, weeklySecond, map[string]int{
+		"1.35.1": 9,
+		"1.36.1": 9,
+	})
+
+	releaseMatrix, err := buildGithubNightlyMatrix(m, "release-gate", nightlyFilters{})
+	if err != nil {
+		t.Fatalf("build release matrix: %v", err)
+	}
+	assertKubernetesRowCounts(t, releaseMatrix, map[string]int{
+		"1.34.3": 9,
+		"1.35.1": 9,
+		"1.36.1": 9,
+	})
 }
 
 func TestGithubMatrixJSONShape(t *testing.T) {
@@ -652,6 +782,28 @@ func TestCIWorkflowRoutesLifecycleChangesToBackupAndUpgrade(t *testing.T) {
 	}
 }
 
+func TestNightlyWorkflowWiresCompatibilityRotation(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join("..", "..", "..", ".github", "workflows", "nightly.yml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read nightly workflow: %v", err)
+	}
+	workflow := string(data)
+
+	required := []string{
+		`week_number="$(date -u +%V)"`,
+		`compatibility_rotation_index="$((10#${week_number}))"`,
+		`--compatibility-rotation-index "${E2E_COMPATIBILITY_ROTATION_INDEX}"`,
+	}
+	for _, value := range required {
+		if !strings.Contains(workflow, value) {
+			t.Errorf("nightly workflow is missing compatibility rotation contract %q", value)
+		}
+	}
+}
+
 func singleNightlyRow(t *testing.T, m manifest, profile string, filters nightlyFilters) matrixRow {
 	t.Helper()
 
@@ -709,4 +861,16 @@ func firstVersion(t *testing.T, versions []string, field string) string {
 		t.Fatalf("versions.kubernetes.%s must not be empty", field)
 	}
 	return versions[0]
+}
+
+func assertKubernetesRowCounts(t *testing.T, matrix githubMatrix, want map[string]int) {
+	t.Helper()
+
+	got := make(map[string]int)
+	for _, row := range matrix.Include {
+		got[row.Kubernetes]++
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Kubernetes row counts = %v, want %v", got, want)
+	}
 }

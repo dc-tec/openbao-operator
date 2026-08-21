@@ -332,6 +332,25 @@ func TestHelmTemplateOmitsProvisionerMetricsInSingleTenantMode(t *testing.T) {
 	}
 }
 
+func TestHelmTemplateProvisionerMemoryDefaults(t *testing.T) {
+	rendered := string(renderChart(t))
+	manifest, ok := findRenderedObject(rendered, "Deployment", "test-openbao-operator-provisioner")
+	if !ok {
+		t.Fatal("rendered chart missing provisioner Deployment")
+	}
+
+	want := `          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi`
+	if !strings.Contains(manifest, want) {
+		t.Fatalf("provisioner Deployment has unexpected default resources:\n%s", manifest)
+	}
+}
+
 func assertMetricsNetworkPolicy(t *testing.T, rendered, name, component string) {
 	t.Helper()
 

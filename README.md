@@ -45,7 +45,7 @@ Recommended entry points:
 
 For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openbao-operator/docs/reference/compatibility).
 
-- **Kubernetes**: requires `v1.33+`; release validation runs on `v1.34`–`v1.35`
+- **Kubernetes**: requires `v1.33+`; release validation runs on `v1.34`–`v1.36`
 - **OpenBao**: primary validation on `2.6.2`, with config compatibility checks for `2.4.4`, `2.5.5`, and `2.6.2`
 - **Support posture**: best-effort support for the latest stable release line
 

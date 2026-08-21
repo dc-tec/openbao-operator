@@ -35,6 +35,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -45,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	"github.com/dc-tec/openbao-operator/test/utils"
 )
 
@@ -61,6 +63,7 @@ type suiteBootstrap struct {
 	Kubeconfigs             []string `json:"kubeconfigs"`
 	CertManagerPreinstalled []bool   `json:"certManagerPreinstalled"`
 	StorageClass            string   `json:"storageClass,omitempty"`
+	APIServerEndpointIPs    []string `json:"apiServerEndpointIPs,omitempty"`
 }
 
 var (
@@ -423,6 +426,50 @@ func waitForCoreDNSAvailable(timeout time.Duration) error {
 	return err
 }
 
+func resolveAPIServerEndpointIPs(ctx context.Context, discoverIfUnset bool) ([]string, error) {
+	if rawEndpointIPs := strings.TrimSpace(os.Getenv("E2E_API_SERVER_ENDPOINT_IPS")); rawEndpointIPs != "" {
+		endpointIPs, err := framework.ParseAPIServerEndpointIPs(rawEndpointIPs)
+		if err != nil {
+			return nil, fmt.Errorf("parse E2E_API_SERVER_ENDPOINT_IPS: %w", err)
+		}
+		return endpointIPs, nil
+	}
+	if !discoverIfUnset {
+		return nil, nil
+	}
+
+	cfg, err := ctrlconfig.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("get kube config for API endpoint discovery: %w", err)
+	}
+
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("add client-go scheme for API endpoint discovery: %w", err)
+	}
+
+	c, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		return nil, fmt.Errorf("create client for API endpoint discovery: %w", err)
+	}
+
+	endpointSlices := &discoveryv1.EndpointSliceList{}
+	if err := c.List(
+		ctx,
+		endpointSlices,
+		client.InNamespace(corev1.NamespaceDefault),
+		client.MatchingLabels{discoveryv1.LabelServiceName: "kubernetes"},
+	); err != nil {
+		return nil, fmt.Errorf("list Kubernetes API server EndpointSlices: %w", err)
+	}
+
+	endpointIPs, err := framework.APIServerEndpointIPsFromEndpointSlices(endpointSlices.Items)
+	if err != nil {
+		return nil, fmt.Errorf("resolve Kubernetes API server endpoint IPs: %w", err)
+	}
+	return endpointIPs, nil
+}
+
 var _ = SynchronizedBeforeSuite(func() []byte {
 	// THIS BLOCK RUNS ONCE (on node 1)
 	var (
@@ -452,6 +499,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		}
 
 		withEnv("KUBECONFIG", kubeconfigPath, func() {
+			By("resolving Kubernetes API server endpoint IPs")
+			bootstrap.APIServerEndpointIPs, err = resolveAPIServerEndpointIPs(context.Background(), false)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to resolve Kubernetes API server endpoint IPs")
+
 			certManagerPreinstalled := false
 			if !skipCertManagerInstall {
 				By("checking if cert manager is installed already")
@@ -579,6 +630,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	withEnv("KUBECONFIG", kubeconfigPath, func() {
 		withEnv("KIND_CLUSTER", clusterName, func() {
+			By(fmt.Sprintf("discovering Kubernetes API server endpoint IPs (cluster=%s)", clusterName))
+			bootstrap.APIServerEndpointIPs, err = resolveAPIServerEndpointIPs(context.Background(), true)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to discover Kubernetes API server endpoint IPs (cluster=%s)", clusterName))
+			_, _ = fmt.Fprintf(GinkgoWriter, "Kubernetes API server endpoint IPs: %s\n",
+				strings.Join(bootstrap.APIServerEndpointIPs, ","))
+
 			By(fmt.Sprintf("waiting for CoreDNS to become Available (cluster=%s)", clusterName))
 			ExpectWithOffset(1, waitForCoreDNSAvailable(2*time.Minute)).To(Succeed(), "CoreDNS did not become Available in time")
 
@@ -748,6 +806,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	if strings.TrimSpace(bootstrap.StorageClass) != "" {
 		ExpectWithOffset(1, os.Setenv("E2E_STORAGE_CLASS", bootstrap.StorageClass)).To(Succeed())
 	}
+	apiServerEndpointIPs = append([]string(nil), bootstrap.APIServerEndpointIPs...)
 
 	proc := GinkgoParallelProcess()
 	_, _ = fmt.Fprintf(GinkgoWriter, "E2E parallel process=%d shared_cluster=%s kubeconfig=%s\n", proc, clusterName, kubeconfigPath)

@@ -81,12 +81,13 @@ var _ = Describe("OpenShift Platform", Label("openshift", "platform"), Ordered, 
 		clusterName := "cluster"
 		By("creating a development cluster on OpenShift")
 		_, err = f.CreateDevelopmentCluster(ctx, framework.DevelopmentClusterConfig{
-			Name:          clusterName,
-			Replicas:      1,
-			Version:       openBaoVersion,
-			Image:         openBaoImage,
-			ConfigInitImg: configInitImage,
-			APIServerCIDR: apiServerCIDR,
+			Name:                 clusterName,
+			Replicas:             1,
+			Version:              openBaoVersion,
+			Image:                openBaoImage,
+			ConfigInitImg:        configInitImage,
+			APIServerCIDR:        apiServerCIDR,
+			APIServerEndpointIPs: apiServerEndpointIPs,
 		})
 		Expect(err).NotTo(HaveOccurred())
 

@@ -152,7 +152,8 @@ var _ = Describe("Cluster KMIP Unseal", Label("cluster", "lifecycle", "unseal", 
 					Size: "1Gi",
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
-					APIServerCIDR: apiServerCIDR,
+					APIServerCIDR:        apiServerCIDR,
+					APIServerEndpointIPs: apiServerEndpointIPs,
 					EgressRules: []networkingv1.NetworkPolicyEgressRule{
 						{
 							To: []networkingv1.NetworkPolicyPeer{
