@@ -26,32 +26,74 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/operator: 'true'
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: 'false'
+  artifacthub.io/prerelease: "false"
   artifacthub.io/containsSecurityUpdates: 'true'
   artifacthub.io/changes: |
-    - kind: security
-      description: "security: require authority for network publication"
     - kind: added
-      description: "self-init: add initial recovery key bootstrap"
-    - kind: security
-      description: "security: delegate dangerous CR controls"
-    - kind: security
-      description: "security: enforce CR reference authorization"
-    - kind: security
-      description: "security: enforce hardened contract for unsafe controls"
-    - kind: security
-      description: "security: require provenance for managed resources"
+      description: "api: stabilize v1alpha1 contracts"
+    - kind: added
+      description: "config: support plugin-backed KMS seals"
+    - kind: added
+      description: "config: support self-init profile controls"
+    - kind: added
+      description: "tooling: make devenv the contributor entry point"
+    - kind: added
+      description: "upgrade: allow idle strategy switching"
     - kind: fixed
-      description: "self-init: make bootstrap config one-shot"
+      description: "api: align status and lifecycle contracts"
+    - kind: fixed
+      description: "api: configure voter resources"
+    - kind: fixed
+      description: "charts: allow provisioner metrics traffic"
+    - kind: fixed
+      description: "charts: set single-tenant controller watch namespace"
+    - kind: fixed
+      description: "compat: qualify OpenBao 2.6.0"
+    - kind: fixed
+      description: "config: omit plugin directory without plugins"
+    - kind: fixed
+      description: "deps: remediate website security advisories"
+    - kind: security
+      description: "deps: remediate website transitive vulnerabilities"
+    - kind: fixed
+      description: "deps: update golang.org/x/mod to v0.40.0"
+    - kind: security
+      description: "deps: update vulnerable brace-expansion"
+    - kind: security
+      description: "deps: update vulnerable Go modules"
+    - kind: security
+      description: "deps: update vulnerable website transitive dependencies"
+    - kind: fixed
+      description: "docs: improve ultrawide layout"
+    - kind: fixed
+      description: "docs: restore TypeScript compatibility"
+    - kind: fixed
+      description: "lifecycle: require ownership proof for managed jobs"
+    - kind: fixed
+      description: "networking: align Gateway and TLS readiness"
+    - kind: fixed
+      description: "provisioner: clean up tenant governance resources"
+    - kind: fixed
+      description: "release: harden release candidate gates"
+    - kind: fixed
+      description: "release: preserve release-as through squash"
+    - kind: fixed
+      description: "release: preserve SPDX schema validity"
+    - kind: fixed
+      description: "resolve 0.5.0-rc.1 safety blockers"
+    - kind: fixed
+      description: "upgrade: verify blue-green validation hook images"
+    - kind: changed
+      description: "tooling: reduce devenv base closure"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.4.0
+      image: ghcr.io/dc-tec/openbao-operator:0.5.0
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.4.0
+      image: ghcr.io/dc-tec/openbao-init:0.5.0
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.4.0
+      image: ghcr.io/dc-tec/openbao-backup:0.5.0
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.4.0
+      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
