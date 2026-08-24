@@ -32,6 +32,8 @@ if [[ -z "${KUBERNETES_VERSION}" ]]; then
 fi
 KIND_NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v${KUBERNETES_VERSION}}"
 KEEP_CLUSTER="${OPERATOR_UPGRADE_E2E_KEEP_CLUSTER:-false}"
+REGISTRY_NAME="${OPERATOR_UPGRADE_E2E_REGISTRY_NAME:-${CLUSTER_NAME}-registry}"
+REGISTRY_IMAGE="${OPERATOR_UPGRADE_E2E_REGISTRY_IMAGE:-registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373}"
 
 MANAGER_SOURCE="${OPERATOR_UPGRADE_E2E_MANAGER_SOURCE:-}"
 INIT_SOURCE="${OPERATOR_UPGRADE_E2E_INIT_SOURCE:-}"
@@ -368,6 +370,7 @@ WORK_DIR="$(mktemp -d)"
 KUBECONFIG_PATH="${WORK_DIR}/kubeconfig"
 CANDIDATE_CHART="${WORK_DIR}/openbao-operator"
 CLUSTER_CREATED=false
+REGISTRY_CREATED=false
 
 collect_diagnostics() {
   echo "Collecting operator upgrade diagnostics..." >&2
@@ -401,6 +404,13 @@ cleanup() {
       "${KIND_BIN}" delete cluster --name "${CLUSTER_NAME}" >/dev/null 2>&1 || true
     fi
   fi
+  if [[ "${REGISTRY_CREATED}" == "true" ]]; then
+    if [[ "${KEEP_CLUSTER}" == "true" ]]; then
+      echo "Keeping candidate image registry ${REGISTRY_NAME}" >&2
+    else
+      "${DOCKER_BIN}" rm --force "${REGISTRY_NAME}" >/dev/null 2>&1 || true
+    fi
+  fi
   if [[ "${KEEP_CLUSTER}" != "true" ]]; then
     rm -rf -- "${WORK_DIR}"
   fi
@@ -412,6 +422,10 @@ if "${KIND_BIN}" get clusters | grep -qx "${CLUSTER_NAME}"; then
   echo "Kind cluster ${CLUSTER_NAME} already exists; choose another OPERATOR_UPGRADE_E2E_KIND_CLUSTER" >&2
   exit 1
 fi
+if "${DOCKER_BIN}" container inspect "${REGISTRY_NAME}" >/dev/null 2>&1; then
+  echo "Docker container ${REGISTRY_NAME} already exists; choose another OPERATOR_UPGRADE_E2E_REGISTRY_NAME" >&2
+  exit 1
+fi
 
 echo "Creating Kind ${KUBERNETES_VERSION} cluster ${CLUSTER_NAME}..." >&2
 "${KIND_BIN}" create cluster \
@@ -421,6 +435,35 @@ echo "Creating Kind ${KUBERNETES_VERSION} cluster ${CLUSTER_NAME}..." >&2
 CLUSTER_CREATED=true
 export KUBECONFIG="${KUBECONFIG_PATH}"
 
+echo "Starting candidate image registry ${REGISTRY_NAME}..." >&2
+"${DOCKER_BIN}" run \
+  --detach \
+  --name "${REGISTRY_NAME}" \
+  --publish 127.0.0.1::5000 \
+  "${REGISTRY_IMAGE}" >/dev/null
+REGISTRY_CREATED=true
+"${DOCKER_BIN}" network connect kind "${REGISTRY_NAME}"
+registry_endpoint="$("${DOCKER_BIN}" port "${REGISTRY_NAME}" 5000/tcp | head -n1)"
+registry_port="${registry_endpoint##*:}"
+if ! [[ "${registry_port}" =~ ^[0-9]+$ ]]; then
+  echo "failed to resolve the candidate registry port: ${registry_endpoint}" >&2
+  exit 1
+fi
+
+while IFS= read -r node_name; do
+  if [[ -z "${node_name}" ]]; then
+    continue
+  fi
+  "${DOCKER_BIN}" exec "${node_name}" mkdir -p /etc/containerd/certs.d/operator-upgrade.local
+  "${DOCKER_BIN}" exec --interactive "${node_name}" \
+    tee /etc/containerd/certs.d/operator-upgrade.local/hosts.toml >/dev/null <<EOF
+server = "https://operator-upgrade.local"
+
+[host."http://${REGISTRY_NAME}:5000"]
+  capabilities = ["pull", "resolve"]
+EOF
+done < <("${KIND_BIN}" get nodes --name "${CLUSTER_NAME}")
+
 api_server_endpoint_ips="$(discover_api_server_endpoint_ips)"
 echo "Kubernetes API server endpoint IPs: ${api_server_endpoint_ips}" >&2
 
@@ -428,6 +471,7 @@ prepare_candidate_image() {
   local source_image="$1"
   local local_image="$2"
   local build_target="$3"
+  local registry_image="127.0.0.1:${registry_port}/${local_image#*/}"
 
   if [[ -n "${source_image}" ]]; then
     "${DOCKER_BIN}" pull "${source_image}"
@@ -435,7 +479,8 @@ prepare_candidate_image() {
   else
     make "${build_target}" IMG="${local_image}"
   fi
-  "${KIND_BIN}" load docker-image --name "${CLUSTER_NAME}" "${local_image}"
+  "${DOCKER_BIN}" tag "${local_image}" "${registry_image}"
+  "${DOCKER_BIN}" push "${registry_image}"
 }
 
 cd "${ROOT_DIR}"
