@@ -2,6 +2,48 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.5.0](https://github.com/dc-tec/openbao-operator/compare/0.4.0...0.5.0) (2026-08-24)
+
+
+### Features
+
+* **api:** stabilize v1alpha1 contracts ([#583](https://github.com/dc-tec/openbao-operator/issues/583)) ([711944e](https://github.com/dc-tec/openbao-operator/commit/711944ed4ec7fa434afbd8f74b5af62b6934b929))
+* **config:** support plugin-backed KMS seals ([#535](https://github.com/dc-tec/openbao-operator/issues/535)) ([f911438](https://github.com/dc-tec/openbao-operator/commit/f9114382c9b9e364155da21320761e0b17686eb9))
+* **config:** support self-init profile controls ([#536](https://github.com/dc-tec/openbao-operator/issues/536)) ([a79c5a0](https://github.com/dc-tec/openbao-operator/commit/a79c5a0c84f615a88c3f1ac9e619da21abb7ce59))
+* **tooling:** make devenv the contributor entry point ([89e5c96](https://github.com/dc-tec/openbao-operator/commit/89e5c9618cbd386eab2aebbc3a40785936f97d0c))
+* **upgrade:** allow idle strategy switching ([#556](https://github.com/dc-tec/openbao-operator/issues/556)) ([3509ffb](https://github.com/dc-tec/openbao-operator/commit/3509ffb2abea197cc6609bd56d3b31b2c049fd60))
+
+
+### Bug Fixes
+
+* **api:** align status and lifecycle contracts ([#604](https://github.com/dc-tec/openbao-operator/issues/604)) ([2a7a3ff](https://github.com/dc-tec/openbao-operator/commit/2a7a3ff81908c3b89ac54b6522efb226b488661f))
+* **api:** configure voter resources ([#600](https://github.com/dc-tec/openbao-operator/issues/600)) ([409f482](https://github.com/dc-tec/openbao-operator/commit/409f4827aa446fc5868a6453fadfdc89941b4534))
+* **charts:** allow provisioner metrics traffic ([#605](https://github.com/dc-tec/openbao-operator/issues/605)) ([b6cd1f3](https://github.com/dc-tec/openbao-operator/commit/b6cd1f330420005354de3529fe63849194fe9bc7))
+* **charts:** set single-tenant controller watch namespace ([#599](https://github.com/dc-tec/openbao-operator/issues/599)) ([026baf2](https://github.com/dc-tec/openbao-operator/commit/026baf21352df2783afc00668bba7cf756acbbf6))
+* **compat:** qualify OpenBao 2.6.0 ([#546](https://github.com/dc-tec/openbao-operator/issues/546)) ([fea6897](https://github.com/dc-tec/openbao-operator/commit/fea68976fe1d4ec169d30ed6f03c62b6f7517cfb))
+* **config:** omit plugin directory without plugins ([#533](https://github.com/dc-tec/openbao-operator/issues/533)) ([1736c6b](https://github.com/dc-tec/openbao-operator/commit/1736c6b2a268083170e49ea05b6c1ec9d23d6d2a))
+* **deps:** remediate website security advisories ([#597](https://github.com/dc-tec/openbao-operator/issues/597)) ([7dd7c37](https://github.com/dc-tec/openbao-operator/commit/7dd7c3737059978baec92c0b215239c84ad220ea))
+* **deps:** remediate website transitive vulnerabilities ([#591](https://github.com/dc-tec/openbao-operator/issues/591)) ([eba02bb](https://github.com/dc-tec/openbao-operator/commit/eba02bb4f166162370a071ab8df93891f98ed9ac))
+* **deps:** update golang.org/x/mod to v0.40.0 ([#633](https://github.com/dc-tec/openbao-operator/issues/633)) ([4d2796c](https://github.com/dc-tec/openbao-operator/commit/4d2796ce1635ba9ce298cc52609b6749064e6c99))
+* **deps:** update vulnerable brace-expansion ([#576](https://github.com/dc-tec/openbao-operator/issues/576)) ([26e7438](https://github.com/dc-tec/openbao-operator/commit/26e74388855697c4eea306ea5bcd0e51cf79e6df))
+* **deps:** update vulnerable Go modules ([#569](https://github.com/dc-tec/openbao-operator/issues/569)) ([75d4b9b](https://github.com/dc-tec/openbao-operator/commit/75d4b9b31fba3e0432d7c80c183c64448c2786e0))
+* **deps:** update vulnerable website transitive dependencies ([#561](https://github.com/dc-tec/openbao-operator/issues/561)) ([8a857ab](https://github.com/dc-tec/openbao-operator/commit/8a857ab24b065ade486702f815c8701b697e3319))
+* **docs:** improve ultrawide layout ([#610](https://github.com/dc-tec/openbao-operator/issues/610)) ([9525648](https://github.com/dc-tec/openbao-operator/commit/952564879bb52254266ab3b1b837361386583203))
+* **docs:** restore TypeScript compatibility ([#568](https://github.com/dc-tec/openbao-operator/issues/568)) ([cf514da](https://github.com/dc-tec/openbao-operator/commit/cf514da72dca35cfb58dc88f9f111bd68cc17236))
+* **lifecycle:** require ownership proof for managed jobs ([#629](https://github.com/dc-tec/openbao-operator/issues/629)) ([591c579](https://github.com/dc-tec/openbao-operator/commit/591c579c3d614fe067f7075ff9a5913b7631f899))
+* **networking:** align Gateway and TLS readiness ([#602](https://github.com/dc-tec/openbao-operator/issues/602)) ([1151b31](https://github.com/dc-tec/openbao-operator/commit/1151b31ef05a9b9f096e83896b03f932556d10f3))
+* **provisioner:** clean up tenant governance resources ([#606](https://github.com/dc-tec/openbao-operator/issues/606)) ([bf53821](https://github.com/dc-tec/openbao-operator/commit/bf538212baa79eadb65f74f4db1e204d39870651))
+* **release:** harden release candidate gates ([#618](https://github.com/dc-tec/openbao-operator/issues/618)) ([4e999fb](https://github.com/dc-tec/openbao-operator/commit/4e999fba6720f037c8bcd4b9db9232986ae300a4))
+* **release:** preserve release-as through squash ([#621](https://github.com/dc-tec/openbao-operator/issues/621)) ([8198a88](https://github.com/dc-tec/openbao-operator/commit/8198a880573c21f2a27f07b5b445c2d71178718d))
+* **release:** preserve SPDX schema validity ([#617](https://github.com/dc-tec/openbao-operator/issues/617)) ([305b241](https://github.com/dc-tec/openbao-operator/commit/305b241913063770d5b7efc655d48a3bca8abd8c))
+* resolve 0.5.0-rc.1 safety blockers ([#623](https://github.com/dc-tec/openbao-operator/issues/623)) ([ec50a60](https://github.com/dc-tec/openbao-operator/commit/ec50a6057af45b587843d1beab6d1c48afb1b645))
+* **upgrade:** verify blue-green validation hook images ([#601](https://github.com/dc-tec/openbao-operator/issues/601)) ([686922a](https://github.com/dc-tec/openbao-operator/commit/686922a286d4b58c485b2118212d9967ab3dd160))
+
+
+### Performance Improvements
+
+* **tooling:** reduce devenv base closure ([#614](https://github.com/dc-tec/openbao-operator/issues/614)) ([af2826a](https://github.com/dc-tec/openbao-operator/commit/af2826af2262a53707340c4d8659dbc84d851cbb))
+
 ## [0.4.0](https://github.com/dc-tec/openbao-operator/compare/0.3.0...0.4.0) (2026-07-04)
 
 
