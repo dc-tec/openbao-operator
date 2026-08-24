@@ -103,6 +103,21 @@ assert_not_contains() {
   fi
 }
 
+assert_ordered() {
+  local file="$1"
+  local first="$2"
+  local second="$3"
+  local first_line
+  local second_line
+
+  first_line="$(grep -nF -- "${first}" "${file}" | head -n 1 | cut -d: -f1)"
+  second_line="$(grep -nF -- "${second}" "${file}" | head -n 1 | cut -d: -f1)"
+
+  [[ -n "${first_line}" ]] || fail "expected '${first}' in ${file}"
+  [[ -n "${second_line}" ]] || fail "expected '${second}' in ${file}"
+  (( first_line < second_line )) || fail "expected '${first}' before '${second}' in ${file}"
+}
+
 bash -n \
   "${VALIDATOR}" \
   "${RELEASE_AS_RESOLVER}" \
@@ -117,6 +132,17 @@ assert_contains "${RELEASE_PLEASE_WORKFLOW}" 'release-as: ${{ steps.release-as.o
 assert_contains "${RELEASE_WORKFLOW}" "Setup Helm 3 compatibility client"
 assert_contains "${RELEASE_WORKFLOW}" 'HELM: ${{ steps.helm4.outputs.helm-path }}'
 assert_contains "${RELEASE_WORKFLOW}" 'HELM_INSTALL: ${{ steps.helm3.outputs.helm-path }}'
+
+release_security_images_job="${tmp_dir}/release-security-images.yml"
+awk '
+  /^  security-images:/ { capture = 1 }
+  /^  e2e-matrix:/ { capture = 0 }
+  capture
+' "${RELEASE_WORKFLOW}" > "${release_security_images_job}"
+assert_ordered \
+  "${release_security_images_job}" \
+  "- name: Checkout" \
+  "- name: Install Trivy (safe pinned release)"
 
 assert_contains "${RELEASE_PR_GATE_WORKFLOW}" "pull_request_review:"
 assert_contains "${RELEASE_PR_GATE_WORKFLOW}" "      - dismissed"
