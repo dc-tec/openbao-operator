@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
 usage() {
   cat >&2 <<'USAGE'
 usage: VERSION=X.Y.Z [REPO=dc-tec/openbao-operator] hack/ci/verify-post-release.sh
@@ -38,6 +40,7 @@ OWNER="${REPO%%/*}"
 GIT_REMOTE="${GIT_REMOTE:-https://github.com/${REPO}.git}"
 ALLOW_DRAFT="${ALLOW_DRAFT:-0}"
 EVIDENCE_OUT="${EVIDENCE_OUT:-}"
+EXPECTED_CHART_FILE="${EXPECTED_CHART_FILE:-${ROOT_DIR}/charts/openbao-operator/Chart.yaml}"
 VERIFIED_AT="${VERIFIED_AT:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 RELEASE_RUN_ID="${RELEASE_RUN_ID:-}"
 VERIFICATION_RUN_ID="${GITHUB_RUN_ID:-}"
@@ -57,9 +60,12 @@ if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]]; then
   fail "VERSION must be SemVer, got '${VERSION}'"
 fi
 
-for cmd in gh jq git docker cosign; do
+for cmd in gh jq git docker cosign helm sha256sum cmp; do
   require_cmd "${cmd}"
 done
+if [[ ! -f "${EXPECTED_CHART_FILE}" ]]; then
+  fail "reviewed Chart.yaml not found: ${EXPECTED_CHART_FILE}"
+fi
 
 required_assets=(
   install.yaml
@@ -131,14 +137,17 @@ info "release assets present: ${release_url}"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "${tmpdir}"' EXIT
 
-info "downloading signature evidence"
+info "downloading published release assets"
 gh release download "${VERSION}" \
   --repo "${REPO}" \
   --dir "${tmpdir}" \
-  --clobber \
-  --pattern checksums.txt \
-  --pattern checksums.txt.bundle \
-  --pattern provenance-index.json
+  --clobber
+
+info "verifying published release-asset checksums"
+(
+  cd "${tmpdir}"
+  sha256sum -c checksums.txt
+)
 
 identity="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${VERSION}"
 
@@ -155,6 +164,96 @@ if [[ "${provenance_tag}" != "${VERSION}" ]]; then
   fail "provenance-index.json release tag is '${provenance_tag}', expected '${VERSION}'"
 fi
 
+source_ref="refs/tags/${VERSION}"
+provenance_source_ref="$(jq -r '.release.source_ref' "${tmpdir}/provenance-index.json")"
+if [[ "${provenance_source_ref}" != "${source_ref}" ]]; then
+  fail "provenance-index.json source ref is '${provenance_source_ref}', expected '${source_ref}'"
+fi
+
+checksums_digest="sha256:$(sha256sum "${tmpdir}/checksums.txt" | awk '{print $1}')"
+provenance_checksums_digest="$(jq -r '.release_artifacts.checksums_txt.digest' "${tmpdir}/provenance-index.json")"
+if [[ "${provenance_checksums_digest}" != "${checksums_digest}" ]]; then
+  fail "provenance-index.json checksums digest does not match the published checksums.txt"
+fi
+
+image_count="$(jq '.images | length' "${tmpdir}/provenance-index.json")"
+if [[ "${image_count}" != "4" ]]; then
+  fail "provenance-index.json must contain exactly four release images, found ${image_count}"
+fi
+
+image_value() {
+  local name="$1"
+  local field="$2"
+  jq -er --arg name "${name}" --arg field "${field}" \
+    '[.images[] | select(.name == $name)]
+     | if length == 1 then .[0][$field] else error("expected one image entry for " + $name) end' \
+    "${tmpdir}/provenance-index.json"
+}
+
+manager_image="$(image_value openbao-operator ref)"
+manager_digest="$(image_value openbao-operator digest)"
+config_init_image="$(image_value openbao-init ref)"
+config_init_digest="$(image_value openbao-init digest)"
+backup_executor_image="$(image_value openbao-backup ref)"
+backup_executor_digest="$(image_value openbao-backup digest)"
+upgrade_executor_image="$(image_value openbao-upgrade ref)"
+upgrade_executor_digest="$(image_value openbao-upgrade digest)"
+
+expected_image_refs=(
+  "openbao-operator=ghcr.io/${OWNER}/openbao-operator"
+  "openbao-init=ghcr.io/${OWNER}/openbao-init"
+  "openbao-backup=ghcr.io/${OWNER}/openbao-backup"
+  "openbao-upgrade=ghcr.io/${OWNER}/openbao-upgrade"
+)
+for expected in "${expected_image_refs[@]}"; do
+  image_name="${expected%%=*}"
+  expected_ref="${expected#*=}"
+  actual_ref="$(image_value "${image_name}" ref)"
+  if [[ "${actual_ref}" != "${expected_ref}" ]]; then
+    fail "provenance image ${image_name} ref is '${actual_ref}', expected '${expected_ref}'"
+  fi
+done
+
+attestation_signer_workflow="$(jq -er '.identity_constraints.reusable_build_signer_workflow' "${tmpdir}/provenance-index.json")"
+info "verifying published image attestations"
+REPO="${REPO}" \
+  VERSION="${VERSION}" \
+  SOURCE_REF="${source_ref}" \
+  SIGNER_WORKFLOW="${attestation_signer_workflow}" \
+  MANAGER_IMAGE="${manager_image}" \
+  MANAGER_DIGEST="${manager_digest}" \
+  CONFIG_INIT_IMAGE="${config_init_image}" \
+  CONFIG_INIT_DIGEST="${config_init_digest}" \
+  BACKUP_EXECUTOR_IMAGE="${backup_executor_image}" \
+  BACKUP_EXECUTOR_DIGEST="${backup_executor_digest}" \
+  UPGRADE_EXECUTOR_IMAGE="${upgrade_executor_image}" \
+  UPGRADE_EXECUTOR_DIGEST="${upgrade_executor_digest}" \
+  bash "${ROOT_DIR}/hack/ci/verify-image-attestations.sh"
+
+info "verifying published image tags and release signatures"
+while IFS= read -r image_entry; do
+  image_name="$(jq -r '.name' <<<"${image_entry}")"
+  image_ref="$(jq -r '.ref' <<<"${image_entry}")"
+  image_digest="$(jq -r '.digest' <<<"${image_entry}")"
+  if ! [[ "${image_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    fail "provenance image ${image_name} has invalid digest '${image_digest}'"
+  fi
+
+  published_digest="$(
+    docker buildx imagetools inspect "${image_ref}:${VERSION}" \
+      --format '{{json .Manifest.Digest}}' | tr -d '"'
+  )"
+  if [[ "${published_digest}" != "${image_digest}" ]]; then
+    fail "published image tag ${image_ref}:${VERSION} resolves to ${published_digest}, expected ${image_digest}"
+  fi
+
+  cosign verify \
+    --new-bundle-format=true \
+    --certificate-identity "${identity}" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    "${image_ref}@${image_digest}" >/dev/null
+done < <(jq -c '.images[]' "${tmpdir}/provenance-index.json")
+
 chart_ref="ghcr.io/${OWNER}/charts/openbao-operator:${VERSION}"
 info "checking Helm chart publication: ${chart_ref}"
 chart_digest="$(
@@ -164,12 +263,40 @@ if [[ -z "${chart_digest}" || "${chart_digest}" == "null" ]]; then
   fail "could not resolve chart digest for ${chart_ref}"
 fi
 
+provenance_chart_digest="$(jq -r '.chart.digest' "${tmpdir}/provenance-index.json")"
+if [[ "${provenance_chart_digest}" != "${chart_digest}" ]]; then
+  fail "provenance chart digest is ${provenance_chart_digest}, published chart digest is ${chart_digest}"
+fi
+
+info "checking published Helm chart metadata"
+chart_dir="${tmpdir}/chart"
+mkdir -p "${chart_dir}"
+helm pull "oci://ghcr.io/${OWNER}/charts/openbao-operator" \
+  --version "${VERSION}" \
+  --untar \
+  --untardir "${chart_dir}" >/dev/null
+if ! cmp -s \
+  "${EXPECTED_CHART_FILE}" \
+  "${chart_dir}/openbao-operator/Chart.yaml"; then
+  fail "published Helm chart metadata differs from the reviewed ${VERSION} Chart.yaml"
+fi
+
 info "verifying Helm chart signature"
 cosign verify \
   --new-bundle-format=true \
   --certificate-identity "${identity}" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   "ghcr.io/${OWNER}/charts/openbao-operator@${chart_digest}" >/dev/null
+
+info "verifying chart and checksums attestations"
+REPO="${REPO}" \
+  OWNER="${OWNER}" \
+  VERSION="${VERSION}" \
+  SOURCE_REF="${source_ref}" \
+  CHECKSUMS_PATH="${tmpdir}/checksums.txt" \
+  CHART_DIGEST="${chart_digest}" \
+  VERIFY_CHART=true \
+  bash "${ROOT_DIR}/hack/ci/verify-release-artifact-attestations.sh"
 
 info "checking for open release-please PRs"
 open_release_prs="$(
@@ -293,9 +420,16 @@ if [[ -n "${EVIDENCE_OUT}" ]]; then
         github_release_published: true,
         github_release_prerelease_flag_verified: true,
         required_assets_present: true,
+        release_asset_checksums_verified: true,
         checksums_signature_verified: true,
+        checksums_attestation_verified: true,
+        image_tags_match_provenance: true,
+        image_signatures_verified: true,
+        image_attestations_verified: true,
         helm_chart_published: true,
+        published_chart_metadata_matches_tag: true,
         helm_chart_signature_verified: true,
+        helm_chart_attestation_verified: true,
         no_open_release_please_prs: true,
         no_stale_release_please_branches: true,
         release_please_pending_label_cleared: true
