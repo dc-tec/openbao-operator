@@ -4,8 +4,8 @@ description: >-
   OpenBao Operator installs the OpenBao Kubernetes operator and its required
   cluster-scoped resources.
 type: application
-version: 0.5.0-rc.1
-appVersion: 0.5.0-rc.1
+version: 0.5.0-rc.2
+appVersion: 0.5.0-rc.2
 icon: >-
   https://raw.githubusercontent.com/dc-tec/openbao-operator/main/website/static/img/brand/logo.svg
 home: https://github.com/dc-tec/openbao-operator
@@ -83,19 +83,21 @@ annotations:
       description: "resolve 0.5.0-rc.1 safety blockers"
     - kind: fixed
       description: "upgrade: verify blue-green validation hook images"
+    - kind: fixed
+      description: "release: checkout before image scans"
     - kind: changed
       description: "tooling: reduce devenv base closure"
     - kind: changed
-      description: "main: request release 0.5.0-rc.1"
+      description: "main: request release 0.5.0-rc.2"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.5.0-rc.1
+      image: ghcr.io/dc-tec/openbao-operator:0.5.0-rc.2
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.5.0-rc.1
+      image: ghcr.io/dc-tec/openbao-init:0.5.0-rc.2
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.5.0-rc.1
+      image: ghcr.io/dc-tec/openbao-backup:0.5.0-rc.2
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0-rc.1
+      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0-rc.2
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
