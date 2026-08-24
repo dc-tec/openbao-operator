@@ -8,6 +8,12 @@ set -euo pipefail
 CHART_DIR="${CHART_DIR:-charts/openbao-operator}"
 CHART_FILE="${CHART_DIR}/Chart.yaml"
 CHANGELOG_FILE="${CHANGELOG_FILE:-CHANGELOG.md}"
+PRESERVE_CHANGE_METADATA="${PRESERVE_CHANGE_METADATA:-false}"
+
+if [[ "${PRESERVE_CHANGE_METADATA}" != "true" && "${PRESERVE_CHANGE_METADATA}" != "false" ]]; then
+  echo "PRESERVE_CHANGE_METADATA must be true or false" >&2
+  exit 1
+fi
 
 if [[ ! -f "${CHART_FILE}" ]]; then
   echo "chart file not found: ${CHART_FILE}" >&2
@@ -35,7 +41,7 @@ sed -E -i.bak \
   "${CHART_FILE}"
 rm -f "${CHART_FILE}.bak"
 
-python3 - "${CHART_FILE}" "${CHANGELOG_FILE}" "${CHART_VERSION}" <<'PY'
+python3 - "${CHART_FILE}" "${CHANGELOG_FILE}" "${CHART_VERSION}" "${PRESERVE_CHANGE_METADATA}" <<'PY'
 import json
 import re
 import sys
@@ -44,6 +50,7 @@ from pathlib import Path
 chart_path = Path(sys.argv[1])
 changelog_path = Path(sys.argv[2])
 version = sys.argv[3]
+preserve_change_metadata = sys.argv[4] == "true"
 
 
 def heading_version(line):
@@ -199,17 +206,18 @@ def replace_contains_security_updates(lines, enabled):
     raise SystemExit("artifacthub.io/containsSecurityUpdates annotation not found")
 
 
-changes = release_changes(changelog_path.read_text())
-has_security_changes = any(change["kind"] == "security" for change in changes)
-
-changes_block = ["  artifacthub.io/changes: |"]
-for change in changes:
-    changes_block.append(f"    - kind: {change['kind']}")
-    changes_block.append(f"      description: {json.dumps(change['description'])}")
-
 chart_lines = chart_path.read_text().splitlines()
-chart_lines = replace_contains_security_updates(chart_lines, has_security_changes)
-chart_lines = replace_annotation_block(chart_lines, "artifacthub.io/changes", changes_block)
+if not preserve_change_metadata:
+    changes = release_changes(changelog_path.read_text())
+    has_security_changes = any(change["kind"] == "security" for change in changes)
+
+    changes_block = ["  artifacthub.io/changes: |"]
+    for change in changes:
+        changes_block.append(f"    - kind: {change['kind']}")
+        changes_block.append(f"      description: {json.dumps(change['description'])}")
+
+    chart_lines = replace_contains_security_updates(chart_lines, has_security_changes)
+    chart_lines = replace_annotation_block(chart_lines, "artifacthub.io/changes", changes_block)
 chart_path.write_text("\n".join(chart_lines) + "\n")
 PY
 
@@ -265,6 +273,11 @@ fi
 
 if ! grep -Eq '^[[:space:]]*artifacthub\.io/changes:[[:space:]]*\|[[:space:]]*$' "${CHART_FILE}"; then
   echo "artifacthub.io/changes annotation not found in ${CHART_FILE}" >&2
+  exit 1
+fi
+
+if ! grep -Eq "^[[:space:]]*artifacthub\.io/containsSecurityUpdates:[[:space:]]*['\"]?(true|false)['\"]?[[:space:]]*$" "${CHART_FILE}"; then
+  echo "artifacthub.io/containsSecurityUpdates annotation missing or invalid in ${CHART_FILE}" >&2
   exit 1
 fi
 

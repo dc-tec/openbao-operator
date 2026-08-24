@@ -504,7 +504,7 @@ jobs:
           set -euo pipefail
           work_dir="$(mktemp -d)"
           cp -a charts/openbao-operator "${work_dir}/openbao-operator"
-          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash hack/ci/prepare-release-chart.sh
+          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" PRESERVE_CHANGE_METADATA=true bash hack/ci/prepare-release-chart.sh
           find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
           helm lint "${work_dir}/openbao-operator"
           helm package "${work_dir}/openbao-operator" -d dist/primary
@@ -519,7 +519,7 @@ jobs:
           set -euo pipefail
           work_dir="$(mktemp -d)"
           cp -a charts/openbao-operator "${work_dir}/openbao-operator"
-          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash hack/ci/prepare-release-chart.sh
+          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" PRESERVE_CHANGE_METADATA=true bash hack/ci/prepare-release-chart.sh
           find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
           helm package "${work_dir}/openbao-operator" -d dist/rebuild
           test -f "dist/rebuild/openbao-operator-${CHART_VERSION}.tgz"

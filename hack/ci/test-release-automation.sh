@@ -132,6 +132,10 @@ assert_contains "${RELEASE_PLEASE_WORKFLOW}" 'release-as: ${{ steps.release-as.o
 assert_contains "${RELEASE_WORKFLOW}" "Setup Helm 3 compatibility client"
 assert_contains "${RELEASE_WORKFLOW}" 'HELM: ${{ steps.helm4.outputs.helm-path }}'
 assert_contains "${RELEASE_WORKFLOW}" 'HELM_INSTALL: ${{ steps.helm3.outputs.helm-path }}'
+preserve_change_metadata_count="$(grep -Fc 'PRESERVE_CHANGE_METADATA=true' "${RELEASE_WORKFLOW}")"
+[[ "${preserve_change_metadata_count}" == "2" ]] || {
+  fail "release packaging must preserve reviewed chart change metadata in both builds"
+}
 
 release_security_images_job="${tmp_dir}/release-security-images.yml"
 awk '
@@ -154,6 +158,15 @@ assert_not_contains "${RELEASE_PR_GATE_WORKFLOW}" "    paths:"
 assert_contains "${POST_RELEASE_VERIFIER}" 'if [[ "${VERSION}" == *-* ]]; then'
 assert_contains "${POST_RELEASE_VERIFIER}" 'if [[ "${is_prerelease}" != "${expected_prerelease}" ]]; then'
 assert_contains "${POST_RELEASE_VERIFIER}" "github_release_prerelease_flag_verified: true"
+assert_contains "${POST_RELEASE_VERIFIER}" "verifying published release-asset checksums"
+assert_contains "${POST_RELEASE_VERIFIER}" "verifying published image tags and release signatures"
+assert_contains "${POST_RELEASE_VERIFIER}" "hack/ci/verify-image-attestations.sh"
+assert_contains "${POST_RELEASE_VERIFIER}" "published_chart_metadata_matches_tag: true"
+assert_contains "${POST_RELEASE_VERIFIER}" "helm_chart_attestation_verified: true"
+assert_not_contains "${ROOT_DIR}/.github/workflows/post-release-verification.yml" 'ref: ${{ github.event.workflow_run.head_sha || github.event.inputs.tag }}'
+assert_contains "${ROOT_DIR}/.github/workflows/post-release-verification.yml" 'git show "${TAG_HEAD_SHA}:charts/openbao-operator/Chart.yaml"'
+assert_contains "${ROOT_DIR}/.github/workflows/post-release-verification.yml" "EXPECTED_CHART_FILE=dist/reviewed-Chart.yaml"
+assert_contains "${ROOT_DIR}/.github/workflows/post-release-verification.yml" "Setup Helm"
 
 spdx_fixture="${tmp_dir}/normalizer.spdx.json"
 cat > "${spdx_fixture}" <<'EOF'
@@ -341,5 +354,36 @@ assert_not_contains "${stable_chart}" "legacy: older release entry"
 
 backup_change_count="$(grep -Fc "backup: add immutable backup evidence" "${stable_chart}")"
 [[ "${backup_change_count}" == "1" ]] || fail "expected rolled-up changes to be deduplicated"
+
+preserved_chart_dir="${tmp_dir}/preserved-chart"
+mkdir -p "${preserved_chart_dir}"
+write_chart_fixture "${preserved_chart_dir}/Chart.yaml"
+sed -E -i.bak \
+  -e "s/artifacthub\.io\/containsSecurityUpdates: 'false'/artifacthub.io\/containsSecurityUpdates: 'true'/" \
+  -e 's/description: "stale"/description: "reviewed security metadata"/' \
+  "${preserved_chart_dir}/Chart.yaml"
+rm -f "${preserved_chart_dir}/Chart.yaml.bak"
+PRESERVE_CHANGE_METADATA=true \
+  CHART_DIR="${preserved_chart_dir}" \
+  CHANGELOG_FILE="${changelog_file}" \
+  CHART_VERSION="0.5.0-rc.2" \
+  OWNER="dc-tec" \
+  bash "${CHART_PREPARER}"
+
+preserved_chart="${preserved_chart_dir}/Chart.yaml"
+assert_contains "${preserved_chart}" 'artifacthub.io/prerelease: "true"'
+assert_contains "${preserved_chart}" "artifacthub.io/containsSecurityUpdates: 'true'"
+assert_contains "${preserved_chart}" 'description: "reviewed security metadata"'
+assert_contains "${preserved_chart}" "image: ghcr.io/dc-tec/openbao-operator:0.5.0-rc.2"
+assert_not_contains "${preserved_chart}" "controller: add rc2-only reconciliation guard"
+
+if PRESERVE_CHANGE_METADATA=invalid \
+  CHART_DIR="${preserved_chart_dir}" \
+  CHANGELOG_FILE="${changelog_file}" \
+  CHART_VERSION="0.5.0-rc.2" \
+  OWNER="dc-tec" \
+  bash "${CHART_PREPARER}" >/dev/null 2>&1; then
+  fail "invalid PRESERVE_CHANGE_METADATA value was accepted"
+fi
 
 echo "release automation tests passed"
