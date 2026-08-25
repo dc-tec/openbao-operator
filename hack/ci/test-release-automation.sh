@@ -10,6 +10,8 @@ SPDX_NORMALIZER="${ROOT_DIR}/hack/ci/normalize-spdx-json.sh"
 POST_RELEASE_VERIFIER="${ROOT_DIR}/hack/ci/verify-post-release.sh"
 RELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release.yml"
 RELEASE_PLEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release-please.yml"
+RELEASE_PLEASE_PACKAGE="${ROOT_DIR}/hack/ci/release-please/package.json"
+RELEASE_PLEASE_LOCK="${ROOT_DIR}/hack/ci/release-please/package-lock.json"
 RELEASE_PR_GATE_WORKFLOW="${ROOT_DIR}/.github/workflows/release-pr-gate.yml"
 
 tmp_dir="$(mktemp -d)"
@@ -127,7 +129,19 @@ bash -n \
 
 assert_contains "${RELEASE_PLEASE_WORKFLOW}" "Resolve Release-As override"
 assert_contains "${RELEASE_PLEASE_WORKFLOW}" "bash hack/ci/resolve-release-as-override.sh"
-assert_contains "${RELEASE_PLEASE_WORKFLOW}" 'release-as: ${{ steps.release-as.outputs.release_as }}'
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" "Run release-please action (normal manifest PR)"
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" "Run release-please CLI (exact-version manifest PR)"
+assert_contains "${RELEASE_PLEASE_PACKAGE}" '"release-please": "17.6.0"'
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" '--release-as="${RELEASE_AS}"'
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" "exact-version release PR does not match requested version"
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" "release-please did not create the requested"
+assert_not_contains "${RELEASE_PLEASE_WORKFLOW}" 'release-as: ${{ steps.release-as.outputs.release_as }}'
+release_please_lock_version="$(jq -er '.packages["node_modules/release-please"].version' "${RELEASE_PLEASE_LOCK}")"
+[[ "${release_please_lock_version}" == "17.6.0" ]] || fail "release-please lockfile version is not pinned to 17.6.0"
+release_please_lock_integrity="$(jq -er '.packages["node_modules/release-please"].integrity' "${RELEASE_PLEASE_LOCK}")"
+[[ "${release_please_lock_integrity}" == "sha512-ItzkkEBeEbKsCrx7N1QlADrCahoONA4WPlsOinSnXTkqUBIWlHC6+S28VJ9PaHy7ZPSJwSQsRuDjI0/HL5G6hw==" ]] || {
+  fail "release-please lockfile integrity does not match 17.6.0"
+}
 
 assert_contains "${RELEASE_WORKFLOW}" "Setup Helm 3 compatibility client"
 assert_contains "${RELEASE_WORKFLOW}" 'HELM: ${{ steps.helm4.outputs.helm-path }}'

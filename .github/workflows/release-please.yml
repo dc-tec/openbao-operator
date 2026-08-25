@@ -90,6 +90,16 @@ jobs:
             COMMIT_IS_EMPTY="${commit_is_empty}" \
             bash hack/ci/resolve-release-as-override.sh
 
+      - name: Setup Node for exact-version release request
+        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' && steps.release-as.outputs.release_as != '' }}
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.0.0
+        with:
+          node-version: "24"
+
+      - name: Install pinned release-please CLI
+        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' && steps.release-as.outputs.release_as != '' }}
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix hack/ci/release-please
+
       - name: Mint GitHub App token (openbao-operator-release-pr)
         id: app-token
         if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' }}
@@ -103,29 +113,101 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
 
-      - name: Run release-please (PR only)
+      - name: Run release-please action (normal manifest PR)
         id: release
-        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' }}
+        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' && steps.release-as.outputs.release_as == '' }}
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ steps.app-token.outputs.token }}
           target-branch: ${{ github.ref_name }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          release-as: ${{ steps.release-as.outputs.release_as }}
           skip-github-release: true
 
-      - name: Check out release PR branch
-        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' && steps.release.outputs.prs_created == 'true' }}
+      # release-please-action v5 silently ignores release-as in manifest mode.
+      # Use the matching pinned CLI until googleapis/release-please-action#1220 is fixed.
+      - name: Run release-please CLI (exact-version manifest PR)
+        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' && steps.release-as.outputs.release_as != '' }}
+        env:
+          RELEASE_AS: ${{ steps.release-as.outputs.release_as }}
+          RELEASE_PLEASE_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          token_file="${RUNNER_TEMP}/release-please-token"
+          umask 077
+          printf '%s' "${RELEASE_PLEASE_TOKEN}" > "${token_file}"
+
+          hack/ci/release-please/node_modules/.bin/release-please release-pr \
+            --repo-url="${REPOSITORY}" \
+            --target-branch="${TARGET_BRANCH}" \
+            --token="${token_file}" \
+            --config-file=release-please-config.json \
+            --manifest-file=.release-please-manifest.json \
+            --release-as="${RELEASE_AS}"
+
+      - name: Locate open release PR
+        id: release-pr
+        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_AS: ${{ steps.release-as.outputs.release_as }}
+          RELEASE_PR_BRANCH: release-please--branches--${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          release_prs="$(
+            gh pr list \
+              --repo "${REPO}" \
+              --state open \
+              --base "${TARGET_BRANCH}" \
+              --head "${RELEASE_PR_BRANCH}" \
+              --limit 2 \
+              --json number,title
+          )"
+          release_pr_count="$(jq 'length' <<<"${release_prs}")"
+          if (( release_pr_count > 1 )); then
+            echo "expected at most one open release PR, found ${release_pr_count}" >&2
+            exit 1
+          fi
+          if (( release_pr_count == 0 )); then
+            if [[ -n "${RELEASE_AS}" ]]; then
+              echo "release-please did not create the requested '${RELEASE_AS}' release PR" >&2
+              exit 1
+            fi
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          release_pr_number="$(jq -r '.[0].number' <<<"${release_prs}")"
+          release_pr_title="$(jq -r '.[0].title' <<<"${release_prs}")"
+          if [[ -n "${RELEASE_AS}" ]]; then
+            expected_title="chore(${TARGET_BRANCH}): release ${RELEASE_AS}"
+            if [[ "${release_pr_title}" != "${expected_title}" ]]; then
+              echo "exact-version release PR title is '${release_pr_title}', expected '${expected_title}'" >&2
+              exit 1
+            fi
+          fi
+
+          echo "exists=true" >> "${GITHUB_OUTPUT}"
+          echo "number=${release_pr_number}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check out release PR synchronization workspace
+        if: ${{ steps.release-pr.outputs.exists == 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
       - name: Sync Chart metadata and changelog on release PR branch
-        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' && steps.release.outputs.prs_created == 'true' }}
+        if: ${{ steps.release-pr.outputs.exists == 'true' }}
         env:
           OWNER: ${{ github.repository_owner }}
+          RELEASE_AS: ${{ steps.release-as.outputs.release_as }}
           RELEASE_PR_BRANCH: release-please--branches--${{ github.ref_name }}
         run: |
           set -euo pipefail
@@ -142,6 +224,19 @@ jobs:
           if [[ -z "${chart_version}" ]]; then
             echo "failed to parse charts/openbao-operator/Chart.yaml version" >&2
             exit 1
+          fi
+
+          if [[ -n "${RELEASE_AS}" ]]; then
+            manifest_version="$(jq -er '."."' .release-please-manifest.json)"
+            chart_app_version="$(sed -nE 's/^appVersion:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*(#.*)?$/\1/p' charts/openbao-operator/Chart.yaml | head -n1)"
+
+            if [[ "${manifest_version}" != "${RELEASE_AS}" || "${chart_version}" != "${RELEASE_AS}" || "${chart_app_version}" != "${RELEASE_AS}" ]]; then
+              echo "exact-version release PR does not match requested version '${RELEASE_AS}'" >&2
+              echo "  manifest:   ${manifest_version}" >&2
+              echo "  chart:      ${chart_version}" >&2
+              echo "  appVersion: ${chart_app_version}" >&2
+              exit 1
+            fi
           fi
 
           CHART_DIR="charts/openbao-operator" CHART_VERSION="${chart_version}" OWNER="${OWNER}" bash hack/ci/prepare-release-chart.sh
