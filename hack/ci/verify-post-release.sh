@@ -17,6 +17,8 @@ Environment:
   GIT_REMOTE    Git remote used for branch/tag checks. Default: https://github.com/${REPO}.git.
   ALLOW_DRAFT   Set to 1 to allow a draft GitHub Release. Default: 0.
   EVIDENCE_OUT  Optional path where a JSON verification evidence file is written.
+  EXPECTED_CHART_FILE
+                 Reviewed Chart.yaml to compare with the published chart.
 USAGE
 }
 
@@ -270,14 +272,17 @@ fi
 
 info "checking published Helm chart metadata"
 chart_dir="${tmpdir}/chart"
+expected_chart_dir="${tmpdir}/expected-chart"
 mkdir -p "${chart_dir}"
+mkdir -p "${expected_chart_dir}"
 helm pull "oci://ghcr.io/${OWNER}/charts/openbao-operator" \
   --version "${VERSION}" \
   --untar \
   --untardir "${chart_dir}" >/dev/null
-if ! cmp -s \
-  "${EXPECTED_CHART_FILE}" \
-  "${chart_dir}/openbao-operator/Chart.yaml"; then
+cp "${EXPECTED_CHART_FILE}" "${expected_chart_dir}/Chart.yaml"
+helm show chart "${expected_chart_dir}" > "${tmpdir}/expected-chart-metadata.yaml"
+helm show chart "${chart_dir}/openbao-operator" > "${tmpdir}/published-chart-metadata.yaml"
+if ! cmp -s "${tmpdir}/expected-chart-metadata.yaml" "${tmpdir}/published-chart-metadata.yaml"; then
   fail "published Helm chart metadata differs from the reviewed ${VERSION} Chart.yaml"
 fi
 
