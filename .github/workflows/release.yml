@@ -796,8 +796,6 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-      issues: write
-      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1082,6 +1080,20 @@ jobs:
             gh release edit "${version}" --title "${version}" --draft=false --latest
           fi
 
+  cleanup-release-state:
+    name: Clear Release Pending State
+    runs-on: *runner
+    needs: [prepare, promote]
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+
       - name: Clear release-please pending label
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1093,7 +1105,7 @@ jobs:
   deploy-docs:
     name: Deploy Docs Site
     runs-on: *runner
-    needs: [prepare, promote]
+    needs: [prepare, promote, cleanup-release-state]
     concurrency:
       group: gh-pages
       cancel-in-progress: false
