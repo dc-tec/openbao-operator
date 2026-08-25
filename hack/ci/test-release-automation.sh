@@ -132,6 +132,12 @@ assert_contains "${RELEASE_PLEASE_WORKFLOW}" 'release-as: ${{ steps.release-as.o
 assert_contains "${RELEASE_WORKFLOW}" "Setup Helm 3 compatibility client"
 assert_contains "${RELEASE_WORKFLOW}" 'HELM: ${{ steps.helm4.outputs.helm-path }}'
 assert_contains "${RELEASE_WORKFLOW}" 'HELM_INSTALL: ${{ steps.helm3.outputs.helm-path }}'
+assert_contains "${RELEASE_WORKFLOW}" "  cleanup-release-state:"
+assert_contains "${RELEASE_WORKFLOW}" "    name: Clear Release Pending State"
+assert_contains "${RELEASE_WORKFLOW}" "    needs: [prepare, promote]"
+assert_contains "${RELEASE_WORKFLOW}" "      pull-requests: write"
+assert_contains "${RELEASE_WORKFLOW}" "bash hack/ci/clear-release-please-pending-label.sh"
+assert_contains "${RELEASE_WORKFLOW}" "    needs: [prepare, promote, cleanup-release-state]"
 preserve_change_metadata_count="$(grep -Fc 'PRESERVE_CHANGE_METADATA=true' "${RELEASE_WORKFLOW}")"
 [[ "${preserve_change_metadata_count}" == "2" ]] || {
   fail "release packaging must preserve reviewed chart change metadata in both builds"
