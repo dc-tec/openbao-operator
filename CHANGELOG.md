@@ -8,6 +8,7 @@ Release notes are generated and maintained via **release-please** based on **Con
 ### Bug Fixes
 
 * **release:** unblock RC publication checks ([#642](https://github.com/dc-tec/openbao-operator/issues/642)) ([ff5c506](https://github.com/dc-tec/openbao-operator/commit/ff5c506be38e1dc5acfb924d94608f6b3fb0a58d))
+* **release:** compare packaged chart metadata semantically
 
 
 ### Miscellaneous Chores

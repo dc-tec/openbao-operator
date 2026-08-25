@@ -161,6 +161,8 @@ assert_contains "${POST_RELEASE_VERIFIER}" "github_release_prerelease_flag_verif
 assert_contains "${POST_RELEASE_VERIFIER}" "verifying published release-asset checksums"
 assert_contains "${POST_RELEASE_VERIFIER}" "verifying published image tags and release signatures"
 assert_contains "${POST_RELEASE_VERIFIER}" "hack/ci/verify-image-attestations.sh"
+assert_contains "${POST_RELEASE_VERIFIER}" 'helm show chart "${expected_chart_dir}"'
+assert_contains "${POST_RELEASE_VERIFIER}" 'helm show chart "${chart_dir}/openbao-operator"'
 assert_contains "${POST_RELEASE_VERIFIER}" "published_chart_metadata_matches_tag: true"
 assert_contains "${POST_RELEASE_VERIFIER}" "helm_chart_attestation_verified: true"
 assert_not_contains "${ROOT_DIR}/.github/workflows/post-release-verification.yml" 'ref: ${{ github.event.workflow_run.head_sha || github.event.inputs.tag }}'
