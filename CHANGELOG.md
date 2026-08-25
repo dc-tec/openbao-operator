@@ -2,6 +2,13 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.5.1-rc.3](https://github.com/dc-tec/openbao-operator/compare/0.5.0-rc.3...0.5.1-rc.3) (2026-08-25)
+
+
+### Bug Fixes
+
+* **release:** isolate pending label cleanup ([#646](https://github.com/dc-tec/openbao-operator/issues/646)) ([2538473](https://github.com/dc-tec/openbao-operator/commit/25384730cd32ab2c73134a00773f7ba6349b8eb4))
+
 ## [0.5.0-rc.3](https://github.com/dc-tec/openbao-operator/compare/0.5.0-rc.2...0.5.0-rc.3) (2026-08-25)
 
 
