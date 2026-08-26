@@ -36,25 +36,56 @@ spec:
   unseal:
     type: kmip
     kmip:
-      # Address of the KMIP server
-      address: "kmip.example.com:5696"
+      # Endpoint and wrapping-key identifier in the KMIP server
+      endpoint: "kmip.example.com:5696"
+      kmsKeyID: "1"
       # Path to client certificate for KMIP communication
-      certificate: "/etc/kmip/cert.pem"
+      clientCert: "/etc/bao/seal-creds/client.crt"
       # Path to private key for KMIP communication
-      key: "/etc/kmip/key.pem"
+      clientKey: "/etc/bao/seal-creds/client.key"
       # Path to CA certificate for KMIP communication
-      caCert: "/etc/kmip/ca.pem"
+      caCert: "/etc/bao/seal-creds/ca.crt"
       # Optional: SNI server name for TLS
-      # tlsServerName: "kmip.example.com"
-      # Optional: Skip TLS verification (NOT RECOMMENDED for production)
-      # tlsSkipVerify: false
+      serverName: "kmip.example.com"
     # Optional: Reference to Secret containing KMIP certificates
     # credentialsSecretRef:
     #   name: kmip-certificates
-    #   namespace: openbaocluster-kmip
   # Self-initialization (required for Hardened profile)
   selfInit:
     enabled: true
+    requests:
+      # Replace the example issuer and audience with values tested against your identity provider.
+      - name: enable-human-jwt-auth
+        operation: update
+        path: sys/auth/jwt
+        authMethod:
+          type: jwt
+      - name: configure-human-jwt-auth
+        operation: update
+        path: auth/jwt/config
+        data:
+          jwks_url: "https://idp.example.com/.well-known/jwks.json"
+          bound_issuer: "https://idp.example.com/"
+      - name: create-platform-operator-policy
+        operation: update
+        path: sys/policies/acl/platform-operator
+        policy:
+          policy: |
+            path "*" {
+              capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+            }
+      - name: bind-platform-operator-role
+        operation: update
+        path: auth/jwt/role/platform-operator
+        data:
+          role_type: jwt
+          bound_audiences:
+            - openbao
+          bound_claims:
+            groups: platform-operators
+          user_claim: sub
+          token_policies:
+            - platform-operator
 ---
 # Example: Create KMIP certificates Secret
 # The Secret should contain the client certificate, key, and CA certificate
@@ -66,11 +97,11 @@ spec:
 #   namespace: openbaocluster-kmip
 # type: Opaque
 # stringData:
-#   cert.pem: |
+#   client.crt: |
 #     -----BEGIN CERTIFICATE-----
 #     ...
 #     -----END CERTIFICATE-----
-#   key.pem: |
+#   client.key: |
 #     -----BEGIN PRIVATE KEY-----
 #     ...
 #     -----END PRIVATE KEY-----
@@ -78,4 +109,3 @@ spec:
 #     -----BEGIN CERTIFICATE-----
 #     ...
 #     -----END CERTIFICATE-----
-

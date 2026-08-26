@@ -58,14 +58,19 @@ The target namespace must already exist. `spec.targetNamespace` is required and 
 4. Verify that provisioning completed.
 
    {{< command label="verify" title="Verify the tenant handoff" >}}
+   kubectl -n openbao-demo wait \
+     --for=condition=Provisioned \
+     openbaotenant/openbao-demo \
+     --timeout=2m
    kubectl -n openbao-demo get openbaotenant openbao-demo \
      -o jsonpath='{.status.provisioned}{"\t"}{.status.conditions[?(@.type=="Provisioned")].status}{"\n"}'
    kubectl -n openbao-demo get rolebinding \
      openbao-operator-tenant-rolebinding
    {{< /command >}}
 
-   The first command must print `true` and `True`. The condition carries the current generation, reason, and message;
-   the RoleBinding is the concrete handoff that allows cluster reconciliation to continue.
+   The wait command must report `condition met`. The status command must print `true` and `True`. The condition carries
+   the current generation, reason, and message; the RoleBinding is the concrete handoff that allows cluster
+   reconciliation to continue.
 
 ## Onboard centrally
 

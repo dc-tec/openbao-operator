@@ -26,6 +26,12 @@ Create a disposable Development cluster for evaluation. Do not create a producti
   production.
 - Decide whether the cluster is disposable or intended for production before the first reconcile.
 
+{{< command label="verify" title="Verify evaluation storage" >}}
+kubectl get storageclass
+{{< /command >}}
+
+For evaluation, the output must identify one default StorageClass. Stop and configure storage when no default exists.
+
 ## Choose the profile
 
 | Profile | Intended use | Security behavior |
@@ -46,7 +52,7 @@ Create a disposable Development cluster for evaluation. Do not create a producti
      name: dev-cluster
      namespace: openbao-demo
    spec:
-    version: "2.6.2"
+     version: "2.6.2"
      replicas: 1
      profile: Development
      tls:
@@ -67,12 +73,11 @@ Create a disposable Development cluster for evaluation. Do not create a producti
    kubectl apply -f cluster.yaml
    {{< /command >}}
 
-3. Watch the custom resource and Pods converge.
+3. In a separate terminal, optionally watch the custom resource converge. Stop the watch with `Ctrl-C` after the
+   availability condition becomes true.
 
    {{< command label="inspect" title="Watch cluster creation" >}}
    kubectl -n openbao-demo get openbaocluster dev-cluster -w
-   kubectl -n openbao-demo get pods \
-     -l openbao.org/cluster=dev-cluster -w
    {{< /command >}}
 
 4. Wait for the availability condition.
@@ -99,6 +104,28 @@ Create a disposable Development cluster for evaluation. Do not create a producti
    - `Available=True` and `TLSReady=True`;
    - every voter Pod is Ready and its PVC is Bound;
    - the TLS mode and storage match the declared configuration.
+
+6. Prove that the evaluation credential can authenticate to OpenBao from inside the cluster.
+
+   {{< command label="verify" title="Run an authenticated OpenBao check" >}}
+   (
+     kubectl -n openbao-demo get secret dev-cluster-root-token \
+       -o jsonpath='{.data.token}' | base64 -d
+     printf '\n'
+   ) | kubectl -n openbao-demo exec -i -c openbao dev-cluster-0 -- \
+     sh -ec '
+       IFS= read -r BAO_TOKEN
+       export BAO_ADDR=https://127.0.0.1:8200
+       export BAO_CACERT=/etc/bao/tls/ca.crt
+       export BAO_TLS_SERVER_NAME=openbao-cluster-dev-cluster.local
+       export BAO_TOKEN
+       bao token capabilities sys/health
+     '
+   {{< /command >}}
+
+   The command must print `root`. This check proves authenticated API access through the Pod-local endpoint. It does
+   not place the token in the exec command or expose OpenBao outside the cluster. Use
+   [Expose OpenBao](../../configure/expose/) when the evaluation requires a client entry path.
 
 {{< callout type="warning" title="Development stores sensitive material in Kubernetes Secrets" >}}
 The default static auto-unseal key and root token are stored in Kubernetes Secrets. Protect etcd encryption, RBAC,

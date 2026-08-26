@@ -40,27 +40,55 @@ spec:
     pkcs11:
       # Path to the PKCS#11 library provided by the HSM vendor
       lib: "/usr/lib/libpkcs11.so"
-      # Optional: Slot number where the HSM token is located
-      # slot: "0"
+      # Select one HSM slot by number or tokenLabel.
+      slot: "0"
       # Optional: PIN for accessing the HSM token (STRONGLY recommended to use CredentialsSecretRef)
       # pin: "your-hsm-pin"
       # Label for the encryption key used by OpenBao
       keyLabel: "vault-key"
-      # Optional: Label for the HMAC key used by OpenBao
-      # hmacKeyLabel: "vault-hmac-key"
-      # Optional: Generate key if it doesn't exist (default: false)
-      # generateKey: false
-      # Optional: Perform RSA encryption locally (for HSMs that don't support encryption for RSA keys)
-      # rsaEncryptLocal: false
+      # Optional: Disable the software encryption fallback.
+      # disableSoftwareEncryption: true
       # Optional: Hash algorithm for RSA with OAEP padding (sha1, sha224, sha256, sha384, sha512)
       # rsaOAEPHash: "sha256"
     # Optional: Reference to Secret containing HSM PIN
     # credentialsSecretRef:
     #   name: pkcs11-pin
-    #   namespace: openbaocluster-pkcs11
   # Self-initialization (required for Hardened profile)
   selfInit:
     enabled: true
+    requests:
+      # Replace the example issuer and audience with values tested against your identity provider.
+      - name: enable-human-jwt-auth
+        operation: update
+        path: sys/auth/jwt
+        authMethod:
+          type: jwt
+      - name: configure-human-jwt-auth
+        operation: update
+        path: auth/jwt/config
+        data:
+          jwks_url: "https://idp.example.com/.well-known/jwks.json"
+          bound_issuer: "https://idp.example.com/"
+      - name: create-platform-operator-policy
+        operation: update
+        path: sys/policies/acl/platform-operator
+        policy:
+          policy: |
+            path "*" {
+              capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+            }
+      - name: bind-platform-operator-role
+        operation: update
+        path: auth/jwt/role/platform-operator
+        data:
+          role_type: jwt
+          bound_audiences:
+            - openbao
+          bound_claims:
+            groups: platform-operators
+          user_claim: sub
+          token_policies:
+            - platform-operator
 ---
 # Example: Create PKCS#11 PIN Secret
 # apiVersion: v1
@@ -71,4 +99,3 @@ spec:
 # type: Opaque
 # stringData:
 #   VAULT_HSM_PIN: "your-hsm-pin"
-

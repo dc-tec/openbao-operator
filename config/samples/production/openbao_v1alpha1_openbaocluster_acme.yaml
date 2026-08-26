@@ -7,6 +7,7 @@
 # - No TLS Secrets created or mounted (certificates managed entirely by OpenBao)
 # - No TLS reload wrapper needed (ShareProcessNamespace disabled)
 # - Automatic certificate acquisition and rotation via ACME protocol
+# - HA replicas share ACME state through a ReadWriteMany cache PVC
 # - Zero trust: operator never possesses private keys
 # - Compatible with Hardened security profile
 #
@@ -39,6 +40,10 @@ spec:
       # Domain names for which to obtain the certificate (multi-SAN).
       domains:
         - "openbao.example.com"
+      # Select a StorageClass that supports ReadWriteMany when the default does not.
+      sharedCache:
+        mode: ManagedPVC
+        size: "1Gi"
       # Optional: Email address for CA notifications about certificate expiration
       email: "admin@example.com"
       # Note: For internal networks, you may need to use DNS challenges.
@@ -47,12 +52,13 @@ spec:
     size: "10Gi"
   deletionPolicy: Retain
   # Hardened profile note: external dependencies (ACME directory, KMS, object storage, etc.)
-  # require explicit egress rules. Replace 0.0.0.0/0 with CIDR(s) for your endpoints.
+  # require explicit egress rules. Replace this documentation-only CIDR with the ranges
+  # for your endpoints, or use in-cluster selectors.
   network:
     egressRules:
       - to:
           - ipBlock:
-              cidr: 0.0.0.0/0
+              cidr: 203.0.113.0/24
         ports:
           - protocol: TCP
             port: 443
@@ -87,7 +93,6 @@ spec:
     # Optional: If not using IRSA (IAM Roles for Service Accounts)
     # credentialsSecretRef:
     #   name: aws-kms-credentials
-    #   namespace: openbaocluster-acme
   # Self-initialization (required for Hardened profile)
   selfInit:
     enabled: true
@@ -114,6 +119,30 @@ spec:
             path "*" {
               capabilities = ["create", "read", "update", "delete", "list", "sudo"]
             }
+      # Replace the example issuer and audience with values tested against your identity provider.
+      - name: enable-human-jwt-auth
+        operation: update
+        path: sys/auth/jwt
+        authMethod:
+          type: jwt
+      - name: configure-human-jwt-auth
+        operation: update
+        path: auth/jwt/config
+        data:
+          jwks_url: "https://idp.example.com/.well-known/jwks.json"
+          bound_issuer: "https://idp.example.com/"
+      - name: bind-human-jwt-role
+        operation: update
+        path: auth/jwt/role/platform-operator
+        data:
+          role_type: jwt
+          bound_audiences:
+            - openbao
+          bound_claims:
+            groups: platform-operators
+          user_claim: sub
+          token_policies:
+            - admin
   # Image verification for supply chain security
   # Custom Hardened trust roots require `useimagetrustroots` on this OpenBaoCluster.
   imageVerification:
@@ -138,7 +167,6 @@ spec:
       pathPrefix: "clusters/openbaocluster-acme"
       credentialsSecretRef:
         name: s3-backup-credentials
-        namespace: openbaocluster-acme
     jwtAuthRole: backup
     retention:
       maxCount: 7

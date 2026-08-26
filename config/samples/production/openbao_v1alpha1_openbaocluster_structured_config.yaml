@@ -38,8 +38,8 @@ spec:
       pidFile: "/var/run/openbao/openbao.pid"
     # Listener configuration
     listener:
-      # Proxy protocol behavior (use_proxy_protocol, allow_authorized, deny_unauthorized)
-      proxyProtocolBehavior: "use_proxy_protocol"
+      # Proxy protocol behavior (use_always, allow_any, deny_unauthorized)
+      proxyProtocolBehavior: "use_always"
       # TLS disable (typically managed by operator based on spec.tls.enabled)
       # tlsDisable: false
     # Raft storage configuration

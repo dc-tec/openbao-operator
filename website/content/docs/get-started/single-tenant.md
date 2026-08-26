@@ -31,24 +31,45 @@ in the target namespace, so the platform must own that RoleBinding explicitly.
 
 ## Install with Helm
 
-Use Helm for a released 0.5.x installation:
+Use Helm for a released 0.5.x installation.
 
-{{< command label="apply" title="Install a single-tenant operator" >}}
-helm upgrade --install openbao-operator \
-  oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --version 0.5.0 \
-  --namespace openbao-operator-system \
-  --create-namespace \
-  --set tenancy.mode=single \
-  --set tenancy.targetNamespace=openbao
-{{< /command >}}
+1. Create the target namespace through the platform's normal workflow. The chart must create a RoleBinding in this
+   namespace during installation.
 
-Create the target namespace through the platform's normal workflow before applying the first `OpenBaoCluster`. When
-`tenancy.targetNamespace` is omitted, the chart watches its release namespace.
+   {{< command label="apply" title="Create the target namespace" >}}
+   kubectl create namespace openbao
+   {{< /command >}}
 
-Verify that the rendered Deployment contains `WATCH_NAMESPACE=openbao`, the target RoleBinding is in `openbao`, and no
-Provisioner resources exist. Custom release names or `fullnameOverride` values change the controller identity; keep
-manually managed JWT roles aligned with the rendered ServiceAccount.
+2. Install the operator.
+
+   {{< command label="apply" title="Install a single-tenant operator" >}}
+   helm upgrade --install openbao-operator \
+     oci://ghcr.io/dc-tec/charts/openbao-operator \
+     --version 0.5.0 \
+     --namespace openbao-operator-system \
+     --create-namespace \
+     --set tenancy.mode=single \
+     --set tenancy.targetNamespace=openbao
+   {{< /command >}}
+
+When `tenancy.targetNamespace` is omitted, the chart watches its release namespace and `--create-namespace` creates
+that namespace.
+
+3. Verify that the rendered Deployment contains `WATCH_NAMESPACE=openbao`, the target RoleBinding is in `openbao`, and
+   no Provisioner resources exist. Custom release names or `fullnameOverride` values change the controller identity;
+   keep manually managed JWT roles aligned with the rendered ServiceAccount.
+
+   {{< command label="verify" title="Verify single-tenant scope" >}}
+   kubectl -n openbao-operator-system rollout status \
+     deployment/openbao-operator-controller --timeout=2m
+   kubectl -n openbao-operator-system get deployment \
+     openbao-operator-controller \
+     -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="WATCH_NAMESPACE")].value}{"\n"}'
+   kubectl -n openbao get rolebinding openbao-operator-single-tenant
+   kubectl -n openbao-operator-system get deployment
+   {{< /command >}}
+
+   The JSONPath command must print `openbao`. The Deployment list must contain the controller and no Provisioner.
 
 ## Install with Kustomize
 

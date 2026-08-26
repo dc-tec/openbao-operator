@@ -37,23 +37,31 @@ spec:
     oidc:
       enabled: true
     requests:
-      # Enable stdout audit logging (useful for debugging)
-      - name: enable-stdout-audit
+      # Create a narrow policy for the sample client.
+      - name: create-sample-read-policy
         operation: update
-        path: sys/audit/stdout
-        auditDevice:
-          type: file
-          fileOptions:
-            filePath: stdout
-      # Enable Kubernetes authentication
-      - name: enable-kubernetes-auth
+        path: sys/policies/acl/sample-read
+        policy:
+          policy: |
+            path "sys/health" {
+              capabilities = ["read"]
+            }
+      # Bind a dedicated ServiceAccount to the JWT mount created by selfInit.oidc.
+      # Change bound_subject if you apply this sample in another namespace.
+      - name: bind-sample-client-role
         operation: update
-        path: sys/auth/kubernetes
-        authMethod:
-          type: kubernetes
-      # Configure Kubernetes auth to use in-cluster service account
-      - name: configure-kubernetes-auth
-        operation: update
-        path: auth/kubernetes/config
+        path: auth/jwt-operator/role/openbao-sample-client
         data:
-          kubernetes_host: "https://kubernetes.default.svc"
+          role_type: jwt
+          bound_audiences:
+            - openbao-internal
+          bound_subject: system:serviceaccount:default:openbao-sample-client
+          user_claim: sub
+          token_policies:
+            - sample-read
+          token_no_default_policy: true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-sample-client
