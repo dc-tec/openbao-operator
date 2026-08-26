@@ -35,32 +35,32 @@
 <span aria-current=page>Install the operator</span></nav><article class=doc-article><header class=article-header><h1>Install the operator</h1><p class=article-lede>Install OpenBao Operator 0.4.2 with the intended tenancy, platform, identity, CRDs, and admission policy contract.</p><p class=page-meta>Updated 9 August 2026 · 5 min read</p></header><details class=mobile-toc><summary>On this page</summary><nav id=MobileTableOfContents><ul><li><a href=#before-you-begin>Before you begin</a></li><li><a href=#choose-an-installation-path>Choose an installation path</a></li><li><a href=#install-with-helm>Install with Helm</a></li><li><a href=#install-the-published-manifest>Install the published manifest</a></li><li><a href=#install-with-a-custom-raw-identity>Install with a custom raw identity</a></li><li><a href=#install-on-openshift>Install on OpenShift</a></li><li><a href=#install-from-source-for-development>Install from source for development</a></li><li><a href=#upgrade-the-operator>Upgrade the operator</a></li><li><a href=#uninstall-the-operator>Uninstall the operator</a></li><li><a href=#troubleshoot-installation>Troubleshoot installation</a></li></ul></nav></details><div class=article-content><p>Install a pinned 0.4.2 release and verify the rendered namespace, identities, controllers, CRDs, and admission policies.
 The core procedure uses Helm in the chart&rsquo;s default multi-tenant mode.</p><h2 id=before-you-begin>Before you begin</h2><ul><li>Confirm that the cluster meets the <a href=../../reference/compatibility/>compatibility requirements</a>. Kubernetes 1.33
 satisfies the chart constraint, while current release gates validate Kubernetes 1.34 and 1.35.</li><li>Use an identity that can create cluster-scoped CRDs, RBAC, and ValidatingAdmissionPolicies.</li><li>Decide whether Helm, a release manifest, or a maintained Kustomize overlay owns future upgrades.</li><li>Decide the tenancy model. Use the separate <a href=../single-tenant/>single-tenant procedure</a> for one watched namespace.</li></ul><h2 id=choose-an-installation-path>Choose an installation path</h2><table><thead><tr><th>Requirement</th><th>Path</th><th>What to verify</th></tr></thead><tbody><tr><td>Standard multi-tenant installation</td><td>Helm</td><td>Controller, Provisioner, CRDs, policies, and release identity</td></tr><tr><td>Default resources without Helm</td><td>Pinned <code>install.yaml</code> release asset</td><td>Published version and default namespace or identity</td></tr><tr><td>Custom namespace or prefix</td><td><code>config/overlays/custom-identity</code></td><td>Every subject and admission identity after rendering</td></tr><tr><td>Dedicated single namespace</td><td><code>config/overlays/single-tenant</code></td><td>Controller-only runtime and <code>WATCH_NAMESPACE</code></td></tr><tr><td>OpenShift</td><td>Helm with <code>platform=openshift</code>, or auto-detection</td><td>SCC-compatible workload security context</td></tr><tr><td>Local development</td><td>Source deployment</td><td>Development image and generated resources</td></tr></tbody></table><h2 id=install-with-helm>Install with Helm</h2><ol><li><p>Set the release values.</p><div class=command-block><div class=command-head><div><span>configure</span><p>Set the 0.4.2 release values</p></div><button type=button data-copy-button>Copy</button></div><pre><code>export OPERATOR_RELEASE=openbao-operator
-   export OPERATOR_NAMESPACE=openbao-operator-system
-   export CHART_VERSION=0.4.2</code></pre></div></li><li><p>Inspect the chart defaults when the platform needs overrides.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Read the pinned values</p></div><button type=button data-copy-button>Copy</button></div><pre><code>helm show values \
-     oci://ghcr.io/dc-tec/charts/openbao-operator \
-     --version &#34;${CHART_VERSION}&#34;</code></pre></div><p>Pin the chart and normally let its <code>appVersion</code> select the matching operator image. Set <code>image.tag</code> only for a
+export OPERATOR_NAMESPACE=openbao-operator-system
+export CHART_VERSION=0.4.2</code></pre></div></li><li><p>Inspect the chart defaults when the platform needs overrides.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Read the pinned values</p></div><button type=button data-copy-button>Copy</button></div><pre><code>helm show values \
+  oci://ghcr.io/dc-tec/charts/openbao-operator \
+  --version &#34;${CHART_VERSION}&#34;</code></pre></div><p>Pin the chart and normally let its <code>appVersion</code> select the matching operator image. Set <code>image.tag</code> only for a
 controlled prerelease or test. The complete pinned reference is
 <a href=https://github.com/dc-tec/openbao-operator/blob/0.4.2/charts/openbao-operator/values.yaml><code>values.yaml</code></a>.</p></li><li><p>Render the installation before applying it when you use non-default values.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Render the Helm release</p></div><button type=button data-copy-button>Copy</button></div><pre><code>helm template &#34;${OPERATOR_RELEASE}&#34; \
-     oci://ghcr.io/dc-tec/charts/openbao-operator \
-     --version &#34;${CHART_VERSION}&#34; \
-     --namespace &#34;${OPERATOR_NAMESPACE}&#34;</code></pre></div><p>Check the controller and Provisioner ServiceAccounts, RoleBinding subjects, admission-policy identity variables,
+  oci://ghcr.io/dc-tec/charts/openbao-operator \
+  --version &#34;${CHART_VERSION}&#34; \
+  --namespace &#34;${OPERATOR_NAMESPACE}&#34;</code></pre></div><p>Check the controller and Provisioner ServiceAccounts, RoleBinding subjects, admission-policy identity variables,
 projected token audience, images, and namespaces.</p></li><li><p>Install the chart.</p><div class=command-block><div class=command-head><div><span>apply</span><p>Install OpenBao Operator</p></div><button type=button data-copy-button>Copy</button></div><pre><code>helm upgrade --install &#34;${OPERATOR_RELEASE}&#34; \
-     oci://ghcr.io/dc-tec/charts/openbao-operator \
-     --version &#34;${CHART_VERSION}&#34; \
-     --namespace &#34;${OPERATOR_NAMESPACE}&#34; \
-     --create-namespace \
-     --wait</code></pre></div></li><li><p>Wait for both multi-tenant Deployments.</p><div class=command-block><div class=command-head><div><span>verify</span><p>Verify the controller and Provisioner</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl -n &#34;${OPERATOR_NAMESPACE}&#34; rollout status \
-     deployment/openbao-operator-controller --timeout=2m
-   kubectl -n &#34;${OPERATOR_NAMESPACE}&#34; rollout status \
-     deployment/openbao-operator-provisioner --timeout=2m</code></pre></div></li><li><p>Verify the installed APIs and admission policies.</p><div class=command-block><div class=command-head><div><span>verify</span><p>Verify cluster-scoped resources</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl get crd \
-     openbaoclusters.openbao.org \
-     openbaotenants.openbao.org \
-     openbaorestores.openbao.org
-   kubectl get validatingadmissionpolicies \
-     -l app.kubernetes.io/instance=&#34;${OPERATOR_RELEASE}&#34;</code></pre></div></li><li><p>Verify the default controller JWT contract.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Inspect the controller identity and audience</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl -n &#34;${OPERATOR_NAMESPACE}&#34; get serviceaccount \
-     openbao-operator-controller
-   kubectl -n &#34;${OPERATOR_NAMESPACE}&#34; get deployment \
-     openbao-operator-controller -o yaml</code></pre></div><p>Confirm that the Deployment uses the rendered ServiceAccount, mounts the projected <code>openbao-token</code>, and aligns its
+  oci://ghcr.io/dc-tec/charts/openbao-operator \
+  --version &#34;${CHART_VERSION}&#34; \
+  --namespace &#34;${OPERATOR_NAMESPACE}&#34; \
+  --create-namespace \
+  --wait</code></pre></div></li><li><p>Wait for both multi-tenant Deployments.</p><div class=command-block><div class=command-head><div><span>verify</span><p>Verify the controller and Provisioner</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl -n &#34;${OPERATOR_NAMESPACE}&#34; rollout status \
+  deployment/openbao-operator-controller --timeout=2m
+kubectl -n &#34;${OPERATOR_NAMESPACE}&#34; rollout status \
+  deployment/openbao-operator-provisioner --timeout=2m</code></pre></div></li><li><p>Verify the installed APIs and admission policies.</p><div class=command-block><div class=command-head><div><span>verify</span><p>Verify cluster-scoped resources</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl get crd \
+  openbaoclusters.openbao.org \
+  openbaotenants.openbao.org \
+  openbaorestores.openbao.org
+kubectl get validatingadmissionpolicies \
+  -l app.kubernetes.io/instance=&#34;${OPERATOR_RELEASE}&#34;</code></pre></div></li><li><p>Verify the default controller JWT contract.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Inspect the controller identity and audience</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl -n &#34;${OPERATOR_NAMESPACE}&#34; get serviceaccount \
+  openbao-operator-controller
+kubectl -n &#34;${OPERATOR_NAMESPACE}&#34; get deployment \
+  openbao-operator-controller -o yaml</code></pre></div><p>Confirm that the Deployment uses the rendered ServiceAccount, mounts the projected <code>openbao-token</code>, and aligns its
 audience with <code>OPENBAO_JWT_AUDIENCE</code>. Continue with <a href=../operator-authentication/>operator authentication</a> when you
 customize these values.</p></li></ol><h2 id=install-the-published-manifest>Install the published manifest</h2><p>Use the release asset when the platform wants the published default resources without a Helm release:</p><div class=command-block><div class=command-head><div><span>apply</span><p>Apply the 0.4.2 installer manifest</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl apply -f \
   https://github.com/dc-tec/openbao-operator/releases/download/0.4.2/install.yaml</code></pre></div><p>The manifest uses the repository&rsquo;s default operator namespace and identity. Do not rewrite the rendered YAML by hand

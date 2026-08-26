@@ -48,14 +48,14 @@ identity that intentionally needs the permissions across all namespaces.</p><tab
 binding. The cluster-administration role administers <code>OpenBaoCluster</code>; it does not itself grant permission to create
 or modify Kubernetes RBAC.</p><p>Protected operations such as restore, network publication, custom executable use, cloud identity, and image trust
 roots require separate delegated verbs. Do not add those permissions to the ordinary editor binding for convenience.</p><h2 id=verify-the-effective-boundary>Verify the effective boundary</h2><ol><li><p>Verify the onboarding handoff and generated controls.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Inspect the tenant namespace</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl -n &lt;request-namespace&gt; get openbaotenant &lt;name&gt; \
-     -o jsonpath=&#39;{.status.provisioned}{&#34;\n&#34;}&#39;
-   kubectl -n &lt;target-namespace&gt; get \
-     role,rolebinding,resourcequota,limitrange \
-     -l app.kubernetes.io/managed-by=openbao-operator</code></pre></div><p>The first command must print <code>true</code>. Confirm that the controller ServiceAccount is the subject of
+  -o jsonpath=&#39;{.status.provisioned}{&#34;\n&#34;}&#39;
+kubectl -n &lt;target-namespace&gt; get \
+  role,rolebinding,resourcequota,limitrange \
+  -l app.kubernetes.io/managed-by=openbao-operator</code></pre></div><p>The first command must print <code>true</code>. Confirm that the controller ServiceAccount is the subject of
 <code>openbao-operator-tenant-rolebinding</code>.</p></li><li><p>Test the tenant user&rsquo;s actual binding.</p><div class=command-block><div class=command-head><div><span>verify</span><p>Check tenant-user permissions</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl auth can-i create openbaoclusters.openbao.org \
-     -n &lt;target-namespace&gt; --as &lt;tenant-user&gt;
-   kubectl auth can-i get secrets \
-     -n &lt;target-namespace&gt; --as &lt;tenant-user&gt;</code></pre></div><p>An ordinary cluster editor should receive <code>yes</code> for cluster creation and <code>no</code> for broad Secret reads. Test the
+  -n &lt;target-namespace&gt; --as &lt;tenant-user&gt;
+kubectl auth can-i get secrets \
+  -n &lt;target-namespace&gt; --as &lt;tenant-user&gt;</code></pre></div><p>An ordinary cluster editor should receive <code>yes</code> for cluster creation and <code>no</code> for broad Secret reads. Test the
 real group or ServiceAccount identity as well when bindings use groups or workload identities.</p></li><li><p>After creating an <code>OpenBaoCluster</code>, verify the workload network boundary separately.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Inspect cluster network policy</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl -n &lt;target-namespace&gt; get networkpolicy</code></pre></div><p>Confirm that the installed CNI enforces NetworkPolicy and test the allowed ingress and egress paths. Object-storage
 credentials and backup prefixes also need tenant-specific isolation outside Kubernetes RBAC.</p></li></ol><h2 id=remove-a-tenant-safely>Remove a tenant safely</h2><p><code>spec.targetNamespace</code> is immutable. Deleting <code>OpenBaoTenant</code> waits until every <code>OpenBaoCluster</code> in the target
 namespace is gone. If no other active, authorized tenant claim targets that namespace, cleanup removes the controller

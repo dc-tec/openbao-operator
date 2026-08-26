@@ -38,24 +38,24 @@ source when you are developing the operator. Do not treat either path as a stabl
 and a pinned release for production. The planned 0.5.x line becomes executable only after 0.5.0 is published.</div></div></aside><h2 id=before-you-begin>Before you begin</h2><ul><li>Confirm that the cluster meets the <a href=../../reference/compatibility/>Next compatibility requirements</a>.</li><li>Use an identity that can create cluster-scoped CRDs, RBAC, and ValidatingAdmissionPolicies.</li><li>Install <code>kubectl</code>. Source deployments also require the repository toolchain and a registry the cluster can pull
 from.</li><li>Decide the tenancy model. Use the <a href=../single-tenant/>single-tenant procedure</a> for one watched namespace.</li></ul><h2 id=install-the-latest-validated-edge-build>Install the latest validated edge build</h2><p>The edge publisher promotes images and generates manifests from the same successful <code>main</code> commit. Inspect the channel
 metadata before applying it so you know the exact commit and image digests under evaluation.</p><ol><li><p>Set the edge channel URL and inspect its metadata.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Review the current edge build</p></div><button type=button data-copy-button>Copy</button></div><pre><code>export EDGE_ROOT=https://dc-tec.github.io/openbao-operator/edge/latest
-   curl --fail --silent --show-error &#34;${EDGE_ROOT}/metadata.json&#34;</code></pre></div><p>Record the <code>sha</code>, generated time, and image digests. Follow the
+curl --fail --silent --show-error &#34;${EDGE_ROOT}/metadata.json&#34;</code></pre></div><p>Record the <code>sha</code>, generated time, and image digests. Follow the
 <a href=../../security/supply-chain/>supply-chain verification</a> procedure when the evaluation requires provenance
 verification.</p></li><li><p>Apply the generated multi-tenant installer.</p><div class=command-block><div class=command-head><div><span>apply</span><p>Install the edge manifest</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl apply -f &#34;${EDGE_ROOT}/install.yaml&#34;</code></pre></div></li><li><p>Wait for both multi-tenant controllers.</p><div class=command-block><div class=command-head><div><span>verify</span><p>Verify the controller and Provisioner</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl -n openbao-operator-system rollout status \
-     deployment/openbao-operator-controller --timeout=2m
-   kubectl -n openbao-operator-system rollout status \
-     deployment/openbao-operator-provisioner --timeout=2m</code></pre></div></li><li><p>Verify the installed APIs and admission policies.</p><div class=command-block><div class=command-head><div><span>verify</span><p>Verify cluster-scoped resources</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl get crd \
-     openbaoclusters.openbao.org \
-     openbaotenants.openbao.org \
-     openbaorestores.openbao.org
-   kubectl get validatingadmissionpolicies</code></pre></div></li><li><p>Verify the controller identity.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Inspect the controller identity</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl -n openbao-operator-system get serviceaccount \
-     openbao-operator-controller
-   kubectl -n openbao-operator-system get deployment \
-     openbao-operator-controller -o yaml</code></pre></div><p>Confirm that the Deployment uses the rendered ServiceAccount and projected <code>openbao-token</code>. Continue with
+  deployment/openbao-operator-controller --timeout=2m
+kubectl -n openbao-operator-system rollout status \
+  deployment/openbao-operator-provisioner --timeout=2m</code></pre></div></li><li><p>Verify the installed APIs and admission policies.</p><div class=command-block><div class=command-head><div><span>verify</span><p>Verify cluster-scoped resources</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl get crd \
+  openbaoclusters.openbao.org \
+  openbaotenants.openbao.org \
+  openbaorestores.openbao.org
+kubectl get validatingadmissionpolicies</code></pre></div></li><li><p>Verify the controller identity.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Inspect the controller identity</p></div><button type=button data-copy-button>Copy</button></div><pre><code>kubectl -n openbao-operator-system get serviceaccount \
+  openbao-operator-controller
+kubectl -n openbao-operator-system get deployment \
+  openbao-operator-controller -o yaml</code></pre></div><p>Confirm that the Deployment uses the rendered ServiceAccount and projected <code>openbao-token</code>. Continue with
 <a href=../operator-authentication/>operator authentication</a> when you customize the JWT audience or identity.</p></li></ol><h2 id=deploy-from-source>Deploy from source</h2><p>Use a source deployment when you need a local change or an exact checkout that has not reached the edge channel.</p><ol><li><p>Check out the intended commit and prepare the toolchain.</p><div class=command-block><div class=command-head><div><span>configure</span><p>Prepare the source checkout</p></div><button type=button data-copy-button>Copy</button></div><pre><code>git clone https://github.com/dc-tec/openbao-operator.git
-   cd openbao-operator
-   git checkout &lt;commit&gt;
-   make bootstrap</code></pre></div></li><li><p>Build and push an image that the cluster can pull.</p><div class=command-block><div class=command-head><div><span>build</span><p>Publish the development image</p></div><button type=button data-copy-button>Copy</button></div><pre><code>export IMG=&lt;registry&gt;/openbao-operator:&lt;commit&gt;
-   make docker-build docker-push IMG=&#34;${IMG}&#34;</code></pre></div><p>For a local Kind cluster, load the image into every node instead of pushing it, then use the same image reference
+cd openbao-operator
+git checkout &lt;commit&gt;
+make bootstrap</code></pre></div></li><li><p>Build and push an image that the cluster can pull.</p><div class=command-block><div class=command-head><div><span>build</span><p>Publish the development image</p></div><button type=button data-copy-button>Copy</button></div><pre><code>export IMG=&lt;registry&gt;/openbao-operator:&lt;commit&gt;
+make docker-build docker-push IMG=&#34;${IMG}&#34;</code></pre></div><p>For a local Kind cluster, load the image into every node instead of pushing it, then use the same image reference
 for deployment.</p></li><li><p>Deploy the generated resources and the selected image.</p><div class=command-block><div class=command-head><div><span>apply</span><p>Deploy the source build</p></div><button type=button data-copy-button>Copy</button></div><pre><code>make deploy IMG=&#34;${IMG}&#34; OPERATOR_VERSION=edge</code></pre></div></li></ol><h2 id=render-the-local-helm-contract>Render the local Helm contract</h2><p>Use the checked-out chart when you need to evaluate Helm rendering, including the single-tenant or OpenShift paths.
 The edge image and operator version keep helper-image selection aligned with the unreleased build.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Render the local edge chart</p></div><button type=button data-copy-button>Copy</button></div><pre><code>helm template openbao-operator charts/openbao-operator \
   --namespace openbao-operator-system \
