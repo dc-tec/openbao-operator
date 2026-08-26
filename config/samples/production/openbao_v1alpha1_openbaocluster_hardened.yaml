@@ -1,7 +1,8 @@
 # OpenBaoCluster with Hardened Security Profile
 #
-# This example demonstrates a production-ready OpenBao cluster using the Hardened
-# security profile. The Hardened profile enforces strict security requirements:
+# This example demonstrates the fields enforced by the Hardened security profile.
+# It is a starting point, not evidence that the external dependencies or access
+# paths are production-ready. The Hardened profile enforces strict requirements:
 # - External TLS management (cert-manager or CSI)
 # - External KMS for auto-unseal (no static keys in Kubernetes Secrets)
 # - Self-initialization enabled (no root token stored)
@@ -41,12 +42,13 @@ spec:
     size: "10Gi"
   deletionPolicy: Retain
   # Hardened profile note: external dependencies (KMS, object storage, etc.) require explicit
-  # egress rules. Replace 0.0.0.0/0 with CIDR(s) for your endpoints, or use in-cluster selectors.
+  # egress rules. Replace this documentation-only CIDR with the ranges for your endpoints,
+  # or use in-cluster selectors.
   network:
     egressRules:
       - to:
           - ipBlock:
-              cidr: 0.0.0.0/0
+              cidr: 203.0.113.0/24
         ports:
           - protocol: TCP
             port: 443
@@ -74,7 +76,6 @@ spec:
     # Optional: If not using IRSA (IAM Roles for Service Accounts)
     # credentialsSecretRef:
     #   name: aws-kms-credentials
-    #   namespace: openbaocluster-hardened
   # Self-initialization (required for Hardened profile)
   # Root token is automatically revoked after initialization - no root token Secret is created
   selfInit:
@@ -103,6 +104,30 @@ spec:
             path "*" {
               capabilities = ["create", "read", "update", "delete", "list", "sudo"]
             }
+      # Replace the example issuer and audience with values tested against your identity provider.
+      - name: enable-human-jwt-auth
+        operation: update
+        path: sys/auth/jwt
+        authMethod:
+          type: jwt
+      - name: configure-human-jwt-auth
+        operation: update
+        path: auth/jwt/config
+        data:
+          jwks_url: "https://idp.example.com/.well-known/jwks.json"
+          bound_issuer: "https://idp.example.com/"
+      - name: bind-human-jwt-role
+        operation: update
+        path: auth/jwt/role/platform-operator
+        data:
+          role_type: jwt
+          bound_audiences:
+            - openbao
+          bound_claims:
+            groups: platform-operators
+          user_claim: sub
+          token_policies:
+            - admin
   # Image verification for supply chain security
   # Custom Hardened trust roots require `useimagetrustroots` on this OpenBaoCluster.
   imageVerification:
@@ -128,7 +153,6 @@ spec:
       pathPrefix: "clusters/openbaocluster-hardened"
       credentialsSecretRef:
         name: s3-backup-credentials
-        namespace: openbaocluster-hardened
     # JWT Auth (automatically rotated tokens, better security)
     jwtAuthRole: backup
     retention:

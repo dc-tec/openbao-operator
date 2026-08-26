@@ -76,7 +76,8 @@ For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openba
 
 ## Quick Start
 
-Once the operator is running, the next move depends on the tenancy mode you chose:
+Install and verify the operator before continuing. If it is not running, complete [Installation](#installation) first.
+The next move depends on the tenancy mode you chose:
 
 - **Multi-tenant (default)**: Create the target namespace, onboard it through `OpenBaoTenant`, then apply the first `OpenBaoCluster`.
 - **Single-tenant**: Skip `OpenBaoTenant` and create the first `OpenBaoCluster` directly in the controller's watched namespace.
@@ -117,13 +118,19 @@ spec:
   targetNamespace: openbao-demo
 EOF
 
-kubectl -n openbao-demo get openbaotenant openbao-demo -w
+kubectl -n openbao-demo wait \
+  --for=condition=Provisioned \
+  openbaotenant/openbao-demo \
+  --timeout=2m
 
 kubectl apply -f cluster.yaml
 
-# Watch status and pods
-kubectl -n openbao-demo get openbaoclusters my-cluster -w
-kubectl -n openbao-demo get pods -l openbao.org/cluster=my-cluster -w
+# Wait for the cluster, then inspect its Pods.
+kubectl -n openbao-demo wait \
+  --for=condition=Available \
+  openbaocluster/my-cluster \
+  --timeout=10m
+kubectl -n openbao-demo get pods -l openbao.org/cluster=my-cluster
 ```
 
 If `spec.selfInit.enabled` is `false` (default), the operator stores a root token in `Secret/openbao-demo/my-cluster-root-token` (key: `token`).
