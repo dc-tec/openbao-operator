@@ -117,7 +117,7 @@ func NewInfraReconciler(deps InfraDependencies) SubReconciler {
 
 // Reconcile implements the controller's sub-reconciler contract for infrastructure reconciliation.
 func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-	logger.Info("Reconciling infrastructure for OpenBaoCluster")
+	logger.V(1).Info("Reconciling infrastructure for OpenBaoCluster")
 
 	if err := upgrade.ValidateUpgradeTargetVersion(logger, cluster.Status.CurrentVersion, cluster.Spec.Version); err != nil {
 		return recon.Result{}, err

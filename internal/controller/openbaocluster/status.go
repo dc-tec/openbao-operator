@@ -101,7 +101,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		return ctrl.Result{}, fmt.Errorf("failed to update status for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
-	logger.Info("Updated status for OpenBaoCluster",
+	logger.V(1).Info("Updated status for OpenBaoCluster",
 		"readyReplicas", state.ReadyReplicas,
 		"readReplicaReadyReplicas", state.ReadReplicaReadyReplicas,
 		"phase", cluster.Status.Phase,

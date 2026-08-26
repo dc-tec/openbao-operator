@@ -138,7 +138,7 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 	}
 
 	// Log the Profile and replicas being used for debugging
-	logger.Info("Reconciling autopilot config",
+	logger.V(1).Info("Reconciling autopilot config",
 		"profile", cluster.Spec.Profile,
 		"replicas", cluster.Spec.Replicas,
 		"cluster", cluster.Name,
@@ -148,7 +148,7 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 	desiredConfig := BuildAutopilotConfig(cluster)
 
 	// Log the calculated min_quorum for debugging
-	logger.Info("Calculated autopilot config",
+	logger.V(1).Info("Calculated autopilot config",
 		"min_quorum", desiredConfig.MinQuorum,
 		"cleanup_dead_servers", desiredConfig.CleanupDeadServers,
 		"profile", cluster.Spec.Profile,
@@ -197,7 +197,7 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 		}
 	}
 
-	logger.Info("Reconciling Raft Autopilot configuration",
+	logger.V(1).Info("Reconciling Raft Autopilot configuration",
 		"cluster", cluster.Name,
 		"cleanup_dead_servers", desiredConfig.CleanupDeadServers,
 		"dead_server_last_contact_threshold", desiredConfig.DeadServerLastContactThreshold,
@@ -448,7 +448,7 @@ func (m *Manager) configureAutopilotWithClient(ctx context.Context, logger logr.
 
 	desiredConfig := BuildAutopilotConfig(cluster)
 
-	logger.Info("Reconciling Raft Autopilot configuration",
+	logger.V(1).Info("Reconciling Raft Autopilot configuration",
 		"cluster", cluster.Name,
 		"cleanup_dead_servers", desiredConfig.CleanupDeadServers,
 		"dead_server_last_contact_threshold", desiredConfig.DeadServerLastContactThreshold,

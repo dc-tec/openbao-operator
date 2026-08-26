@@ -73,9 +73,10 @@ func TestSignalReload_AnnotatesReadyPods(t *testing.T) {
 			Name:      "test-cluster-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelAppInstance:  "test-cluster",
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelAppInstance:      "test-cluster",
+				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoComponent: constants.ComponentOpenBaoCluster,
 			},
 		},
 		Status: corev1.PodStatus{
@@ -118,9 +119,10 @@ func TestSignalReload_SkipsNonReadyPods(t *testing.T) {
 			Name:      "test-cluster-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelAppInstance:  "test-cluster",
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelAppInstance:      "test-cluster",
+				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoComponent: constants.ComponentOpenBaoCluster,
 			},
 		},
 		Status: corev1.PodStatus{
@@ -163,9 +165,10 @@ func TestSignalReload_SkipsPodsWithCurrentHash(t *testing.T) {
 			Name:      "test-cluster-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelAppInstance:  "test-cluster",
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelAppInstance:      "test-cluster",
+				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoComponent: constants.ComponentOpenBaoCluster,
 			},
 			Annotations: map[string]string{
 				tlsCertHashAnnotation: testCertHash,
@@ -205,15 +208,17 @@ func TestSignalReload_SkipsPodsWithCurrentHash(t *testing.T) {
 	}
 }
 
-func TestSignalReload_UpdatesMultiplePods(t *testing.T) {
+func TestSignalReload_AnnotatesVoterAndReadReplicaPods(t *testing.T) {
 	pod1 := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelAppInstance:  "test-cluster",
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelAppInstance:         "test-cluster",
+				constants.LabelAppName:             constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy:        constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoComponent:    constants.ComponentOpenBaoCluster,
+				constants.LabelOpenBaoWorkloadPool: constants.LabelValueOpenBaoWorkloadPoolVoter,
 			},
 		},
 		Status: corev1.PodStatus{
@@ -231,9 +236,11 @@ func TestSignalReload_UpdatesMultiplePods(t *testing.T) {
 			Name:      "test-cluster-1",
 			Namespace: "default",
 			Labels: map[string]string{
-				constants.LabelAppInstance:  "test-cluster",
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelAppInstance:         "test-cluster",
+				constants.LabelAppName:             constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy:        constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoComponent:    constants.ComponentOpenBaoCluster,
+				constants.LabelOpenBaoWorkloadPool: constants.LabelValueOpenBaoWorkloadPoolReadReplica,
 			},
 		},
 		Status: corev1.PodStatus{
@@ -269,6 +276,60 @@ func TestSignalReload_UpdatesMultiplePods(t *testing.T) {
 		if updatedPod.Annotations[tlsCertHashAnnotation] != certHash {
 			t.Errorf("Pod %s annotation = %v, want %v", podName, updatedPod.Annotations[tlsCertHashAnnotation], certHash)
 		}
+	}
+}
+
+func TestSignalReload_ExcludesExecutorPods(t *testing.T) {
+	tests := []struct {
+		name      string
+		component string
+	}{
+		{name: "backup", component: "backup"},
+		{name: "restore", component: "restore"},
+		{name: "upgrade", component: "upgrade"},
+		{name: "upgrade-snapshot", component: "upgrade-snapshot"},
+		{name: "autopilot", component: "autopilot"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executorPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster-" + tt.name,
+					Namespace: "default",
+					Labels: map[string]string{
+						constants.LabelAppInstance:      "test-cluster",
+						constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+						constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+						constants.LabelOpenBaoComponent: tt.component,
+					},
+				},
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
+						},
+					},
+				},
+			}
+
+			clientset := newTestClientset(executorPod)
+			signaler := NewKubernetesReloadSignaler(clientset)
+			ctx := context.Background()
+
+			if err := signaler.SignalReload(ctx, logr.Discard(), newTestCluster("test-cluster", "default"), testCertHash); err != nil {
+				t.Fatalf("SignalReload() error = %v", err)
+			}
+
+			unchangedPod, err := clientset.CoreV1().Pods("default").Get(ctx, executorPod.Name, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("failed to get executor pod: %v", err)
+			}
+			if got := unchangedPod.Annotations[tlsCertHashAnnotation]; got != "" {
+				t.Errorf("Executor pod annotation = %q, want empty", got)
+			}
+		})
 	}
 }
 
