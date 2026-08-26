@@ -150,7 +150,7 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 	cmName := resourceidentity.ConfigInitMapName(cluster)
 
 	if cluster.Status.SelfInitialized {
-		logger.Info("Self-init already completed; reconciling inert self-init ConfigMap", "configmap", cmName)
+		logger.V(1).Info("Self-init already completed; reconciling inert self-init ConfigMap", "configmap", cmName)
 		return m.ensureConfigMapWithName(ctx, cluster, cmName, completedSelfInitConfig)
 	}
 

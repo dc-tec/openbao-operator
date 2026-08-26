@@ -251,7 +251,7 @@ func gatherStatefulSetState(
 
 	state.StatusStale = statefulSetStillScaling || statusPotentiallyStale
 
-	logger.Info("StatefulSet status read for ReadyReplicas calculation",
+	logger.V(1).Info("StatefulSet status read for ReadyReplicas calculation",
 		"statefulSetReadyReplicas", statefulSet.Status.ReadyReplicas,
 		"statefulSetReplicas", statefulSet.Status.Replicas,
 		"statefulSetCurrentReplicas", statefulSet.Status.CurrentReplicas,

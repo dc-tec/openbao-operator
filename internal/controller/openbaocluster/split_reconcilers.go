@@ -59,7 +59,7 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 	}()
 
 	logger := r.parent.loggerFor(ctx, req, controllerNameWorkload)
-	logger.Info("Reconciling OpenBaoCluster workload")
+	logger.V(1).Info("Reconciling OpenBaoCluster workload")
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := r.parent.Get(ctx, req.NamespacedName, cluster); err != nil {
@@ -141,7 +141,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	}()
 
 	logger := r.parent.loggerFor(ctx, req, controllerNameAdminOps)
-	logger.Info("Reconciling OpenBaoCluster admin operations")
+	logger.V(1).Info("Reconciling OpenBaoCluster admin operations")
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	reader := r.parent.APIReader
@@ -196,7 +196,7 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 	}()
 
 	logger := r.parent.loggerFor(ctx, req, controllerNameStatus)
-	logger.Info("Reconciling OpenBaoCluster status")
+	logger.V(1).Info("Reconciling OpenBaoCluster status")
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := r.parent.Get(ctx, req.NamespacedName, cluster); err != nil {
