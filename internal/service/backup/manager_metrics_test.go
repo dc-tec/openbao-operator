@@ -164,6 +164,55 @@ func TestCollectBackupJobMetricsSnapshotUpdatesMetricsAndDeduplicates(t *testing
 	}
 }
 
+func TestCollectBackupJobMetricsSnapshotFiltersByBackupType(t *testing.T) {
+	cluster := newTestClusterWithBackup("snapshot-type-filter", "backup-ns")
+	scheduledCompletedAt := time.Unix(1700001000, 0)
+
+	scheduled := newBackupJobForCluster(cluster, "scheduled-success", time.Unix(1700000900, 0))
+	scheduled.Status.Succeeded = 1
+	scheduled.Status.CompletionTime = ptrToTime(scheduledCompletedAt)
+
+	preUpgradeSucceeded := newBackupJobForCluster(cluster, "pre-upgrade-success", time.Unix(1700001900, 0))
+	preUpgradeSucceeded.Labels[constants.LabelOpenBaoBackupType] = constants.BackupTypePreUpgrade
+	preUpgradeSucceeded.Status.Succeeded = 1
+	preUpgradeSucceeded.Status.CompletionTime = ptrToTime(time.Unix(1700002000, 0))
+
+	preUpgradeFailed := newBackupJobForCluster(cluster, "pre-upgrade-failure", time.Unix(1700002900, 0))
+	preUpgradeFailed.Labels[constants.LabelOpenBaoBackupType] = constants.BackupTypePreUpgrade
+	preUpgradeFailed.Status.Failed = 1
+	preUpgradeFailed.Status.CompletionTime = ptrToTime(time.Unix(1700003000, 0))
+
+	preUpgradeRunning := newBackupJobForCluster(cluster, "pre-upgrade-running", time.Unix(1700004000, 0))
+	preUpgradeRunning.Labels[constants.LabelOpenBaoBackupType] = constants.BackupTypePreUpgrade
+	preUpgradeRunning.Status.Active = 1
+
+	manager := newBackupManager(newTestClient(t, scheduled, preUpgradeSucceeded, preUpgradeFailed, preUpgradeRunning))
+	metrics := NewMetrics(cluster.Namespace, cluster.Name)
+	resetBackupTestState(cluster.Namespace, cluster.Name)
+	defer metrics.Clear()
+
+	snapshot, err := manager.collectBackupJobMetricsSnapshot(context.Background(), cluster, metrics)
+	if err != nil {
+		t.Fatalf("collectBackupJobMetricsSnapshot() error = %v", err)
+	}
+
+	if snapshot.inProgress {
+		t.Fatal("snapshot.inProgress = true, want false")
+	}
+	if snapshot.newestSucceeded == nil || snapshot.newestSucceeded.Name != scheduled.Name {
+		t.Fatalf("snapshot.newestSucceeded = %#v, want %q", snapshot.newestSucceeded, scheduled.Name)
+	}
+	if snapshot.newestFailed != nil {
+		t.Fatalf("snapshot.newestFailed = %#v, want nil", snapshot.newestFailed)
+	}
+	if got := testutil.ToFloat64(backupSuccessTotal.WithLabelValues(cluster.Namespace, cluster.Name)); got != 1 {
+		t.Fatalf("backupSuccessTotal = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(backupFailureTotal.WithLabelValues(cluster.Namespace, cluster.Name)); got != 0 {
+		t.Fatalf("backupFailureTotal = %v, want 0", got)
+	}
+}
+
 func TestApplyBackupJobSnapshotToMetrics(t *testing.T) {
 	successJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{CreationTimestamp: metav1.NewTime(time.Unix(1700000000, 0))},

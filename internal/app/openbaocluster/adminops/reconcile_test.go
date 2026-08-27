@@ -243,7 +243,7 @@ func TestReconcile_AdminOpsErrorPaths(t *testing.T) {
 }
 
 func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
-	t.Run("subreconciler requeue is propagated", func(t *testing.T) {
+	t.Run("successful subreconciler requeue clears last error and is propagated", func(t *testing.T) {
 		withAdminOpsReconcilers(t, fakeSubReconciler{result: recon.Result{RequeueAfter: 7 * time.Second}})
 
 		var patchReasons []string
@@ -275,8 +275,8 @@ func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 		if len(patchReasons) != 1 || patchReasons[0] != "adminops-requeue" {
 			t.Fatalf("patch reasons=%v, want [adminops-requeue]", patchReasons)
 		}
-		if cluster.Status.AdminOps.LastError == nil || cluster.Status.AdminOps.LastError.Reason != "old" {
-			t.Fatalf("expected existing LastError to remain unchanged on requeue path")
+		if cluster.Status.AdminOps.LastError != nil {
+			t.Fatalf("expected LastError to be cleared after an error-free requeue")
 		}
 	})
 

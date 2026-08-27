@@ -134,6 +134,10 @@ func Reconcile(
 		}
 
 		if result.RequeueAfter > 0 {
+			// A requeue without an error is a successful observation. Clear any
+			// error from an earlier pass before persisting the next poll time.
+			ensureAdminOpsStatus(cluster)
+			cluster.Status.AdminOps.LastError = nil
 			if patchStatus != nil {
 				if statusErr := patchStatus(ctx, deps.Client, logger, original, cluster, "adminops-requeue"); statusErr != nil {
 					return recon.Result{}, statusErr
