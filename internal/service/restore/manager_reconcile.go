@@ -37,15 +37,28 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *op
 	case openbaov1alpha1.RestorePhaseRunning:
 		return m.handleRunning(ctx, logger, restore)
 	case openbaov1alpha1.RestorePhaseCompleted, openbaov1alpha1.RestorePhaseFailed:
-		// Terminal states: ensure lock cleanup eventually succeeds.
-		return m.ensureTerminalLockReleased(ctx, logger, restore)
+		// Terminal states: remove the retained Job and ensure lock cleanup eventually succeeds.
+		return m.ensureTerminalCleanup(ctx, logger, restore)
+	case openbaov1alpha1.RestorePhaseUnknown:
+		// Unknown is fail-closed. Keep the operation lock until an operator deletes
+		// the immutable restore request after investigating the execution.
+		return ctrl.Result{}, nil
 	default:
 		logger.Info("Unknown restore phase", "phase", restore.Status.Phase)
 		return ctrl.Result{}, nil
 	}
 }
 
-func (m *Manager) ensureTerminalLockReleased(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
+func (m *Manager) ensureTerminalCleanup(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
+	if restore.Status.Execution != nil && restore.Status.Execution.JobName != "" {
+		jobDeleted, err := m.deleteRestoreJob(ctx, logger, restore)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to remove terminal restore Job: %w", err)
+		}
+		if !jobDeleted {
+			return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
+		}
+	}
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to release cluster operation lock for terminal restore %s/%s: %w", restore.Namespace, restore.Name, err)
 	}
@@ -129,10 +142,12 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 		return ctrl.Result{}, err
 	}
 
-	// Transition to Running phase
+	// Persist the execution identity before entering Running. The Prepared stage
+	// remains cancelable and does not assert that Job creation was attempted.
 	original := restore.DeepCopy()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
-	restore.Status.Message = "Creating restore job"
+	restore.Status.Execution = newRestoreExecutionStatus(restore)
+	restore.Status.Message = fmt.Sprintf("Restore execution %s prepared; waiting to commit Job %s.", restore.Status.Execution.OperationID, restore.Status.Execution.JobName)
 
 	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status: %w", err)

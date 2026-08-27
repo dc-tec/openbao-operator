@@ -21,6 +21,29 @@ type RestoreReconciler interface {
 	Reconcile(ctx context.Context, logger logr.Logger, restoreResource *openbaov1alpha1.OpenBaoRestore) (recon.Result, error)
 }
 
+// CanContinueWithoutAdmission reports whether reconciliation can only observe
+// and drain an execution that crossed its durable creation boundary. The
+// restore manager does not create a Job from any of these states.
+func CanContinueWithoutAdmission(restoreResource *openbaov1alpha1.OpenBaoRestore) bool {
+	if restoreResource == nil || restoreResource.Status.Execution == nil {
+		return false
+	}
+
+	switch restoreResource.Status.Execution.Stage {
+	case openbaov1alpha1.RestoreExecutionStageCommitted,
+		openbaov1alpha1.RestoreExecutionStageCreated,
+		openbaov1alpha1.RestoreExecutionStageTerminalObserved,
+		openbaov1alpha1.RestoreExecutionStageFollowThroughComplete,
+		openbaov1alpha1.RestoreExecutionStageUnknown:
+		return restoreResource.Status.Phase == openbaov1alpha1.RestorePhaseRunning ||
+			restoreResource.Status.Phase == openbaov1alpha1.RestorePhaseCompleted ||
+			restoreResource.Status.Phase == openbaov1alpha1.RestorePhaseFailed ||
+			restoreResource.Status.Phase == openbaov1alpha1.RestorePhaseUnknown
+	default:
+		return false
+	}
+}
+
 // RestoreDependencies contains the runtime inputs needed to build the restore reconciler.
 type RestoreDependencies struct {
 	Client                client.Client

@@ -121,19 +121,21 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 		VolumeMounts: volumeMounts,
 	}
 
-	// Job backoff limit - allow a few retries for transient failures
+	// Keep the Job until the controller persists its terminal result and all
+	// post-restore recovery. The controller removes it deliberately afterward.
 	backoffLimit := int32(3)
-	ttlSeconds := int32(RestoreJobTTLSeconds)
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: restore.Namespace,
 			Labels:    labels,
+			Annotations: map[string]string{
+				restoreExecutionIDAnnotation: restoreExecutionOperationID(restore),
+			},
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			TTLSecondsAfterFinished: &ttlSeconds,
+			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: podTemplateLabels,

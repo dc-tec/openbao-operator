@@ -93,7 +93,12 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 	if restoreResource.DeletionTimestamp == nil {
 		if result, blocked := r.pauseForAdmissionDependencyLoss(ctx, logger); blocked {
-			return result, nil
+			if !appopenbaorestore.CanContinueWithoutAdmission(restoreResource) {
+				return result, nil
+			}
+			logger.Info("Admission policy dependencies are unavailable; continuing observation of a committed restore execution",
+				"operationID", restoreResource.Status.Execution.OperationID,
+				"executionStage", restoreResource.Status.Execution.Stage)
 		}
 	}
 

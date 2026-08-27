@@ -7,11 +7,42 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
+
+func TestBuildRestoreJob_RetainsExecutionReceipt(t *testing.T) {
+	restoreObj := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+			UID:       types.UID("restore-operation-uid"),
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Image:   "example.com/restore-executor:v1",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshots/test.snap",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "https://s3.example.com",
+					Bucket:   "bao",
+				},
+			},
+		},
+	}
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec:       openbaov1alpha1.OpenBaoClusterSpec{Replicas: 3},
+	}
+
+	job, err := (&Manager{Platform: constants.PlatformKubernetes}).buildRestoreJob(restoreObj, cluster, "")
+	require.NoError(t, err)
+	require.Nil(t, job.Spec.TTLSecondsAfterFinished)
+	assert.Equal(t, string(restoreObj.UID), job.Annotations[restoreExecutionIDAnnotation])
+}
 
 func TestBuildRestoreJob_PodSecurityContext_Platform(t *testing.T) {
 	restoreObj := &openbaov1alpha1.OpenBaoRestore{

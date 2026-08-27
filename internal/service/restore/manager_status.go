@@ -159,6 +159,29 @@ func (m *Manager) handleDeletion(ctx context.Context, logger logr.Logger, restor
 		return ctrl.Result{}, nil
 	}
 
+	if restoreExecutionCommitted(restore.Status.Execution) {
+		switch restore.Status.Phase {
+		case openbaov1alpha1.RestorePhaseRunning:
+			result, err := m.handleRunning(ctx, logger, restore)
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to drain committed restore execution during deletion: %w", err)
+			}
+			if result.RequeueAfter == 0 {
+				result.RequeueAfter = restoreRequeueImmediately
+			}
+			return result, nil
+		case openbaov1alpha1.RestorePhaseUnknown:
+			return m.handleUnknownRestoreDeletion(ctx, logger, restore)
+		case openbaov1alpha1.RestorePhaseCompleted, openbaov1alpha1.RestorePhaseFailed:
+			// The terminal result and any required follow-through are durable. The
+			// retained Job can now be removed deliberately.
+		default:
+			return ctrl.Result{}, fmt.Errorf("committed restore deletion has unsupported phase %q", restore.Status.Phase)
+		}
+	}
+
+	// Pending, Validating, and Prepared restores are cancelable because Job
+	// creation has not crossed the durable commitment boundary.
 	jobDeleted, err := m.deleteRestoreJob(ctx, logger, restore)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -167,6 +190,47 @@ func (m *Manager) handleDeletion(ctx context.Context, logger logr.Logger, restor
 		return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
 	}
 
+	return m.finalizeRestoreDeletion(ctx, logger, restore)
+}
+
+func (m *Manager) handleUnknownRestoreDeletion(
+	ctx context.Context,
+	logger logr.Logger,
+	restore *openbaov1alpha1.OpenBaoRestore,
+) (ctrl.Result, error) {
+	job, err := opslifecycle.ReadManagedJob(
+		ctx,
+		m.reader,
+		types.NamespacedName{Namespace: restore.Namespace, Name: restore.Status.Execution.JobName},
+		restore,
+		openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"),
+		"drain unknown restore",
+	)
+	if apierrors.IsNotFound(err) {
+		return m.finalizeRestoreDeletion(ctx, logger, restore)
+	}
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to inspect unknown restore Job during deletion: %w", err)
+	}
+	if err := validateRestoreExecutionJob(restore.Status.Execution, job); err != nil {
+		return ctrl.Result{}, fmt.Errorf("refusing to delete or adopt restore Job with inconsistent execution identity: %w", err)
+	}
+
+	original := restore.DeepCopy()
+	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
+	restore.Status.Execution.Stage = openbaov1alpha1.RestoreExecutionStageCreated
+	restore.Status.Message = fmt.Sprintf("Restore Job %s became observable during deletion; draining the committed execution.", job.Name)
+	if err := m.patchStatus(ctx, restore, original); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to resume observable restore execution during deletion: %w", err)
+	}
+	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
+}
+
+func (m *Manager) finalizeRestoreDeletion(
+	ctx context.Context,
+	logger logr.Logger,
+	restore *openbaov1alpha1.OpenBaoRestore,
+) (ctrl.Result, error) {
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to release cluster operation lock during restore deletion: %w", err)
 	}

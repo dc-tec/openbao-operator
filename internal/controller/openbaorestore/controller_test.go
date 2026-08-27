@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
@@ -21,7 +22,22 @@ import (
 	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
+
+type recordingRestoreReconciler struct {
+	calls  int
+	result recon.Result
+}
+
+func (r *recordingRestoreReconciler) Reconcile(
+	_ context.Context,
+	_ logr.Logger,
+	_ *openbaov1alpha1.OpenBaoRestore,
+) (recon.Result, error) {
+	r.calls++
+	return r.result, nil
+}
 
 func setAdmissionReady(t *testing.T) {
 	t.Helper()
@@ -126,5 +142,45 @@ func TestOpenBaoRestoreReconciler_AdmissionDependencyLoss(t *testing.T) {
 		current := &openbaov1alpha1.OpenBaoRestore{}
 		require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(restore), current))
 		assert.Empty(t, current.Finalizers)
+	})
+
+	t.Run("committed execution continues observation", func(t *testing.T) {
+		t.Setenv("OPENBAO_UNSAFE_ADMISSION_DISABLED", "")
+		admission.SetAdmissionDependenciesReady(false)
+		t.Cleanup(func() { admission.SetAdmissionDependenciesReady(false) })
+
+		scheme := runtime.NewScheme()
+		require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+		restore := &openbaov1alpha1.OpenBaoRestore{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "committed-restore",
+				Namespace: "default",
+				UID:       types.UID("committed-restore-uid"),
+			},
+			Spec: openbaov1alpha1.OpenBaoRestoreSpec{Cluster: "test-cluster"},
+			Status: openbaov1alpha1.OpenBaoRestoreStatus{
+				Phase: openbaov1alpha1.RestorePhaseRunning,
+				Execution: &openbaov1alpha1.RestoreExecutionStatus{
+					OperationID: "committed-restore-uid",
+					Stage:       openbaov1alpha1.RestoreExecutionStageCreated,
+					JobName:     "restore-committed-restore",
+				},
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(restore).Build()
+		tracker := admission.NewTracker(c, admission.DefaultDependencies(), admission.DefaultNamePrefixes(), time.Hour)
+		tracker.Set(admission.Status{CheckedAt: time.Now(), OverallReady: false})
+		recorder := &recordingRestoreReconciler{result: recon.Result{RequeueAfter: 7 * time.Second}}
+		r := &OpenBaoRestoreReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			AdmissionTracker:  tracker,
+			RestoreReconciler: recorder,
+		}
+
+		result, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(restore)})
+		require.NoError(t, err)
+		assert.Equal(t, 7*time.Second, result.RequeueAfter)
+		assert.Equal(t, 1, recorder.calls)
 	})
 }

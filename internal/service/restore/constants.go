@@ -21,6 +21,10 @@ const (
 	// ReasonRestoreJobCreated indicates the restore Job was created successfully.
 	ReasonRestoreJobCreated = "RestoreJobCreated"
 
+	// ReasonRestoreExecutionUnknown indicates the controller cannot prove whether
+	// a committed restore Job ran and will not recreate it automatically.
+	ReasonRestoreExecutionUnknown = "RestoreExecutionUnknown"
+
 	// ReasonRestoreFailed indicates the restore operation failed.
 	ReasonRestoreFailed = "RestoreFailed"
 

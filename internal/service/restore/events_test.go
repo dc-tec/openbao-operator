@@ -137,6 +137,8 @@ func TestCreateRestoreJob_EmitsJobCreatedEvent(t *testing.T) {
 	scheme := newRestoreEventScheme(t)
 	cluster := newRestoreEventCluster()
 	restore := newRestoreEventResource()
+	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
+	restore.Status.Execution = newRestoreExecutionStatus(restore)
 	recorder := events.NewFakeRecorder(10)
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).

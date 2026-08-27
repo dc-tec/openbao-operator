@@ -68,8 +68,11 @@ successful backup as its guard.
 and service instead of hiding destructive recovery in `OpenBaoCluster` reconciliation.
 
 The restore service validates the target, snapshot source, credentials, initialization state, and lock state before it
-creates a restore Job. A force option may override specific safety checks, and operation-lock override requires explicit
-intent. Completed and failed requests keep reconciling lock cleanup until restore no longer owns the cluster lock.
+commits one restore Job creation attempt. Status records the stable operation ID, Job identity, terminal result, and
+post-restore completion. A missing Job after commitment becomes `Unknown`; the service never recreates it automatically.
+A force option may override specific safety checks, and operation-lock override requires explicit intent. Completed and
+failed requests remove the retained Job deliberately and keep reconciling lock cleanup until restore no longer owns the
+cluster lock.
 
 Restore completion means the restore workflow reached a terminal result. It does not guarantee that the cluster is
 unsealed or ready for clients; follow-up recovery can still be required.
@@ -106,7 +109,7 @@ Blue-green needs a second workload revision and approximately doubles storage us
 | Surface | Durable intent |
 | --- | --- |
 | `status.backup` | Schedule window, last attempt and success, next run, and failure counters |
-| `OpenBaoRestore.status` | Validation, running, terminal result, conditions, and Job progress |
+| `OpenBaoRestore.status` | Validation, stable execution and Job identity, terminal receipt, follow-through completion, conditions, and progress |
 | `status.upgrade` | Rolling progress, completed pods, failure, and finalization state |
 | `status.blueGreen` | Active phase, promotion, cutover, cleanup, or rollback progress |
 | `status.upgradeRequests` | Edge-trigger bookkeeping for retry, promote, and rollback requests |

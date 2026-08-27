@@ -168,15 +168,27 @@ kubectl -n <namespace> get openbaocluster <cluster> -o yaml
 {{< /command >}}
 
 `status.phase` moves through `Pending`, `Validating`, and `Running`, then ends at `Completed` or `Failed`.
+It changes to `Unknown` when the controller cannot prove whether a committed restore Job ran. The operator never
+recreates that Job automatically. Inspect the retained Job when it exists, verify the cluster state, and delete the
+immutable `OpenBaoRestore` only after you decide that another operation can proceed.
 `RestoreConfigurationReady` reports the operator-known auth, storage identity, Secret, and egress prerequisites.
+
+`status.execution` records the stable operation ID, expected Job name and UID, and the `Prepared`, `Committed`,
+`Created`, `TerminalObserved`, and `FollowThroughComplete` receipts. The operator retains the Job without a TTL until
+the terminal result and post-restore recovery are durable. It then removes the Job deliberately.
 
 When steady read replicas are configured, the operator drains them before creating the restore Job. After the Job
 succeeds, the operator keeps the restore lock and restarts every voter Pod through a StatefulSet rollout. The
 `OpenBaoCluster` records the restore name, UID, and voter restart completion time in `status.restore`.
 
-After all voter Pods run the restored revision and are Ready, the operator releases the restore lock. It then restores
-the desired read replicas and waits for `ReadReplicasReady`, `ReadServingAvailable`, and `RaftMembershipReady` before
-marking the restore `Completed`.
+After all voter Pods run the restored revision and are Ready, the operator restores the desired read replicas. It waits
+for `ReadReplicasReady`, `ReadServingAvailable`, and `RaftMembershipReady` before recording follow-through completion,
+marking the restore `Completed`, and releasing the restore lock.
+
+Deleting a restore before execution is committed cancels it. Deleting a committed restore does not terminate its Job.
+The finalizer observes the terminal result, completes voter and read-replica recovery, and then removes the Job and the
+restore request. Loss of an admission-policy dependency still blocks new restore work, but it does not stop this narrow
+committed-execution drain path.
 
 {{< callout type="note" title="Completed is not full service validation" >}}
 `Completed` means the restore Job succeeded and every voter completed the required post-restore restart. When read
