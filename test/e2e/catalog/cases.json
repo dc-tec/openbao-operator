@@ -3134,6 +3134,7 @@
       "read-replicas-restore"
     ],
     "steps": [
+      "recording voter Pod identities before restore",
       "verifying restore configuration is accepted before execution",
       "waiting for restore to drain steady read replicas before execution continues",
       "Verifying secret persists after restore",

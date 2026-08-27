@@ -46,6 +46,7 @@ func ApplyOpenBaoClusterAdminOpsStatus(
 			Upgrade:                 cluster.Status.Upgrade,
 			UpgradeRequests:         cluster.Status.UpgradeRequests,
 			Backup:                  cluster.Status.Backup,
+			Restore:                 cluster.Status.Restore,
 			BlueGreen:               cluster.Status.BlueGreen,
 			BreakGlass:              cluster.Status.BreakGlass,
 			AdminOps:                cluster.Status.AdminOps,

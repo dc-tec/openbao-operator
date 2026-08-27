@@ -55,6 +55,7 @@ func MutateWithReader(
 	cluster.Status.Upgrade = updated.Status.Upgrade
 	cluster.Status.UpgradeRequests = updated.Status.UpgradeRequests
 	cluster.Status.Backup = updated.Status.Backup
+	cluster.Status.Restore = updated.Status.Restore
 	cluster.Status.BlueGreen = updated.Status.BlueGreen
 	cluster.Status.BreakGlass = updated.Status.BreakGlass
 	cluster.Status.AdminOps = updated.Status.AdminOps

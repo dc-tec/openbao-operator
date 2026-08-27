@@ -27,6 +27,12 @@ const (
 	// ReasonRestoreCompleted indicates the restore operation completed successfully.
 	ReasonRestoreCompleted = "RestoreCompleted"
 
+	// ReasonRestoreRestartRequested indicates the voter workload restart was requested after snapshot application.
+	ReasonRestoreRestartRequested = "RestoreRestartRequested"
+
+	// ReasonRestoreRestartCompleted indicates all voter Pods completed the post-restore restart.
+	ReasonRestoreRestartCompleted = "RestoreRestartCompleted"
+
 	// ReasonRestoreSucceeded indicates the restore operation succeeded.
 	ReasonRestoreSucceeded = "RestoreSucceeded"
 

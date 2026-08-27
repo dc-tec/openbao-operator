@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
@@ -42,6 +43,18 @@ func (a restoreManagerAdapter) Reconcile(ctx context.Context, logger logr.Logger
 
 // NewRestoreReconciler constructs the restore reconciler used by the controller.
 func NewRestoreReconciler(deps RestoreDependencies) RestoreReconciler {
+	adminOpsMutator := func(
+		ctx context.Context,
+		cluster *openbaov1alpha1.OpenBaoCluster,
+		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
+		forceOwnership bool,
+	) error {
+		return adminopsstatus.MutateWithReader(ctx, deps.APIReader, deps.Client, cluster, mutate, adminopsstatus.MutateOptions{
+			ForceOwnership:  forceOwnership,
+			RetryOnConflict: !forceOwnership,
+		})
+	}
+
 	return restoreManagerAdapter{
 		manager: restore.NewManager(
 			deps.Client,
@@ -50,6 +63,6 @@ func NewRestoreReconciler(deps RestoreDependencies) RestoreReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.ClientConfig,
-		).WithReader(deps.APIReader),
+		).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
 	}
 }

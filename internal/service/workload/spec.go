@@ -29,6 +29,10 @@ type StatefulSetSpec struct {
 	// workload pool. Nil falls back to the cluster-level runtime request.
 	RestartAt *string
 
+	// RestoreRevision is the OpenBaoRestore UID that triggered the most recent
+	// post-snapshot workload restart.
+	RestoreRevision string
+
 	// DisableSelfInit prevents pod self-initialization (used for Green pods in BlueGreen)
 	DisableSelfInit bool
 

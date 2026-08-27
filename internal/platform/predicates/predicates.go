@@ -33,6 +33,8 @@ type OpenBaoClusterPredicateOptions struct {
 	ReconcileOnUpgradeStatus bool
 	// ReconcileOnBackupStatus enables reconciliation when status.backup changes.
 	ReconcileOnBackupStatus bool
+	// ReconcileOnRestoreStatus enables reconciliation when status.restore changes.
+	ReconcileOnRestoreStatus bool
 	// ReconcileOnBlueGreenStatus enables reconciliation when status.blueGreen changes.
 	ReconcileOnBlueGreenStatus bool
 	// ReconcileOnBreakGlass enables reconciliation when status.breakGlass changes.
@@ -87,6 +89,9 @@ func shouldReconcileOpenBaoClusterUpdate(
 		return true
 	}
 	if opts.ReconcileOnBackupStatus && !equality.Semantic.DeepEqual(oldCluster.Status.Backup, newCluster.Status.Backup) {
+		return true
+	}
+	if opts.ReconcileOnRestoreStatus && !equality.Semantic.DeepEqual(oldCluster.Status.Restore, newCluster.Status.Restore) {
 		return true
 	}
 	if opts.ReconcileOnBlueGreenStatus && !equality.Semantic.DeepEqual(oldCluster.Status.BlueGreen, newCluster.Status.BlueGreen) {
