@@ -963,6 +963,83 @@ func TestVAP_LockManagedRBAC_DeniesDirectMutationOfProvisionerManagedRoleBinding
 	t.Fatalf("expected VAP to deny direct mutation of provisioner-managed RoleBinding after retries")
 }
 
+func TestVAP_LockManagedRBAC_AllowsNamespaceControllerServiceAccountDeleteOnly(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+	ensureProvisionerRBACApplied(t)
+
+	namespace := newTestNamespace(t)
+	provisionerClient := newPrivilegedImpersonatedClient(t, provisionerUsername)
+	namespaceControllerClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:kube-system:namespace-controller",
+	)
+	tenantNamespaceControllerClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:"+namespace+":namespace-controller",
+	)
+
+	tenantRole := provisionerpkg.GenerateTenantRole(namespace)
+	if err := provisionerClient.Create(ctx, tenantRole); err != nil {
+		t.Fatalf("create tenant Role: %v", err)
+	}
+
+	roleBinding := provisionerpkg.GenerateTenantRoleBinding(namespace, provisionerpkg.OperatorServiceAccount{
+		Name:      "openbao-operator-controller",
+		Namespace: "openbao-operator-system",
+	})
+	if err := provisionerClient.Create(ctx, roleBinding); err != nil {
+		t.Fatalf("create managed RoleBinding: %v", err)
+	}
+
+	roleKey := types.NamespacedName{Namespace: namespace, Name: tenantRole.Name}
+	var updateDenied bool
+	for attempt := 0; attempt < 25; attempt++ {
+		var latestRole rbacv1.Role
+		if err := namespaceControllerClient.Get(ctx, roleKey, &latestRole); err != nil {
+			t.Fatalf("get managed Role before namespace controller update: %v", err)
+		}
+		latestRole.Rules = append(latestRole.Rules, rbacv1.PolicyRule{
+			APIGroups: []string{""},
+			Resources: []string{"secrets"},
+			Verbs:     []string{"get"},
+		})
+		err := namespaceControllerClient.Update(ctx, &latestRole)
+		if err == nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "Direct modification of OpenBao-managed resources is prohibited") {
+			t.Fatalf("unexpected namespace controller update error: %v", err)
+		}
+		updateDenied = true
+		break
+	}
+	if !updateDenied {
+		t.Fatal("expected namespace controller ServiceAccount update to be denied")
+	}
+
+	err := tenantNamespaceControllerClient.Delete(ctx, &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: roleBinding.Name, Namespace: namespace},
+	})
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "Direct modification of OpenBao-managed resources is prohibited") {
+		t.Fatalf("unexpected tenant namespace controller delete error: %v", err)
+	}
+
+	if err := namespaceControllerClient.Delete(ctx, &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: roleBinding.Name, Namespace: namespace},
+	}); err != nil {
+		t.Fatalf("expected namespace controller ServiceAccount to delete managed RoleBinding, got: %v", err)
+	}
+	if err := namespaceControllerClient.Delete(ctx, &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{Name: tenantRole.Name, Namespace: namespace},
+	}); err != nil {
+		t.Fatalf("expected namespace controller ServiceAccount to delete managed Role, got: %v", err)
+	}
+}
+
 func TestVAP_LockManagedRBAC_DoesNotTrustCertManagerNamespace(t *testing.T) {
 	ensureDefaultAdmissionPoliciesApplied(t)
 

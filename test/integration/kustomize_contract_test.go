@@ -205,6 +205,7 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	var isPersistentVolumeBinderExpression string
 	var isPVCProtectionControllerExpression string
 	var isStatefulSetControllerExpression string
+	var isNamespaceControllerServiceAccountExpression string
 	var isStoragePVCBindingUpdateExpression string
 	var currentServiceMonitorOwnedExpression string
 	var oldServiceMonitorOwnedExpression string
@@ -242,6 +243,8 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 			isPVCProtectionControllerExpression = expression
 		case "is_statefulset_controller":
 			isStatefulSetControllerExpression = expression
+		case "is_namespace_controller_serviceaccount":
+			isNamespaceControllerServiceAccountExpression = expression
 		case "is_storage_pvc_binding_update":
 			isStoragePVCBindingUpdateExpression = expression
 		case "current_service_monitor_is_operator_owned":
@@ -310,6 +313,12 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 		!strings.Contains(isStatefulSetControllerExpression, "system:serviceaccount:kube-system:statefulset-controller") {
 		t.Fatalf("is_statefulset_controller expression does not recognize StatefulSet controller identities: %q", isStatefulSetControllerExpression)
 	}
+	if !strings.Contains(isNamespaceControllerServiceAccountExpression, "system:serviceaccount:kube-system:namespace-controller") {
+		t.Fatalf(
+			"is_namespace_controller_serviceaccount expression does not recognize the namespace controller identity: %q",
+			isNamespaceControllerServiceAccountExpression,
+		)
+	}
 	if !strings.Contains(isKubeSchedulerExpression, "system:kube-scheduler") ||
 		!strings.Contains(isKubeSchedulerExpression, "system:serviceaccount:kube-system:kube-scheduler") {
 		t.Fatalf("is_kube_scheduler expression does not recognize scheduler identities: %q", isKubeSchedulerExpression)
@@ -360,6 +369,7 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	var foundOwnerUIDAnnotationGuard bool
 	var foundStatefulSetPVCGuard bool
 	var foundStoragePVCBindingGuard bool
+	var foundNamespaceControllerDeleteGuard bool
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
 		if !ok {
@@ -389,6 +399,11 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 			strings.Contains(expression, "variables.is_storage_pvc_binding_update") {
 			foundStoragePVCBindingGuard = true
 		}
+		if strings.Contains(message, "Direct modification of OpenBao-managed resources is prohibited") &&
+			strings.Contains(expression, "variables.is_namespace_controller_serviceaccount") &&
+			strings.Contains(expression, `request.operation == "DELETE"`) {
+			foundNamespaceControllerDeleteGuard = true
+		}
 	}
 	if !foundServiceMonitorOwnershipGuard {
 		t.Fatalf("openbao-lock-managed-resource-mutations policy missing ServiceMonitor ownership guard")
@@ -401,6 +416,9 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	}
 	if !foundStoragePVCBindingGuard {
 		t.Fatalf("openbao-lock-managed-resource-mutations policy missing storage PVC binding update guard")
+	}
+	if !foundNamespaceControllerDeleteGuard {
+		t.Fatalf("openbao-lock-managed-resource-mutations policy missing namespace controller delete guard")
 	}
 }
 

@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
   annotations:
-    openbao.org/admission-policy-fingerprint: sha256:da94c35652f641eb4a7767be72ecaeeb0c1cfbf8f82bb17e0ed394a0e1124109
+    openbao.org/admission-policy-fingerprint: sha256:4fe62c598a00d07ae0569c52123bf927ab9e81745655f17f79ee539e3a267031
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -129,6 +129,10 @@ spec:
       expression: >-
         request.userInfo.username == "system:controller:statefulset-controller" ||
         request.userInfo.username == "system:serviceaccount:kube-system:statefulset-controller"
+    # Some controller managers use dedicated ServiceAccount credentials for the namespace controller.
+    - name: is_namespace_controller_serviceaccount
+      expression: >-
+        request.userInfo.username == "system:serviceaccount:kube-system:namespace-controller"
     # K3s/K3d and some distributions use service accounts for GC instead of system:controller:*
     - name: is_garbage_collector_sa
       expression: >-
@@ -463,6 +467,7 @@ spec:
         variables.is_operator_provisioner ||
         (variables.is_kube_controller_manager && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
         (variables.is_system_controller && request.operation == "DELETE") ||
+        (variables.is_namespace_controller_serviceaccount && request.operation == "DELETE") ||
         (variables.is_garbage_collector_sa && (request.operation == "DELETE" || request.operation == "UPDATE")) ||
         (variables.is_system_controller && request.resource.resource == "pods") ||
         (variables.is_system_controller && variables.is_endpoints_controller_request) ||
