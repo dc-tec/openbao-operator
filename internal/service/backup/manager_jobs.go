@@ -63,10 +63,11 @@ type backupJobObservation struct {
 func (m *Manager) observeBackupJobs(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (backupJobObservation, error) {
 	jobList := &batchv1.JobList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
-		constants.LabelAppInstance:      cluster.Name,
-		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: ComponentBackup,
+		constants.LabelAppInstance:       cluster.Name,
+		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:    cluster.Name,
+		constants.LabelOpenBaoComponent:  ComponentBackup,
+		constants.LabelOpenBaoBackupType: constants.BackupTypeScheduled,
 	})
 
 	if err := m.reader.List(ctx, jobList,
