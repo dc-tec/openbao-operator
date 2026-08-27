@@ -1,7 +1,10 @@
 package openbaocluster
 
 import (
+	"fmt"
+
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	upgradesvc "github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
@@ -41,13 +44,32 @@ func shouldStageSteadyReadReplicasDown(cluster *openbaov1alpha1.OpenBaoCluster) 
 
 	switch cluster.Status.OperationLock.Operation {
 	case openbaov1alpha1.ClusterOperationRestore:
-		return true
+		return restoreLockRequiresReadReplicaStageDown(cluster)
 	case openbaov1alpha1.ClusterOperationUpgrade:
 		return upgradesvc.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen &&
 			(phase == "" || phase == openbaov1alpha1.PhaseIdle)
 	default:
 		return false
 	}
+}
+
+func restoreLockRequiresReadReplicaStageDown(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	lock := cluster.Status.OperationLock
+	restore := cluster.Status.Restore
+	if lock == nil || restore == nil || restore.RestartCompletedAt == nil || lock.AcquiredAt == nil {
+		return true
+	}
+
+	expectedHolder := fmt.Sprintf("%s/%s", constants.ControllerNameOpenBaoRestore, restore.Name)
+	if lock.Holder != expectedHolder {
+		return true
+	}
+
+	// RestartCompletedAt is the durable hand-off from voter recovery to steady
+	// read-replica recovery. Compare it with the lock acquisition time so a
+	// completed restore with the same name cannot release the drain for a later
+	// restore attempt.
+	return restore.RestartCompletedAt.Time.Before(lock.AcquiredAt.Time)
 }
 
 func blueGreenPhaseRequiresReadReplicaStageDown(phase openbaov1alpha1.BlueGreenPhase) bool {

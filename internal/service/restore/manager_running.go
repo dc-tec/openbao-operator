@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -20,7 +22,6 @@ import (
 
 // handleRunning manages the restore job and checks for completion.
 func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
-	// Get target cluster for job configuration
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := m.reader.Get(ctx, types.NamespacedName{
 		Namespace: restore.Namespace,
@@ -29,14 +30,16 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 		return ctrl.Result{}, fmt.Errorf("failed to get target cluster: %w", err)
 	}
 
-	// Check if job already exists
-	jobName := restoreJobName(restore)
-	job, err := opslifecycle.ReadManagedJob(ctx, m.reader, types.NamespacedName{
-		Namespace: restore.Namespace,
-		Name:      jobName,
-	}, restore, openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"), "observe restore")
+	if restore.Status.Execution == nil {
+		return m.recoverLegacyRunningRestore(ctx, logger, restore, cluster)
+	}
+	if err := validateRestoreExecutionIdentity(restore); err != nil {
+		message := fmt.Sprintf("Restore execution identity is inconsistent: %v. The operator will not create or recreate a restore Job. Investigate the existing Job and delete this OpenBaoRestore only after the cluster state is known.", err)
+		return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore, message)
+	}
 
-	if apierrors.IsNotFound(err) {
+	switch restore.Status.Execution.Stage {
+	case openbaov1alpha1.RestoreExecutionStagePrepared:
 		done, err := m.renewRunningRestoreLock(ctx, logger, restore, cluster)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -44,17 +47,159 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 		if done {
 			return ctrl.Result{}, nil
 		}
-		return m.createRestoreJob(ctx, logger, restore, cluster, jobName)
-	} else if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get restore job: %w", err)
-	}
-
-	// Check job status
-	if job.Status.Succeeded > 0 {
+		return m.createRestoreJob(ctx, logger, restore, cluster, restore.Status.Execution.JobName)
+	case openbaov1alpha1.RestoreExecutionStageCommitted:
+		job, result, err := m.readCommittedRestoreJob(ctx, restore)
+		if result != nil || err != nil {
+			if result != nil {
+				return *result, err
+			}
+			return ctrl.Result{}, err
+		}
+		if err := m.markRestoreExecutionCreated(ctx, restore, job); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to persist restore Job creation receipt: %w", err)
+		}
+		return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
+	case openbaov1alpha1.RestoreExecutionStageCreated:
+		return m.observeCreatedRestoreJob(ctx, logger, restore, cluster)
+	case openbaov1alpha1.RestoreExecutionStageTerminalObserved:
+		if restore.Status.Execution.TerminalResult == openbaov1alpha1.RestoreExecutionResultFailed {
+			return m.failRestore(ctx, logger, restore, "Restore Job failed. The terminal execution receipt is preserved; inspect the retained Job logs before creating a new OpenBaoRestore.")
+		}
+		if restore.Status.Execution.TerminalResult != openbaov1alpha1.RestoreExecutionResultSucceeded {
+			message := fmt.Sprintf("Restore terminal receipt has unsupported result %q. The operator will not create or recreate a restore Job.", restore.Status.Execution.TerminalResult)
+			return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore, message)
+		}
 		if err := m.handleSucceededRestoreJob(ctx, logger, restore, cluster); err != nil {
 			return ctrl.Result{}, err
 		}
-		if restore.Status.Phase == openbaov1alpha1.RestorePhaseCompleted {
+		if restore.Status.Execution.Stage == openbaov1alpha1.RestoreExecutionStageFollowThroughComplete {
+			if err := m.completeRestore(ctx, logger, restore, "Restore completed successfully after post-restore recovery"); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
+	case openbaov1alpha1.RestoreExecutionStageFollowThroughComplete:
+		if err := m.completeRestore(ctx, logger, restore, "Restore completed successfully after post-restore recovery"); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	case openbaov1alpha1.RestoreExecutionStageUnknown:
+		return ctrl.Result{}, nil
+	default:
+		message := fmt.Sprintf("Restore execution has unsupported stage %q. The operator will not create or recreate a restore Job.", restore.Status.Execution.Stage)
+		return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore, message)
+	}
+}
+
+func (m *Manager) recoverLegacyRunningRestore(
+	ctx context.Context,
+	logger logr.Logger,
+	restore *openbaov1alpha1.OpenBaoRestore,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (ctrl.Result, error) {
+	jobName := restoreJobName(restore)
+	job, err := opslifecycle.ReadManagedJob(ctx, m.reader, types.NamespacedName{
+		Namespace: restore.Namespace,
+		Name:      jobName,
+	}, restore, openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"), "observe restore")
+	if apierrors.IsNotFound(err) {
+		message := "Restore is Running without an execution receipt and its Job is missing. The Job may have completed before the controller recorded it, so the operator will not recreate it. Verify the cluster state, then delete this OpenBaoRestore to release the operation lock."
+		return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore, message)
+	}
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get restore job: %w", err)
+	}
+
+	operationID := restoreExecutionOperationID(restore)
+	if jobOperationID := job.Annotations[restoreExecutionIDAnnotation]; jobOperationID != "" && jobOperationID != operationID {
+		message := fmt.Sprintf("Existing restore Job %s has operation ID %q, expected %q. The operator will not adopt or recreate it.", job.Name, jobOperationID, operationID)
+		return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore, message)
+	}
+
+	original := restore.DeepCopy()
+	now := metav1.Now()
+	restore.Status.Execution = &openbaov1alpha1.RestoreExecutionStatus{
+		OperationID: operationID,
+		Stage:       openbaov1alpha1.RestoreExecutionStageCreated,
+		JobName:     job.Name,
+		JobUID:      job.UID,
+		PreparedAt:  &now,
+		CommittedAt: &now,
+		CreatedAt:   &now,
+	}
+	restore.Status.Message = fmt.Sprintf("Adopted existing restore Job %s and persisted its execution receipt.", job.Name)
+	if err := m.patchStatus(ctx, restore, original); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to persist legacy restore Job receipt: %w", err)
+	}
+	logger.Info("Adopted existing restore Job without a prior execution receipt", "job", job.Name, "operationID", operationID)
+	return m.observeCreatedRestoreJob(ctx, logger, restore, cluster)
+}
+
+func (m *Manager) readCommittedRestoreJob(
+	ctx context.Context,
+	restore *openbaov1alpha1.OpenBaoRestore,
+) (*batchv1.Job, *ctrl.Result, error) {
+	job, err := opslifecycle.ReadManagedJob(ctx, m.reader, types.NamespacedName{
+		Namespace: restore.Namespace,
+		Name:      restore.Status.Execution.JobName,
+	}, restore, openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"), "observe committed restore")
+	if apierrors.IsNotFound(err) {
+		message := fmt.Sprintf("Committed restore Job %s is missing before a creation receipt was persisted. Its execution result is unknown, so the operator will not recreate it. Verify the cluster state, then delete this OpenBaoRestore to release the operation lock.", restore.Status.Execution.JobName)
+		if statusErr := m.markRestoreExecutionUnknown(ctx, restore, message); statusErr != nil {
+			return nil, nil, statusErr
+		}
+		result := ctrl.Result{}
+		return nil, &result, nil
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get committed restore Job: %w", err)
+	}
+	if err := validateRestoreExecutionJob(restore.Status.Execution, job); err != nil {
+		message := fmt.Sprintf("Committed restore Job identity is inconsistent: %v. The operator will not recreate it.", err)
+		if statusErr := m.markRestoreExecutionUnknown(ctx, restore, message); statusErr != nil {
+			return nil, nil, statusErr
+		}
+		result := ctrl.Result{}
+		return nil, &result, nil
+	}
+	return job, nil, nil
+}
+
+func (m *Manager) observeCreatedRestoreJob(
+	ctx context.Context,
+	logger logr.Logger,
+	restore *openbaov1alpha1.OpenBaoRestore,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (ctrl.Result, error) {
+	job, err := opslifecycle.ReadManagedJob(ctx, m.reader, types.NamespacedName{
+		Namespace: restore.Namespace,
+		Name:      restore.Status.Execution.JobName,
+	}, restore, openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"), "observe restore")
+	if apierrors.IsNotFound(err) {
+		message := fmt.Sprintf("Restore Job %s is missing after its creation receipt was persisted. Its execution result is unknown, so the operator will not recreate it. Verify the cluster state, then delete this OpenBaoRestore to release the operation lock.", restore.Status.Execution.JobName)
+		return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore, message)
+	}
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get restore Job: %w", err)
+	}
+	if err := validateRestoreExecutionJob(restore.Status.Execution, job); err != nil {
+		message := fmt.Sprintf("Restore Job identity no longer matches its creation receipt: %v. The operator will not recreate it.", err)
+		return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore, message)
+	}
+
+	if job.Status.Succeeded > 0 {
+		if err := m.markRestoreExecutionTerminal(ctx, restore, openbaov1alpha1.RestoreExecutionResultSucceeded); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to persist successful restore Job receipt: %w", err)
+		}
+		if err := m.handleSucceededRestoreJob(ctx, logger, restore, cluster); err != nil {
+			return ctrl.Result{}, err
+		}
+		if restore.Status.Execution.Stage == openbaov1alpha1.RestoreExecutionStageFollowThroughComplete {
+			if err := m.completeRestore(ctx, logger, restore, "Restore completed successfully after post-restore recovery"); err != nil {
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
@@ -69,12 +214,14 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 	}
 
 	if job.Status.Failed > 0 {
+		if err := m.markRestoreExecutionTerminal(ctx, restore, openbaov1alpha1.RestoreExecutionResultFailed); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to persist failed restore Job receipt: %w", err)
+		}
 		return m.failRestore(ctx, logger, restore, restoreJobFailedStatusMessage(job, workloadidentity.FailureHint(restore.Spec.Source.Target, restoreServiceAccountName(cluster))))
 	}
 
-	// Job still running
 	original := restore.DeepCopy()
-	restore.Status.Message = restoreJobRunningStatusMessage(jobName)
+	restore.Status.Message = restoreJobRunningStatusMessage(job.Name)
 	if err := m.patchStatus(ctx, restore, original); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status while job is running: %w", err)
 	}
@@ -100,6 +247,12 @@ func (m *Manager) renewRunningRestoreLock(
 				"restore_name":      restore.Name,
 			})
 			m.emitWarningEvent(restore, ReasonOperationLockLost, "Restore lost the cluster operation lock while running")
+			if restoreExecutionCommitted(restore.Status.Execution) {
+				logger.Info("Restore lost the operation lock after execution commitment; continuing observation and post-restore recovery",
+					"operationID", restore.Status.Execution.OperationID,
+					"executionStage", restore.Status.Execution.Stage)
+				return false, nil
+			}
 			_, failErr := m.failRestore(
 				ctx,
 				logger,
@@ -163,16 +316,12 @@ func (m *Manager) handleSucceededRestoreJob(
 		}
 	}
 
-	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
-		return fmt.Errorf("failed to release cluster operation lock after post-restore voter restart: %w", err)
-	}
-
 	if !shouldWaitForSteadyReadReplicaRestore(cluster) {
-		return m.completeRestore(ctx, logger, restore, "Restore completed successfully after voter Pods restarted")
+		return m.markRestoreFollowThroughComplete(ctx, restore)
 	}
 
 	if steadyReadReplicaRestoreComplete(cluster) {
-		return m.completeRestore(ctx, logger, restore, "Restore completed successfully")
+		return m.markRestoreFollowThroughComplete(ctx, restore)
 	}
 
 	readyReplicas := int32(0)
@@ -206,6 +355,13 @@ func (m *Manager) createRestoreJob(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	jobName string,
 ) (ctrl.Result, error) {
+	if restore.Status.Execution == nil || restore.Status.Execution.Stage != openbaov1alpha1.RestoreExecutionStagePrepared {
+		return ctrl.Result{}, fmt.Errorf("restore execution must be Prepared before Job creation")
+	}
+	if err := validateRestoreExecutionIdentity(restore); err != nil {
+		return ctrl.Result{}, fmt.Errorf("invalid prepared restore execution: %w", err)
+	}
+
 	executorImage, err := getRestoreExecutorImage(restore, cluster)
 	if err != nil {
 		return m.failRestore(ctx, logger, restore, fmt.Sprintf("failed to determine restore executor image: %v", err))
@@ -256,23 +412,56 @@ func (m *Manager) createRestoreJob(
 	if err := opslifecycle.PrepareManagedJobOwner(job, restore, m.scheme); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to prepare restore Job ownership: %w", err)
 	}
+	if err := m.markRestoreExecutionCommitted(ctx, restore); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to persist restore Job creation commitment: %w", err)
+	}
 
 	if err := m.client.Create(ctx, job); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			if _, readErr := opslifecycle.ReadManagedJob(
+			existing, readErr := opslifecycle.ReadManagedJob(
 				ctx,
 				m.reader,
 				types.NamespacedName{Namespace: restore.Namespace, Name: jobName},
 				restore,
 				openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"),
 				"use existing restore",
-			); readErr != nil {
+			)
+			if readErr != nil {
 				return ctrl.Result{}, fmt.Errorf("restore Job create collided with an untrusted existing Job: %w", readErr)
+			}
+			if receiptErr := m.markRestoreExecutionCreated(ctx, restore, existing); receiptErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to persist existing restore Job creation receipt: %w", receiptErr)
 			}
 			logger.V(1).Info("Restore job already exists after create attempt; ownership verified", "job", jobName)
 			return ctrl.Result{RequeueAfter: restoreRequeueJobCheck}, nil
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to create restore job: %w", err)
+
+		existing, readErr := opslifecycle.ReadManagedJob(
+			ctx,
+			m.reader,
+			types.NamespacedName{Namespace: restore.Namespace, Name: jobName},
+			restore,
+			openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"),
+			"resolve ambiguous restore create",
+		)
+		if readErr == nil {
+			if receiptErr := m.markRestoreExecutionCreated(ctx, restore, existing); receiptErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to persist restore Job receipt after ambiguous create: %w", receiptErr)
+			}
+			return ctrl.Result{RequeueAfter: restoreRequeueJobCheck}, nil
+		}
+		if !apierrors.IsNotFound(readErr) {
+			return ctrl.Result{}, fmt.Errorf("failed to resolve restore Job create error %v: %w", err, readErr)
+		}
+
+		message := fmt.Sprintf("Restore Job creation returned an error after execution %s was committed: %v. The Job is not observable, so its execution state is unknown and the operator will not retry creation.", restore.Status.Execution.OperationID, err)
+		if statusErr := m.markRestoreExecutionUnknown(ctx, restore, message); statusErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to record ambiguous restore Job creation after error %v: %w", err, statusErr)
+		}
+		return ctrl.Result{}, nil
+	}
+	if err := m.markRestoreExecutionCreated(ctx, restore, job); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to persist restore Job creation receipt: %w", err)
 	}
 
 	logger.Info("Created restore job", "job", jobName)
@@ -286,11 +475,6 @@ func (m *Manager) createRestoreJob(
 		m.emitNormalEvent(restore, ReasonRestoreIdentityConfiguration, "%s", message)
 	}
 	m.emitNormalEvent(restore, ReasonRestoreJobCreated, "Created restore Job %s", jobName)
-	original := restore.DeepCopy()
-	restore.Status.Message = restoreJobRunningStatusMessage(jobName)
-	if err := m.patchStatus(ctx, restore, original); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to patch restore status after job creation: %w", err)
-	}
 
 	// Requeue to check job status.
 	return ctrl.Result{RequeueAfter: restoreRequeueJobCheck}, nil

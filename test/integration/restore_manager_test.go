@@ -712,6 +712,19 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 	}
 
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
+		t.Fatalf("get restore after committed Job observation: %v", err)
+	}
+	if latest.Status.Phase != openbaov1alpha1.RestorePhaseRunning {
+		t.Fatalf("expected restore phase Running while the creation receipt becomes durable, got %s", latest.Status.Phase)
+	}
+	if latest.Status.Execution == nil || latest.Status.Execution.Stage != openbaov1alpha1.RestoreExecutionStageCreated {
+		t.Fatalf("expected restore execution stage Created before terminal observation, got %+v", latest.Status.Execution)
+	}
+
+	if _, err := mgr.Reconcile(ctx, logr.Discard(), latest); err != nil {
+		t.Fatalf("reconcile created restore with failed job: %v", err)
+	}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
 		t.Fatalf("get failed restore: %v", err)
 	}
 	if latest.Status.Phase != openbaov1alpha1.RestorePhaseFailed {

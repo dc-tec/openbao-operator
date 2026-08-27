@@ -402,6 +402,10 @@ resources:
         rationale: Condition types are stable; reason sets may expand and messages are best-effort.
       - path: status.conditions[].message
         classification: informational
+      - path: status.execution
+        classification: stable-automation
+        owner: lifecycle-safety
+        rationale: Durable execution and Job receipts prevent destructive restore replay and support fail-closed recovery.
       - path: status.message
         classification: informational
         owner: restore-status

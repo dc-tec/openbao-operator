@@ -34,8 +34,9 @@ tests keep the dependency inventory aligned with `config/policy`; do not install
 
 `--admission-enforcement=fail` is the manager default. The controller and provisioner wait up to
 `--admission-startup-timeout` (60 seconds by default) and refuse to start if the policy dependencies are not ready.
-While running, cluster, restore, tenant-provisioning, and tenant Secret-RBAC paths pause when the dependency set is
-lost.
+While running, cluster, new restore work, tenant-provisioning, and tenant Secret-RBAC paths pause when the dependency
+set is lost. A restore that already crossed its durable Job-creation boundary continues through a narrow drain path.
+That path can observe the recorded Job and finish post-restore recovery, but it cannot create or recreate a restore Job.
 
 {{< callout type="warning" title="Disabling chart admission is unsafe mode" >}}
 Setting Helm `admissionPolicies.enabled: false` starts both managers with warning enforcement and

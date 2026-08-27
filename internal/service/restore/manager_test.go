@@ -873,6 +873,7 @@ func TestHandleRunning_RestoreJobAlreadyExistsDuringCreate(t *testing.T) {
 		},
 	}
 	setTestResourceVersion(restore)
+	restore.Status.Execution = newRestoreExecutionStatus(restore)
 
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -896,7 +897,76 @@ func TestHandleRunning_RestoreJobAlreadyExistsDuringCreate(t *testing.T) {
 
 	result, err := mgr.handleRunning(context.Background(), testLogger(), restore)
 	require.NoError(t, err)
-	assert.Equal(t, 10*time.Second, result.RequeueAfter)
+	assert.Equal(t, 10*time.Second, result.RequeueAfter, "phase=%s stage=%s message=%s", restore.Status.Phase, restore.Status.Execution.Stage, restore.Status.Message)
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(restore), updated))
+	require.NotNil(t, updated.Status.Execution)
+	assert.Equal(t, openbaov1alpha1.RestoreExecutionStageCreated, updated.Status.Execution.Stage)
+	assert.Equal(t, restoreJobName(restore), updated.Status.Execution.JobName)
+	assert.NotNil(t, updated.Status.Execution.CommittedAt)
+	assert.NotNil(t, updated.Status.Execution.CreatedAt)
+}
+
+func TestHandleRunning_DoesNotRecreateMissingCommittedJob(t *testing.T) {
+	tests := []struct {
+		name  string
+		stage openbaov1alpha1.RestoreExecutionStage
+	}{
+		{name: "creation committed", stage: openbaov1alpha1.RestoreExecutionStageCommitted},
+		{name: "creation receipt persisted", stage: openbaov1alpha1.RestoreExecutionStageCreated},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+			require.NoError(t, batchv1.AddToScheme(scheme))
+
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+			}
+			setTestResourceVersion(cluster)
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-restore", Namespace: "default"},
+				Spec:       openbaov1alpha1.OpenBaoRestoreSpec{Cluster: cluster.Name},
+				Status:     openbaov1alpha1.OpenBaoRestoreStatus{Phase: openbaov1alpha1.RestorePhaseRunning},
+			}
+			setTestResourceVersion(restore)
+			restore.Status.Execution = newRestoreExecutionStatus(restore)
+			restore.Status.Execution.Stage = tt.stage
+			if tt.stage == openbaov1alpha1.RestoreExecutionStageCreated {
+				restore.Status.Execution.JobUID = types.UID("missing-job-uid")
+			}
+
+			jobCreates := 0
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(cluster, restore).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+						if _, ok := obj.(*batchv1.Job); ok {
+							jobCreates++
+						}
+						return c.Create(ctx, obj, opts...)
+					},
+				}).
+				Build()
+
+			mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+			result, err := mgr.handleRunning(context.Background(), testLogger(), restore)
+			require.NoError(t, err)
+			assert.Zero(t, result.RequeueAfter)
+			assert.Zero(t, jobCreates)
+
+			updated := &openbaov1alpha1.OpenBaoRestore{}
+			require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(restore), updated))
+			assert.Equal(t, openbaov1alpha1.RestorePhaseUnknown, updated.Status.Phase)
+			require.NotNil(t, updated.Status.Execution)
+			assert.Equal(t, openbaov1alpha1.RestoreExecutionStageUnknown, updated.Status.Execution.Stage)
+			assert.Contains(t, updated.Status.Message, "will not recreate")
+		})
+	}
 }
 
 func TestHandleRunning_RejectsForeignSucceededJob(t *testing.T) {
@@ -1099,6 +1169,10 @@ func TestHandleRunning_SucceededJobWaitsForSteadyReadReplicaRestore(t *testing.T
 	assert.Nil(t, updatedRestore.Status.CompletionTime)
 	assert.Contains(t, updatedRestore.Status.Message, "Waiting for steady read replicas to restore before marking restore complete")
 
+	updatedCluster := &openbaov1alpha1.OpenBaoCluster{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updatedCluster))
+	require.NotNil(t, updatedCluster.Status.OperationLock)
+	assert.Equal(t, openbaov1alpha1.ClusterOperationRestore, updatedCluster.Status.OperationLock.Operation)
 }
 
 func TestHandleRunning_SucceededJobCompletesAfterSteadyReadReplicaRestore(t *testing.T) {
@@ -1373,7 +1447,12 @@ func TestHandleRunning_SucceededJobCompletesAfterVoterRestart(t *testing.T) {
 	updatedRestore := &openbaov1alpha1.OpenBaoRestore{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(restore), updatedRestore))
 	assert.Equal(t, openbaov1alpha1.RestorePhaseCompleted, updatedRestore.Status.Phase)
-	assert.Contains(t, updatedRestore.Status.Message, "voter Pods restarted")
+	assert.Contains(t, updatedRestore.Status.Message, "post-restore recovery")
+	require.NotNil(t, updatedRestore.Status.Execution)
+	assert.Equal(t, openbaov1alpha1.RestoreExecutionStageFollowThroughComplete, updatedRestore.Status.Execution.Stage)
+	assert.Equal(t, openbaov1alpha1.RestoreExecutionResultSucceeded, updatedRestore.Status.Execution.TerminalResult)
+	assert.NotNil(t, updatedRestore.Status.Execution.TerminalObservedAt)
+	assert.NotNil(t, updatedRestore.Status.Execution.FollowThroughCompletedAt)
 
 	updatedCluster := &openbaov1alpha1.OpenBaoCluster{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updatedCluster))
@@ -2204,7 +2283,7 @@ func TestHandleDeletion_KeepsFinalizerWhenLockReleaseFails(t *testing.T) {
 	assert.Contains(t, current.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
 }
 
-func TestHandleDeletion_WaitsForRestoreJobBeforeLockRelease(t *testing.T) {
+func TestHandleDeletion_DrainsCommittedRestoreJob(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
 	require.NoError(t, batchv1.AddToScheme(scheme))
@@ -2221,6 +2300,9 @@ func TestHandleDeletion_WaitsForRestoreJobBeforeLockRelease(t *testing.T) {
 		Spec: openbaov1alpha1.OpenBaoRestoreSpec{Cluster: "test-cluster"},
 	}
 	setTestResourceVersion(restore)
+	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
+	restore.Status.Execution = newRestoreExecutionStatus(restore)
+	restore.Status.Execution.Stage = openbaov1alpha1.RestoreExecutionStageCreated
 	lock := restoreOperationLock(restore)
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: restore.Spec.Cluster, Namespace: restore.Namespace},
@@ -2233,20 +2315,26 @@ func TestHandleDeletion_WaitsForRestoreJobBeforeLockRelease(t *testing.T) {
 	}
 	setTestResourceVersion(cluster)
 	job := managedRestoreJobForRestore(
-		&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: restoreJobName(restore), Namespace: restore.Namespace}},
+		&batchv1.Job{ObjectMeta: metav1.ObjectMeta{
+			Name:      restoreJobName(restore),
+			Namespace: restore.Namespace,
+			UID:       types.UID("running-restore-job-uid"),
+		}},
 		restore,
 	)
+	job.Annotations[restoreExecutionIDAnnotation] = restore.Status.Execution.OperationID
+	restore.Status.Execution.JobUID = job.UID
 
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(restore, cluster, job).
-		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
 		Build()
 	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
 
 	result, err := mgr.handleDeletion(context.Background(), testLogger(), restore)
 	require.NoError(t, err)
-	assert.Equal(t, restoreRequeueImmediately, result.RequeueAfter)
+	assert.Equal(t, restoreRequeueJobPoll, result.RequeueAfter)
 
 	currentCluster := &openbaov1alpha1.OpenBaoCluster{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), currentCluster))
@@ -2255,17 +2343,11 @@ func TestHandleDeletion_WaitsForRestoreJobBeforeLockRelease(t *testing.T) {
 	currentRestore := &openbaov1alpha1.OpenBaoRestore{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(restore), currentRestore))
 	assert.Contains(t, currentRestore.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
-	assert.True(t, apierrors.IsNotFound(k8sClient.Get(
+	assert.NoError(t, k8sClient.Get(
 		context.Background(),
 		client.ObjectKey{Namespace: restore.Namespace, Name: restoreJobName(restore)},
 		&batchv1.Job{},
-	)))
-
-	result, err = mgr.handleDeletion(context.Background(), testLogger(), currentRestore)
-	require.NoError(t, err)
-	assert.Zero(t, result.RequeueAfter)
-	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), currentCluster))
-	assert.Nil(t, currentCluster.Status.OperationLock)
+	))
 }
 
 func TestHandleDeletion_RejectsForeignRestoreJob(t *testing.T) {

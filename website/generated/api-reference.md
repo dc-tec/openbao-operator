@@ -2432,13 +2432,79 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `phase` _[RestorePhase](#restorephase)_ | Phase represents the current phase of the restore operation. | Pending | Enum: [Pending Validating Running Completed Failed] <br /> |
+| `phase` _[RestorePhase](#restorephase)_ | Phase represents the current phase of the restore operation. | Pending | Enum: [Pending Validating Running Completed Failed Unknown] <br /> |
 | `startTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | StartTime is when the restore operation started. |  | Optional: \{\} <br /> |
 | `completionTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | CompletionTime is when the restore operation completed (success or failure). |  | Optional: \{\} <br /> |
+| `execution` _[RestoreExecutionStatus](#restoreexecutionstatus)_ | Execution records the stable operation identity and durable lifecycle receipts. |  | Optional: \{\} <br /> |
 | `snapshotKey` _string_ | SnapshotKey is the key of the snapshot that was restored. |  | Optional: \{\} <br /> |
 | `snapshotSize` _integer_ | SnapshotSize is the size of the restored snapshot in bytes. |  | Optional: \{\} <br /> |
 | `message` _string_ | Message provides additional details about the current phase. |  | Optional: \{\} <br /> |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions represent the latest available observations of the restore's state. |  | Optional: \{\} <br /> |
+
+
+#### RestoreExecutionResult
+
+_Underlying type:_ _string_
+
+RestoreExecutionResult is the persisted terminal result of a restore Job.
+
+_Validation:_
+- Enum: [Succeeded Failed]
+
+_Appears in:_
+- [RestoreExecutionStatus](#restoreexecutionstatus)
+
+| Field | Description |
+| --- | --- |
+| `Succeeded` | RestoreExecutionResultSucceeded indicates the restore Job succeeded.<br /> |
+| `Failed` | RestoreExecutionResultFailed indicates the restore Job failed.<br /> |
+
+
+#### RestoreExecutionStage
+
+_Underlying type:_ _string_
+
+RestoreExecutionStage identifies the durable execution boundary reached by a restore.
+
+_Validation:_
+- Enum: [Prepared Committed Created TerminalObserved FollowThroughComplete Unknown]
+
+_Appears in:_
+- [RestoreExecutionStatus](#restoreexecutionstatus)
+
+| Field | Description |
+| --- | --- |
+| `Prepared` | RestoreExecutionStagePrepared indicates validation and resource preparation<br />completed, but Job creation has not been committed.<br /> |
+| `Committed` | RestoreExecutionStageCommitted indicates the controller durably committed to<br />one Job creation attempt. A missing Job after this point is ambiguous and is<br />not recreated automatically.<br /> |
+| `Created` | RestoreExecutionStageCreated indicates the controller persisted the created Job identity.<br /> |
+| `TerminalObserved` | RestoreExecutionStageTerminalObserved indicates the controller persisted the terminal Job result.<br /> |
+| `FollowThroughComplete` | RestoreExecutionStageFollowThroughComplete indicates post-restore voter and<br />read-replica recovery completed.<br /> |
+| `Unknown` | RestoreExecutionStageUnknown indicates the controller cannot prove whether<br />the committed execution ran.<br /> |
+
+
+#### RestoreExecutionStatus
+
+
+
+RestoreExecutionStatus records the identity and durable receipts for one restore execution.
+
+
+
+_Appears in:_
+- [OpenBaoRestoreStatus](#openbaorestorestatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `operationID` _string_ | OperationID identifies this immutable restore execution. |  |  |
+| `stage` _[RestoreExecutionStage](#restoreexecutionstage)_ | Stage is the latest durable execution boundary observed by the controller. |  | Enum: [Prepared Committed Created TerminalObserved FollowThroughComplete Unknown] <br /> |
+| `jobName` _string_ | JobName is the expected restore Job name for this execution. |  |  |
+| `jobUID` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#uid-types-pkg)_ | JobUID is the UID returned for the created restore Job. |  | Optional: \{\} <br /> |
+| `preparedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | PreparedAt is when validation and execution preparation completed. |  | Optional: \{\} <br /> |
+| `committedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | CommittedAt is when the controller committed to one Job creation attempt. |  | Optional: \{\} <br /> |
+| `createdAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | CreatedAt is when the controller persisted the created Job receipt. |  | Optional: \{\} <br /> |
+| `terminalResult` _[RestoreExecutionResult](#restoreexecutionresult)_ | TerminalResult is the persisted terminal Job result. |  | Enum: [Succeeded Failed] <br />Optional: \{\} <br /> |
+| `terminalObservedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | TerminalObservedAt is when the controller persisted the terminal Job result. |  | Optional: \{\} <br /> |
+| `followThroughCompletedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | FollowThroughCompletedAt is when post-restore recovery completed. |  | Optional: \{\} <br /> |
 
 
 #### RestorePhase
@@ -2448,7 +2514,7 @@ _Underlying type:_ _string_
 RestorePhase represents the current phase of a restore operation.
 
 _Validation:_
-- Enum: [Pending Validating Running Completed Failed]
+- Enum: [Pending Validating Running Completed Failed Unknown]
 
 _Appears in:_
 - [OpenBaoRestoreStatus](#openbaorestorestatus)
@@ -2460,6 +2526,7 @@ _Appears in:_
 | `Running` | RestorePhaseRunning indicates the restore job is executing.<br /> |
 | `Completed` | RestorePhaseCompleted indicates the restore completed successfully.<br /> |
 | `Failed` | RestorePhaseFailed indicates the restore failed.<br /> |
+| `Unknown` | RestorePhaseUnknown indicates the controller cannot determine whether the<br />destructive restore operation ran. The controller does not retry an<br />execution in this phase.<br /> |
 
 
 #### RestoreSource

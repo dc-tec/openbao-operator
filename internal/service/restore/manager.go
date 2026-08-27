@@ -26,8 +26,6 @@ type adminOpsStatusMutator func(
 const (
 	// RestoreJobNamePrefix is the prefix for restore job names.
 	RestoreJobNamePrefix = constants.PrefixRestoreJob
-	// RestoreJobTTLSeconds is the TTL for completed/failed restore jobs.
-	RestoreJobTTLSeconds = 3600 // 1 hour
 	// RestoreServiceAccountSuffix is appended to cluster name for the restore SA.
 	RestoreServiceAccountSuffix = constants.SuffixRestoreServiceAccount
 	// RestoreConditionType is the condition type for restore operations.

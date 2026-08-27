@@ -19,10 +19,11 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // RestorePhase represents the current phase of a restore operation.
-// +kubebuilder:validation:Enum=Pending;Validating;Running;Completed;Failed
+// +kubebuilder:validation:Enum=Pending;Validating;Running;Completed;Failed;Unknown
 type RestorePhase string
 
 const (
@@ -40,7 +41,86 @@ const (
 	RestorePhaseCompleted RestorePhase = "Completed"
 	// RestorePhaseFailed indicates the restore failed.
 	RestorePhaseFailed RestorePhase = "Failed"
+	// RestorePhaseUnknown indicates the controller cannot determine whether the
+	// destructive restore operation ran. The controller does not retry an
+	// execution in this phase.
+	RestorePhaseUnknown RestorePhase = "Unknown"
 )
+
+// RestoreExecutionStage identifies the durable execution boundary reached by a restore.
+// +kubebuilder:validation:Enum=Prepared;Committed;Created;TerminalObserved;FollowThroughComplete;Unknown
+type RestoreExecutionStage string
+
+const (
+	// RestoreExecutionStagePrepared indicates validation and resource preparation
+	// completed, but Job creation has not been committed.
+	RestoreExecutionStagePrepared RestoreExecutionStage = "Prepared"
+	// RestoreExecutionStageCommitted indicates the controller durably committed to
+	// one Job creation attempt. A missing Job after this point is ambiguous and is
+	// not recreated automatically.
+	RestoreExecutionStageCommitted RestoreExecutionStage = "Committed"
+	// RestoreExecutionStageCreated indicates the controller persisted the created Job identity.
+	RestoreExecutionStageCreated RestoreExecutionStage = "Created"
+	// RestoreExecutionStageTerminalObserved indicates the controller persisted the terminal Job result.
+	RestoreExecutionStageTerminalObserved RestoreExecutionStage = "TerminalObserved"
+	// RestoreExecutionStageFollowThroughComplete indicates post-restore voter and
+	// read-replica recovery completed.
+	RestoreExecutionStageFollowThroughComplete RestoreExecutionStage = "FollowThroughComplete"
+	// RestoreExecutionStageUnknown indicates the controller cannot prove whether
+	// the committed execution ran.
+	RestoreExecutionStageUnknown RestoreExecutionStage = "Unknown"
+)
+
+// RestoreExecutionResult is the persisted terminal result of a restore Job.
+// +kubebuilder:validation:Enum=Succeeded;Failed
+type RestoreExecutionResult string
+
+const (
+	// RestoreExecutionResultSucceeded indicates the restore Job succeeded.
+	RestoreExecutionResultSucceeded RestoreExecutionResult = "Succeeded"
+	// RestoreExecutionResultFailed indicates the restore Job failed.
+	RestoreExecutionResultFailed RestoreExecutionResult = "Failed"
+)
+
+// RestoreExecutionStatus records the identity and durable receipts for one restore execution.
+type RestoreExecutionStatus struct {
+	// OperationID identifies this immutable restore execution.
+	OperationID string `json:"operationID"`
+
+	// Stage is the latest durable execution boundary observed by the controller.
+	Stage RestoreExecutionStage `json:"stage"`
+
+	// JobName is the expected restore Job name for this execution.
+	JobName string `json:"jobName"`
+
+	// JobUID is the UID returned for the created restore Job.
+	// +optional
+	JobUID types.UID `json:"jobUID,omitempty"`
+
+	// PreparedAt is when validation and execution preparation completed.
+	// +optional
+	PreparedAt *metav1.Time `json:"preparedAt,omitempty"`
+
+	// CommittedAt is when the controller committed to one Job creation attempt.
+	// +optional
+	CommittedAt *metav1.Time `json:"committedAt,omitempty"`
+
+	// CreatedAt is when the controller persisted the created Job receipt.
+	// +optional
+	CreatedAt *metav1.Time `json:"createdAt,omitempty"`
+
+	// TerminalResult is the persisted terminal Job result.
+	// +optional
+	TerminalResult RestoreExecutionResult `json:"terminalResult,omitempty"`
+
+	// TerminalObservedAt is when the controller persisted the terminal Job result.
+	// +optional
+	TerminalObservedAt *metav1.Time `json:"terminalObservedAt,omitempty"`
+
+	// FollowThroughCompletedAt is when post-restore recovery completed.
+	// +optional
+	FollowThroughCompletedAt *metav1.Time `json:"followThroughCompletedAt,omitempty"`
+}
 
 // RestoreSource defines where the snapshot comes from.
 type RestoreSource struct {
@@ -137,6 +217,10 @@ type OpenBaoRestoreStatus struct {
 	// CompletionTime is when the restore operation completed (success or failure).
 	// +optional
 	CompletionTime *metav1.Time `json:"completionTime,omitempty"`
+
+	// Execution records the stable operation identity and durable lifecycle receipts.
+	// +optional
+	Execution *RestoreExecutionStatus `json:"execution,omitempty"`
 
 	// SnapshotKey is the key of the snapshot that was restored.
 	// +optional

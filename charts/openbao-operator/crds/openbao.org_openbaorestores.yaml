@@ -396,6 +396,68 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              execution:
+                description: Execution records the stable operation identity and durable
+                  lifecycle receipts.
+                properties:
+                  committedAt:
+                    description: CommittedAt is when the controller committed to one
+                      Job creation attempt.
+                    format: date-time
+                    type: string
+                  createdAt:
+                    description: CreatedAt is when the controller persisted the created
+                      Job receipt.
+                    format: date-time
+                    type: string
+                  followThroughCompletedAt:
+                    description: FollowThroughCompletedAt is when post-restore recovery
+                      completed.
+                    format: date-time
+                    type: string
+                  jobName:
+                    description: JobName is the expected restore Job name for this
+                      execution.
+                    type: string
+                  jobUID:
+                    description: JobUID is the UID returned for the created restore
+                      Job.
+                    type: string
+                  operationID:
+                    description: OperationID identifies this immutable restore execution.
+                    type: string
+                  preparedAt:
+                    description: PreparedAt is when validation and execution preparation
+                      completed.
+                    format: date-time
+                    type: string
+                  stage:
+                    description: Stage is the latest durable execution boundary observed
+                      by the controller.
+                    enum:
+                    - Prepared
+                    - Committed
+                    - Created
+                    - TerminalObserved
+                    - FollowThroughComplete
+                    - Unknown
+                    type: string
+                  terminalObservedAt:
+                    description: TerminalObservedAt is when the controller persisted
+                      the terminal Job result.
+                    format: date-time
+                    type: string
+                  terminalResult:
+                    description: TerminalResult is the persisted terminal Job result.
+                    enum:
+                    - Succeeded
+                    - Failed
+                    type: string
+                required:
+                - jobName
+                - operationID
+                - stage
+                type: object
               message:
                 description: Message provides additional details about the current
                   phase.
@@ -409,6 +471,7 @@ spec:
                 - Running
                 - Completed
                 - Failed
+                - Unknown
                 type: string
               snapshotKey:
                 description: SnapshotKey is the key of the snapshot that was restored.
