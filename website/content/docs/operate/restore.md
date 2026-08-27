@@ -6,12 +6,14 @@ weight: 10
 verifiedBy:
   - api/v1alpha1/openbaorestore_types.go
   - api/v1alpha1/openbaocluster_operations_types.go
+  - api/v1alpha1/openbaocluster_selfinit_types.go
   - config/policy/openbao-validate-openbaorestore.yaml
   - config/rbac/openbaocluster_restore_role.yaml
   - internal/service/restore/manager_validation.go
   - internal/service/restore/manager_running.go
   - internal/service/restore/post_restore_restart.go
   - internal/adapter/openbao/client_bootstrap.go
+  - internal/adapter/config/selfinit_gohcl.go
   - cmd/bao-backup/restore_flow.go
   - internal/service/restore/read_replica_restore.go
   - internal/service/workloadidentity/readiness.go
@@ -62,6 +64,41 @@ rehearsal and support decision.
 
 Keep traffic on the source until the target is unsealed, has a leader and expected Raft membership, accepts a real
 human or workload login, and returns representative restored data. Cut over traffic manually after those checks.
+
+### Preserve lifecycle JWT identities
+
+The first restore authenticates against the target's current JWT configuration. The applied snapshot then replaces
+that configuration with the source cluster's roles. A later backup, restore, or upgrade fails if the restored role
+does not accept the target Job's ServiceAccount subject.
+
+For a planned recovery target on the same Kubernetes JWT trust domain, add its exact subjects to the source cluster
+before the source self-initializes:
+
+{{< command label="configure" title="Authorize one recovery target without combining role privileges" >}}
+selfInit:
+  enabled: true
+  oidc:
+    enabled: true
+    additionalSubjects:
+      backup:
+        - system:serviceaccount:recovery:prod-recovery-backup-serviceaccount
+      restore:
+        - system:serviceaccount:recovery:prod-recovery-restore-serviceaccount
+      upgrade:
+        - system:serviceaccount:recovery:prod-recovery-upgrade-serviceaccount
+{{< /command >}}
+
+The operator adds each subject only to its corresponding generated role. Add `operator` subjects only when a recovery
+target uses a different controller ServiceAccount. A same-cluster restore does not need additional subjects because
+the generated identities do not change.
+
+Self-init is one-shot. Adding these fields to an initialized source does not update its OpenBao roles. Update each
+role through an authenticated administration path before taking the recovery snapshot, or create and initialize the
+source with the bindings already declared.
+
+The subject allowlist does not extend JWT issuer or signature trust. For a target on another Kubernetes control plane,
+the restored `jwt-operator` auth method must also validate that control plane's projected tokens. Qualify that trust
+configuration separately before relying on the recovery path.
 
 ## Choose restore authentication
 

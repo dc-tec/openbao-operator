@@ -52,10 +52,12 @@ initialize "operator-bootstrap" {
     operation = "update"
     path      = "auth/jwt-operator/role/backup"
     data {
-      role_type               = "jwt"
-      user_claim              = "sub"
-      bound_audiences         = ["openbao-internal"]
-      bound_subject           = "system:serviceaccount:default:hardened-cluster-backup-serviceaccount"
+      role_type       = "jwt"
+      user_claim      = "sub"
+      bound_audiences = ["openbao-internal"]
+      bound_claims = {
+        sub = ["system:serviceaccount:default:hardened-cluster-backup-serviceaccount", "system:serviceaccount:recovery:recovery-backup-serviceaccount"]
+      }
       token_policies          = ["openbao-operator-backup"]
       policies                = ["openbao-operator-backup"]
       ttl                     = "1h"
@@ -78,12 +80,40 @@ initialize "operator-bootstrap" {
     operation = "update"
     path      = "auth/jwt-operator/role/upgrade"
     data {
+      role_type       = "jwt"
+      user_claim      = "sub"
+      bound_audiences = ["openbao-internal"]
+      bound_claims = {
+        sub = ["system:serviceaccount:default:hardened-cluster-upgrade-serviceaccount", "system:serviceaccount:recovery:recovery-upgrade-serviceaccount"]
+      }
+      token_policies          = ["openbao-operator-upgrade"]
+      policies                = ["openbao-operator-upgrade"]
+      ttl                     = "1h"
+      token_ttl               = "1h"
+      token_max_ttl           = "1h"
+      token_no_default_policy = true
+      clock_skew_leeway       = "30s"
+      expiration_leeway       = "30s"
+      not_before_leeway       = "30s"
+    }
+  }
+  request "create-restore-policy" {
+    operation = "update"
+    path      = "sys/policies/acl/openbao-operator-restore"
+    data {
+      policy = "path \"sys/storage/raft/snapshot\" { capabilities = [\"update\"] }\npath \"sys/storage/raft/snapshot-force\" { capabilities = [\"update\"] }"
+    }
+  }
+  request "create-restore-jwt-role" {
+    operation = "update"
+    path      = "auth/jwt-operator/role/openbao-operator-restore"
+    data {
       role_type               = "jwt"
       user_claim              = "sub"
       bound_audiences         = ["openbao-internal"]
-      bound_subject           = "system:serviceaccount:default:hardened-cluster-upgrade-serviceaccount"
-      token_policies          = ["openbao-operator-upgrade"]
-      policies                = ["openbao-operator-upgrade"]
+      bound_subject           = "system:serviceaccount:default:hardened-cluster-restore-serviceaccount"
+      token_policies          = ["openbao-operator-restore"]
+      policies                = ["openbao-operator-restore"]
       ttl                     = "1h"
       token_ttl               = "1h"
       token_max_ttl           = "1h"

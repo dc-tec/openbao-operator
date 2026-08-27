@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -106,7 +107,7 @@ func TestOperatorJWTRoleDataHardening(t *testing.T) {
 	subject := "system:serviceaccount:operator-ns:controller"
 	audiences := []string{"openbao-internal"}
 
-	got := operatorJWTRoleData(subject, authPolicyNameOperator, audiences)
+	got := operatorJWTRoleData(subject, nil, authPolicyNameOperator, audiences)
 
 	if got.RoleType != authMethodJWT {
 		t.Fatalf("RoleType=%q, want %q", got.RoleType, authMethodJWT)
@@ -134,6 +135,32 @@ func TestOperatorJWTRoleDataHardening(t *testing.T) {
 	}
 	if got.ClockSkewLeeway != operatorJWTLeeway || got.ExpirationLeeway != operatorJWTLeeway || got.NotBeforeLeeway != operatorJWTLeeway {
 		t.Fatalf("role leeways = (%q,%q,%q), want %q", got.ClockSkewLeeway, got.ExpirationLeeway, got.NotBeforeLeeway, operatorJWTLeeway)
+	}
+}
+
+func TestOperatorJWTRoleDataAdditionalSubjects(t *testing.T) {
+	defaultSubject := "system:serviceaccount:source:source-backup-serviceaccount"
+	additional := []openbaov1alpha1.KubernetesServiceAccountSubject{
+		"system:serviceaccount:recovery-b:target-backup-serviceaccount",
+		"system:serviceaccount:recovery-a:target-backup-serviceaccount",
+		openbaov1alpha1.KubernetesServiceAccountSubject(defaultSubject),
+	}
+
+	got := operatorJWTRoleData(defaultSubject, additional, authPolicyNameBackup, []string{"openbao-internal"})
+
+	if got.BoundSubject != nil {
+		t.Fatalf("BoundSubject=%q, want nil when multiple subjects are configured", *got.BoundSubject)
+	}
+	if got.BoundClaims == nil {
+		t.Fatal("BoundClaims=nil, want exact subject claim allowlist")
+	}
+	want := []string{
+		"system:serviceaccount:recovery-a:target-backup-serviceaccount",
+		"system:serviceaccount:recovery-b:target-backup-serviceaccount",
+		defaultSubject,
+	}
+	if actual := (*got.BoundClaims)["sub"]; !slices.Equal(actual, want) {
+		t.Fatalf("BoundClaims[sub]=%v, want %v", actual, want)
 	}
 }
 
@@ -1193,6 +1220,13 @@ func TestRenderSelfInitHCL_AutoCreatesBackupAndUpgradePolicies(t *testing.T) {
 	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
 		Enabled: true,
+		OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+			Enabled: true,
+			AdditionalSubjects: &openbaov1alpha1.SelfInitOIDCAdditionalSubjects{
+				Backup:  []openbaov1alpha1.KubernetesServiceAccountSubject{"system:serviceaccount:recovery:recovery-backup-serviceaccount"},
+				Upgrade: []openbaov1alpha1.KubernetesServiceAccountSubject{"system:serviceaccount:recovery:recovery-upgrade-serviceaccount"},
+			},
+		},
 	}
 	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
 		Schedule:    "0 3 * * *",
@@ -1226,6 +1260,12 @@ func TestRenderSelfInitHCL_AutoCreatesRestorePolicyAndRole(t *testing.T) {
 	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
 		Enabled: true,
+		OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+			Enabled: true,
+			AdditionalSubjects: &openbaov1alpha1.SelfInitOIDCAdditionalSubjects{
+				Restore: []openbaov1alpha1.KubernetesServiceAccountSubject{"system:serviceaccount:recovery:recovery-restore-serviceaccount"},
+			},
+		},
 	}
 	cluster.Spec.Restore = &openbaov1alpha1.RestoreConfig{
 		JWTAuthRole: "restore",
@@ -1244,6 +1284,119 @@ func TestRenderSelfInitHCL_AutoCreatesRestorePolicyAndRole(t *testing.T) {
 	}
 
 	compareGolden(t, "render_self_init_restore_policy", got)
+}
+
+func TestRenderSelfInitHCL_AdditionalSubjectsRemainRoleScoped(t *testing.T) {
+	cluster := newMinimalCluster("source", "source-ns")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+			Enabled: true,
+			AdditionalSubjects: &openbaov1alpha1.SelfInitOIDCAdditionalSubjects{
+				Operator: []openbaov1alpha1.KubernetesServiceAccountSubject{"system:serviceaccount:recovery-system:recovery-controller"},
+				Backup:   []openbaov1alpha1.KubernetesServiceAccountSubject{"system:serviceaccount:recovery:target-backup-serviceaccount"},
+				Restore:  []openbaov1alpha1.KubernetesServiceAccountSubject{"system:serviceaccount:recovery:target-restore-serviceaccount"},
+				Upgrade:  []openbaov1alpha1.KubernetesServiceAccountSubject{"system:serviceaccount:recovery:target-upgrade-serviceaccount"},
+			},
+		},
+	}
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+		Schedule: "0 3 * * *",
+		Target: openbaov1alpha1.BackupTarget{
+			Endpoint: "https://s3.amazonaws.com",
+			Bucket:   "backups",
+		},
+	}
+	cluster.Spec.Restore = &openbaov1alpha1.RestoreConfig{}
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{}
+
+	got, err := RenderSelfInitHCL(cluster, &OperatorBootstrapConfig{
+		OIDCIssuerURL: "https://kubernetes.default.svc",
+		JWTKeysPEM:    []string{"test-public-key"},
+		OperatorNS:    "source-system",
+		OperatorSA:    "source-controller",
+	})
+	if err != nil {
+		t.Fatalf("RenderSelfInitHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	tests := []struct {
+		role       string
+		subject    string
+		notAllowed []string
+	}{
+		{
+			role:    authRoleNameOperator,
+			subject: "system:serviceaccount:recovery-system:recovery-controller",
+			notAllowed: []string{
+				"system:serviceaccount:recovery:target-backup-serviceaccount",
+				"system:serviceaccount:recovery:target-restore-serviceaccount",
+				"system:serviceaccount:recovery:target-upgrade-serviceaccount",
+			},
+		},
+		{
+			role:    authRoleNameBackup,
+			subject: "system:serviceaccount:recovery:target-backup-serviceaccount",
+			notAllowed: []string{
+				"system:serviceaccount:recovery-system:recovery-controller",
+				"system:serviceaccount:recovery:target-restore-serviceaccount",
+				"system:serviceaccount:recovery:target-upgrade-serviceaccount",
+			},
+		},
+		{
+			role:    authRoleNameRestore,
+			subject: "system:serviceaccount:recovery:target-restore-serviceaccount",
+			notAllowed: []string{
+				"system:serviceaccount:recovery-system:recovery-controller",
+				"system:serviceaccount:recovery:target-backup-serviceaccount",
+				"system:serviceaccount:recovery:target-upgrade-serviceaccount",
+			},
+		},
+		{
+			role:    authRoleNameUpgrade,
+			subject: "system:serviceaccount:recovery:target-upgrade-serviceaccount",
+			notAllowed: []string{
+				"system:serviceaccount:recovery-system:recovery-controller",
+				"system:serviceaccount:recovery:target-backup-serviceaccount",
+				"system:serviceaccount:recovery:target-restore-serviceaccount",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.role, func(t *testing.T) {
+			block := selfInitRequestBlockForPath(t, rendered, pathAuthJWTRolePrefix+tt.role)
+			if !strings.Contains(block, "bound_claims") || !strings.Contains(block, tt.subject) {
+				t.Fatalf("role %q does not contain its additional exact subject:\n%s", tt.role, block)
+			}
+			if strings.Contains(block, "bound_subject") {
+				t.Fatalf("role %q contains bound_subject with multiple subjects:\n%s", tt.role, block)
+			}
+			for _, subject := range tt.notAllowed {
+				if strings.Contains(block, subject) {
+					t.Fatalf("role %q contains subject for another role %q:\n%s", tt.role, subject, block)
+				}
+			}
+		})
+	}
+}
+
+func selfInitRequestBlockForPath(t *testing.T, rendered, path string) string {
+	t.Helper()
+	pathIndex := strings.Index(rendered, `"`+path+`"`)
+	if pathIndex < 0 {
+		t.Fatalf("rendered HCL does not contain path %q:\n%s", path, rendered)
+	}
+	start := strings.LastIndex(rendered[:pathIndex], `  request "`)
+	if start < 0 {
+		t.Fatalf("rendered HCL does not contain request start for path %q:\n%s", path, rendered)
+	}
+	next := strings.Index(rendered[pathIndex:], "\n  request \"")
+	if next < 0 {
+		return rendered[start:]
+	}
+	return rendered[start : pathIndex+next]
 }
 
 func TestRenderSelfInitHCL_DoesNotCreateBackupUpgradePoliciesWhenNotConfigured(t *testing.T) {

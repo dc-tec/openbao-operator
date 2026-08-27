@@ -71,6 +71,12 @@ operator can maintain the cluster while people remain permanently locked out.
 Self-init is one-shot. The operator uses the generated auth surface after initialization but does not continuously
 reconcile OpenBao policies. A human administrator must apply later policy changes required by an operator upgrade.
 
+For a planned snapshot recovery target whose generated ServiceAccount subjects differ from the source, configure
+`spec.selfInit.oidc.additionalSubjects` on the source before self-initialization. Keep controller, backup, restore, and
+upgrade subjects in their corresponding lists. The operator renders a separate exact allowlist for each role and does
+not combine their policies. See [Restore a snapshot](../../operate/restore/#preserve-lifecycle-jwt-identities) for the
+recovery sequence and the separate JWT trust requirement.
+
 ## Configure a manual controller role
 
 Use manual JWT configuration only for a controlled bootstrap or a custom install that cannot use self-init OIDC.
@@ -137,5 +143,6 @@ Check these values together:
 | Self-init finishes but operator auth does not settle | Discovery or JWKS cannot be reached or validated | Issuer, discovery URL, CA, and network path |
 | Backup or restore auth fails while the controller works | Job-specific identity or role is missing | The Job's ServiceAccount and JWT role |
 | A custom namespace or prefix breaks auth | OpenBao still trusts the default subject | All rendered identity references and `bound_subject` |
+| A recovery target works for its first restore but later lifecycle Jobs fail | The restored source roles do not trust the target subjects | Source-side `additionalSubjects` and the restored `jwt-operator` roles |
 
 If JWT login succeeds but a specific request is denied, continue with [operator authorization](../operator-authorization/).
