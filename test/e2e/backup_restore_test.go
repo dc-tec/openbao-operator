@@ -620,7 +620,6 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 					},
 					JWTAuthRole: "restore",
 					Image:       backupExecutorImage,
-					Force:       true,
 				},
 			}
 

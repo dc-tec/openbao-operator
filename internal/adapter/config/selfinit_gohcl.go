@@ -194,7 +194,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	if restoreRoleName != "" {
 		{
 			req := buildInitializeRequestBlock(reqCreateRestorePolicy, opUpdate, fmt.Sprintf("%s%s", pathSysPoliciesACLPrefix, authPolicyNameRestore), false)
-			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: jwtPolicyRestoreSnapshotForce}, "data"))
+			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: jwtPolicyRestoreSnapshot}, "data"))
 			initBody.AppendBlock(req)
 		}
 		{

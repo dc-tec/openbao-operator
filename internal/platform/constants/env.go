@@ -87,6 +87,7 @@ const (
 	EnvRestoreEndpoint     = "RESTORE_ENDPOINT"
 	EnvRestoreRegion       = "RESTORE_REGION"
 	EnvRestoreUsePathStyle = "RESTORE_USE_PATH_STYLE"
+	EnvRestoreForce        = "RESTORE_FORCE"
 
 	// Operator
 	EnvOperatorVersion                      = "OPERATOR_VERSION"

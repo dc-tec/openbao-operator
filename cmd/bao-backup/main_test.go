@@ -211,6 +211,7 @@ func TestResolveRestoreSettings(t *testing.T) {
 		t.Setenv("RESTORE_ENDPOINT", "")
 		t.Setenv("RESTORE_REGION", "")
 		t.Setenv("RESTORE_USE_PATH_STYLE", "")
+		t.Setenv("RESTORE_FORCE", "")
 
 		settings, err := resolveRestoreSettings(cfg)
 		require.NoError(t, err)
@@ -219,6 +220,7 @@ func TestResolveRestoreSettings(t *testing.T) {
 		assert.Equal(t, cfg.BackupEndpoint, settings.endpoint)
 		assert.Equal(t, cfg.BackupRegion, settings.region)
 		assert.False(t, settings.usePathStyle)
+		assert.False(t, settings.force)
 	})
 
 	t.Run("uses restore overrides", func(t *testing.T) {
@@ -227,6 +229,7 @@ func TestResolveRestoreSettings(t *testing.T) {
 		t.Setenv("RESTORE_ENDPOINT", "http://minio:9000")
 		t.Setenv("RESTORE_REGION", "us-east-2")
 		t.Setenv("RESTORE_USE_PATH_STYLE", "TRUE")
+		t.Setenv("RESTORE_FORCE", "true")
 
 		settings, err := resolveRestoreSettings(cfg)
 		require.NoError(t, err)
@@ -235,6 +238,16 @@ func TestResolveRestoreSettings(t *testing.T) {
 		assert.Equal(t, "http://minio:9000", settings.endpoint)
 		assert.Equal(t, "us-east-2", settings.region)
 		assert.True(t, settings.usePathStyle)
+		assert.True(t, settings.force)
+	})
+
+	t.Run("rejects invalid force value", func(t *testing.T) {
+		t.Setenv("RESTORE_KEY", "snap-003")
+		t.Setenv("RESTORE_FORCE", "sometimes")
+
+		_, err := resolveRestoreSettings(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid RESTORE_FORCE value")
 	})
 }
 

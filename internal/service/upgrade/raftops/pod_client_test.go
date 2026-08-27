@@ -28,7 +28,9 @@ func (s stubClusterActions) Snapshot(context.Context, io.Writer) error { return 
 func (s stubClusterActions) LoginJWT(context.Context, string, string) (string, int, error) {
 	return "", 0, nil
 }
-func (s stubClusterActions) Restore(context.Context, io.Reader) error { return nil }
+func (s stubClusterActions) Restore(context.Context, io.Reader, portopenbao.RestoreOptions) error {
+	return nil
+}
 
 func TestNewClusterPodClient(t *testing.T) {
 	t.Parallel()

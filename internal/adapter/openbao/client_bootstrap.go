@@ -90,13 +90,19 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 	return nil
 }
 
-// Restore restores a snapshot to the cluster using the force restore API.
-func (c *Client) Restore(ctx context.Context, reader io.Reader) error {
+// Restore restores a snapshot to the cluster. By default, OpenBao verifies that
+// the snapshot is compatible with the target cluster's seal configuration.
+func (c *Client) Restore(ctx context.Context, reader io.Reader, options portopenbao.RestoreOptions) error {
 	if err := c.requireAuth("restore operation"); err != nil {
 		return err
 	}
 
-	req, err := c.newRequest(ctx, http.MethodPost, apiPathRaftSnapshotForceRestore, reader)
+	restorePath := apiPathRaftSnapshot
+	if options.Force {
+		restorePath = apiPathRaftSnapshotForceRestore
+	}
+
+	req, err := c.newRequest(ctx, http.MethodPost, restorePath, reader)
 	if err != nil {
 		return fmt.Errorf("failed to create restore request: %w", err)
 	}

@@ -258,7 +258,9 @@ type RestoreConfig struct {
 	// If OIDC is enabled in SelfInit and this field is empty, a default role
 	// named "openbao-operator-restore" will be assumed/created.
 	//
-	// The role must grant "update" capability on sys/storage/raft/snapshot-force.
+	// The role must grant "update" capability on sys/storage/raft/snapshot and
+	// sys/storage/raft/snapshot-force. The force endpoint supports explicitly
+	// requested break-glass restores.
 	//
 	// +optional
 	JWTAuthRole string `json:"jwtAuthRole,omitempty"`

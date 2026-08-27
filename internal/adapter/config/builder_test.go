@@ -87,8 +87,9 @@ path "sys/storage/raft/demote" { capabilities = ["update"] }`,
 		},
 		{
 			name: "restore policy",
-			got:  jwtPolicyRestoreSnapshotForce,
-			want: `path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }`,
+			got:  jwtPolicyRestoreSnapshot,
+			want: `path "sys/storage/raft/snapshot" { capabilities = ["update"] }
+path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }`,
 		},
 	}
 
