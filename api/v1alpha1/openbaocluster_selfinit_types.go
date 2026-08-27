@@ -274,6 +274,7 @@ type SelfInitPolicy struct {
 }
 
 // SelfInitOIDCConfig configures OIDC identity for the cluster.
+// +kubebuilder:validation:XValidation:rule="!has(self.additionalSubjects) || self.enabled",message="spec.selfInit.oidc.additionalSubjects requires spec.selfInit.oidc.enabled=true"
 type SelfInitOIDCConfig struct {
 	// Enabled triggers the bootstrap logic.
 	Enabled bool `json:"enabled"`
@@ -288,4 +289,50 @@ type SelfInitOIDCConfig struct {
 	// Critical for scenarios where OpenBao sees a different K8s URL than the Operator.
 	// +optional
 	Issuer string `json:"issuer,omitempty"`
+
+	// AdditionalSubjects adds exact Kubernetes ServiceAccount subjects to the
+	// generated Operator JWT roles. Use these bindings when a snapshot must
+	// remain operable after restore to a target with different ServiceAccount
+	// subjects. Configure the source cluster before self-initialization so the
+	// bindings are present in each snapshot.
+	//
+	// These bindings do not configure JWT issuer or signature verification for
+	// another Kubernetes control plane. The jwt-operator auth method must also
+	// trust the target's projected ServiceAccount tokens.
+	// +optional
+	AdditionalSubjects *SelfInitOIDCAdditionalSubjects `json:"additionalSubjects,omitempty"`
+}
+
+// KubernetesServiceAccountSubject is the exact subject claim in a projected
+// Kubernetes ServiceAccount token.
+// +kubebuilder:validation:MaxLength=340
+// +kubebuilder:validation:Pattern=`^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
+type KubernetesServiceAccountSubject string
+
+// SelfInitOIDCAdditionalSubjects adds recovery-target identities to the
+// generated Operator JWT roles without combining their policies.
+type SelfInitOIDCAdditionalSubjects struct {
+	// Operator lists additional controller ServiceAccount subjects.
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=set
+	// +optional
+	Operator []KubernetesServiceAccountSubject `json:"operator,omitempty"`
+
+	// Backup lists additional backup Job ServiceAccount subjects.
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=set
+	// +optional
+	Backup []KubernetesServiceAccountSubject `json:"backup,omitempty"`
+
+	// Restore lists additional restore Job ServiceAccount subjects.
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=set
+	// +optional
+	Restore []KubernetesServiceAccountSubject `json:"restore,omitempty"`
+
+	// Upgrade lists additional upgrade Job ServiceAccount subjects.
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=set
+	// +optional
+	Upgrade []KubernetesServiceAccountSubject `json:"upgrade,omitempty"`
 }

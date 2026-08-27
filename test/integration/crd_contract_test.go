@@ -1502,6 +1502,50 @@ func TestVAP_OpenBaoCluster_RejectsOIDCBootstrapWithoutSelfInitEnabled(t *testin
 	}
 }
 
+func TestCRD_OpenBaoCluster_ValidatesOIDCAdditionalSubjects(t *testing.T) {
+	namespace := newTestNamespace(t)
+
+	t.Run("rejects malformed service account subject", func(t *testing.T) {
+		cluster := newMinimalClusterObj(namespace, "cluster-invalid-additional-subject")
+		cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+			Enabled: true,
+			OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+				Enabled: true,
+				AdditionalSubjects: &openbaov1alpha1.SelfInitOIDCAdditionalSubjects{
+					Backup: []openbaov1alpha1.KubernetesServiceAccountSubject{"recovery:backup"},
+				},
+			},
+		}
+
+		err := k8sClient.Create(ctx, cluster, client.DryRunAll)
+		requireInvalidRequest(t, err)
+		if !strings.Contains(err.Error(), "additionalSubjects.backup") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+	})
+
+	t.Run("requires OIDC bootstrap", func(t *testing.T) {
+		cluster := newMinimalClusterObj(namespace, "cluster-disabled-additional-subject")
+		cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+			Enabled: true,
+			OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+				Enabled: false,
+				AdditionalSubjects: &openbaov1alpha1.SelfInitOIDCAdditionalSubjects{
+					Restore: []openbaov1alpha1.KubernetesServiceAccountSubject{
+						"system:serviceaccount:recovery:target-restore-serviceaccount",
+					},
+				},
+			},
+		}
+
+		err := k8sClient.Create(ctx, cluster, client.DryRunAll)
+		requireInvalidRequest(t, err)
+		if !strings.Contains(err.Error(), "spec.selfInit.oidc.additionalSubjects requires spec.selfInit.oidc.enabled=true") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+	})
+}
+
 func TestVAP_OpenBaoCluster_RequiresTrustedIngressPeersForManagedIngress(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoClusterAdmissionPolicies(t, namespace)

@@ -3737,6 +3737,71 @@ spec:
                       This is for Operator authentication only - users must configure their own
                       authentication methods via spec.selfInit.requests.
                     properties:
+                      additionalSubjects:
+                        description: |-
+                          AdditionalSubjects adds exact Kubernetes ServiceAccount subjects to the
+                          generated Operator JWT roles. Use these bindings when a snapshot must
+                          remain operable after restore to a target with different ServiceAccount
+                          subjects. Configure the source cluster before self-initialization so the
+                          bindings are present in each snapshot.
+
+                          These bindings do not configure JWT issuer or signature verification for
+                          another Kubernetes control plane. The jwt-operator auth method must also
+                          trust the target's projected ServiceAccount tokens.
+                        properties:
+                          backup:
+                            description: Backup lists additional backup Job ServiceAccount
+                              subjects.
+                            items:
+                              description: |-
+                                KubernetesServiceAccountSubject is the exact subject claim in a projected
+                                Kubernetes ServiceAccount token.
+                              maxLength: 340
+                              pattern: ^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                              type: string
+                            maxItems: 32
+                            type: array
+                            x-kubernetes-list-type: set
+                          operator:
+                            description: Operator lists additional controller ServiceAccount
+                              subjects.
+                            items:
+                              description: |-
+                                KubernetesServiceAccountSubject is the exact subject claim in a projected
+                                Kubernetes ServiceAccount token.
+                              maxLength: 340
+                              pattern: ^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                              type: string
+                            maxItems: 32
+                            type: array
+                            x-kubernetes-list-type: set
+                          restore:
+                            description: Restore lists additional restore Job ServiceAccount
+                              subjects.
+                            items:
+                              description: |-
+                                KubernetesServiceAccountSubject is the exact subject claim in a projected
+                                Kubernetes ServiceAccount token.
+                              maxLength: 340
+                              pattern: ^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                              type: string
+                            maxItems: 32
+                            type: array
+                            x-kubernetes-list-type: set
+                          upgrade:
+                            description: Upgrade lists additional upgrade Job ServiceAccount
+                              subjects.
+                            items:
+                              description: |-
+                                KubernetesServiceAccountSubject is the exact subject claim in a projected
+                                Kubernetes ServiceAccount token.
+                              maxLength: 340
+                              pattern: ^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                              type: string
+                            maxItems: 32
+                            type: array
+                            x-kubernetes-list-type: set
+                        type: object
                       audience:
                         description: |-
                           Audience, if set, must match the operator installation audience used for
@@ -3754,6 +3819,9 @@ spec:
                     required:
                     - enabled
                     type: object
+                    x-kubernetes-validations:
+                    - message: spec.selfInit.oidc.additionalSubjects requires spec.selfInit.oidc.enabled=true
+                      rule: '!has(self.additionalSubjects) || self.enabled'
                   requests:
                     description: |-
                       Requests defines the API operations to execute during self-initialization.

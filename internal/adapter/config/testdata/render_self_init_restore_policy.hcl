@@ -41,6 +41,32 @@ initialize "operator-bootstrap" {
       not_before_leeway       = "30s"
     }
   }
+  request "create-upgrade-policy" {
+    operation = "update"
+    path      = "sys/policies/acl/openbao-operator-upgrade"
+    data {
+      policy = "path \"sys/health\" { capabilities = [\"read\"] }\npath \"sys/step-down\" { capabilities = [\"sudo\", \"update\"] }\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }\npath \"sys/storage/raft/autopilot/state\" { capabilities = [\"read\"] }"
+    }
+  }
+  request "create-upgrade-jwt-role" {
+    operation = "update"
+    path      = "auth/jwt-operator/role/openbao-operator-upgrade"
+    data {
+      role_type               = "jwt"
+      user_claim              = "sub"
+      bound_audiences         = ["openbao-internal"]
+      bound_subject           = "system:serviceaccount:default:hardened-cluster-upgrade-serviceaccount"
+      token_policies          = ["openbao-operator-upgrade"]
+      policies                = ["openbao-operator-upgrade"]
+      ttl                     = "1h"
+      token_ttl               = "1h"
+      token_max_ttl           = "1h"
+      token_no_default_policy = true
+      clock_skew_leeway       = "30s"
+      expiration_leeway       = "30s"
+      not_before_leeway       = "30s"
+    }
+  }
   request "create-restore-policy" {
     operation = "update"
     path      = "sys/policies/acl/openbao-operator-restore"
@@ -52,10 +78,12 @@ initialize "operator-bootstrap" {
     operation = "update"
     path      = "auth/jwt-operator/role/restore"
     data {
-      role_type               = "jwt"
-      user_claim              = "sub"
-      bound_audiences         = ["openbao-internal"]
-      bound_subject           = "system:serviceaccount:default:hardened-cluster-restore-serviceaccount"
+      role_type       = "jwt"
+      user_claim      = "sub"
+      bound_audiences = ["openbao-internal"]
+      bound_claims = {
+        sub = ["system:serviceaccount:default:hardened-cluster-restore-serviceaccount", "system:serviceaccount:recovery:recovery-restore-serviceaccount"]
+      }
       token_policies          = ["openbao-operator-restore"]
       policies                = ["openbao-operator-restore"]
       ttl                     = "1h"

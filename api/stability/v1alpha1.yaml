@@ -169,6 +169,12 @@ resources:
         classification: beta-stable
         owner: bootstrap-security
         enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.selfInit.oidc.additionalSubjects
+        classification: additive-unfrozen
+        owner: bootstrap-security
+        omission: generated JWT roles bind only their default local ServiceAccount subjects
+        enforcement: [crd-schema, controller]
+        rationale: Recovery-target identity bindings are additive and role-scoped; cross-control-plane JWT trust remains a separate configuration contract.
       - path: spec.service
         classification: beta-stable
         owner: networking

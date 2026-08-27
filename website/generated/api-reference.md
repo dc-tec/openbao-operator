@@ -863,6 +863,22 @@ _Appears in:_
 | `config` _object (keys:string, values:string)_ | Config contains plugin-specific seal configuration rendered as string<br />attributes inside seal "&lt;pluginName&gt;". Keys must be valid HCL identifiers.<br />Values are stored in the OpenBaoCluster resource; use file paths to<br />credentialsSecretRef-mounted files for sensitive material instead of inline<br />secrets. |  | MaxProperties: 64 <br />Optional: \{\} <br /> |
 
 
+#### KubernetesServiceAccountSubject
+
+_Underlying type:_ _string_
+
+KubernetesServiceAccountSubject is the exact subject claim in a projected
+Kubernetes ServiceAccount token.
+
+_Validation:_
+- MaxLength: 340
+- Pattern: `^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`
+
+_Appears in:_
+- [SelfInitOIDCAdditionalSubjects](#selfinitoidcadditionalsubjects)
+
+
+
 #### ListenerConfig
 
 
@@ -1652,6 +1668,26 @@ _Appears in:_
 | `requests` _[SelfInitRequest](#selfinitrequest) array_ | Requests defines the API operations to execute during self-initialization.<br />Each request becomes a named request block inside an initialize stanza. |  | Optional: \{\} <br /> |
 
 
+#### SelfInitOIDCAdditionalSubjects
+
+
+
+SelfInitOIDCAdditionalSubjects adds recovery-target identities to the
+generated Operator JWT roles without combining their policies.
+
+
+
+_Appears in:_
+- [SelfInitOIDCConfig](#selfinitoidcconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `operator` _[KubernetesServiceAccountSubject](#kubernetesserviceaccountsubject) array_ | Operator lists additional controller ServiceAccount subjects. |  | MaxItems: 32 <br />MaxLength: 340 <br />Pattern: `^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$` <br />Optional: \{\} <br /> |
+| `backup` _[KubernetesServiceAccountSubject](#kubernetesserviceaccountsubject) array_ | Backup lists additional backup Job ServiceAccount subjects. |  | MaxItems: 32 <br />MaxLength: 340 <br />Pattern: `^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$` <br />Optional: \{\} <br /> |
+| `restore` _[KubernetesServiceAccountSubject](#kubernetesserviceaccountsubject) array_ | Restore lists additional restore Job ServiceAccount subjects. |  | MaxItems: 32 <br />MaxLength: 340 <br />Pattern: `^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$` <br />Optional: \{\} <br /> |
+| `upgrade` _[KubernetesServiceAccountSubject](#kubernetesserviceaccountsubject) array_ | Upgrade lists additional upgrade Job ServiceAccount subjects. |  | MaxItems: 32 <br />MaxLength: 340 <br />Pattern: `^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$` <br />Optional: \{\} <br /> |
+
+
 #### SelfInitOIDCConfig
 
 
@@ -1668,6 +1704,7 @@ _Appears in:_
 | `enabled` _boolean_ | Enabled triggers the bootstrap logic. |  |  |
 | `audience` _string_ | Audience, if set, must match the operator installation audience used for<br />projected OpenBao auth tokens.<br />This field does not create a per-cluster TokenRequest audience override. |  | Optional: \{\} <br /> |
 | `issuer` _string_ | Issuer overrides the auto-discovered K8s issuer URL.<br />Critical for scenarios where OpenBao sees a different K8s URL than the Operator. |  | Optional: \{\} <br /> |
+| `additionalSubjects` _[SelfInitOIDCAdditionalSubjects](#selfinitoidcadditionalsubjects)_ | AdditionalSubjects adds exact Kubernetes ServiceAccount subjects to the<br />generated Operator JWT roles. Use these bindings when a snapshot must<br />remain operable after restore to a target with different ServiceAccount<br />subjects. Configure the source cluster before self-initialization so the<br />bindings are present in each snapshot.<br />These bindings do not configure JWT issuer or signature verification for<br />another Kubernetes control plane. The jwt-operator auth method must also<br />trust the target's projected ServiceAccount tokens. |  | Optional: \{\} <br /> |
 
 
 #### SelfInitOperation

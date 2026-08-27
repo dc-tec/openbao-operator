@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -50,20 +51,20 @@ type hclInitialRecoveryKeysData struct {
 }
 
 type hclJWTRoleData struct {
-	RoleType             string             `hcl:"role_type"`
-	UserClaim            string             `hcl:"user_claim"`
-	BoundAudiences       []string           `hcl:"bound_audiences"`
-	BoundClaims          *map[string]string `hcl:"bound_claims,optional"`
-	BoundSubject         *string            `hcl:"bound_subject,optional"`
-	TokenPolicies        []string           `hcl:"token_policies"`
-	Policies             *[]string          `hcl:"policies"`
-	TTL                  string             `hcl:"ttl"`
-	TokenTTL             string             `hcl:"token_ttl"`
-	TokenMaxTTL          string             `hcl:"token_max_ttl"`
-	TokenNoDefaultPolicy bool               `hcl:"token_no_default_policy"`
-	ClockSkewLeeway      string             `hcl:"clock_skew_leeway"`
-	ExpirationLeeway     string             `hcl:"expiration_leeway"`
-	NotBeforeLeeway      string             `hcl:"not_before_leeway"`
+	RoleType             string               `hcl:"role_type"`
+	UserClaim            string               `hcl:"user_claim"`
+	BoundAudiences       []string             `hcl:"bound_audiences"`
+	BoundClaims          *map[string][]string `hcl:"bound_claims,optional"`
+	BoundSubject         *string              `hcl:"bound_subject,optional"`
+	TokenPolicies        []string             `hcl:"token_policies"`
+	Policies             *[]string            `hcl:"policies"`
+	TTL                  string               `hcl:"ttl"`
+	TokenTTL             string               `hcl:"token_ttl"`
+	TokenMaxTTL          string               `hcl:"token_max_ttl"`
+	TokenNoDefaultPolicy bool                 `hcl:"token_no_default_policy"`
+	ClockSkewLeeway      string               `hcl:"clock_skew_leeway"`
+	ExpirationLeeway     string               `hcl:"expiration_leeway"`
+	NotBeforeLeeway      string               `hcl:"not_before_leeway"`
 }
 
 const (
@@ -111,6 +112,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	initBody := initBlock.Body()
 	jwtAudiences := jwtAuthAudiences(config)
 	bootstrapEnabled := portauth.OperatorJWTBootstrapEnabled(cluster)
+	additionalSubjects := selfInitOIDCAdditionalSubjects(cluster)
 
 	// 1. Enable JWT Auth
 	{
@@ -140,7 +142,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	{
 		subject := fmt.Sprintf("system:serviceaccount:%s:%s", config.OperatorNS, config.OperatorSA)
 		req := buildInitializeRequestBlock(reqCreateOperatorRole, opUpdate, fmt.Sprintf("%s%s", pathAuthJWTRolePrefix, authRoleNameOperator), false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(operatorJWTRoleData(subject, authPolicyNameOperator, jwtAudiences), "data"))
+		req.Body().AppendBlock(gohcl.EncodeAsBlock(operatorJWTRoleData(subject, additionalSubjects.Operator, authPolicyNameOperator, jwtAudiences), "data"))
 		initBody.AppendBlock(req)
 	}
 
@@ -157,7 +159,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 			{
 				subject := fmt.Sprintf("system:serviceaccount:%s:%s-backup-serviceaccount", cluster.Namespace, cluster.Name)
 				req := buildInitializeRequestBlock(reqCreateBackupRole, opUpdate, fmt.Sprintf("%s%s", pathAuthJWTRolePrefix, roleName), false)
-				req.Body().AppendBlock(gohcl.EncodeAsBlock(operatorJWTRoleData(subject, authPolicyNameBackup, jwtAudiences), "data"))
+				req.Body().AppendBlock(gohcl.EncodeAsBlock(operatorJWTRoleData(subject, additionalSubjects.Backup, authPolicyNameBackup, jwtAudiences), "data"))
 				initBody.AppendBlock(req)
 			}
 		}
@@ -179,7 +181,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 		{
 			subject := fmt.Sprintf("system:serviceaccount:%s:%s-upgrade-serviceaccount", cluster.Namespace, cluster.Name)
 			req := buildInitializeRequestBlock(reqCreateUpgradeRole, opUpdate, fmt.Sprintf("%s%s", pathAuthJWTRolePrefix, roleName), false)
-			req.Body().AppendBlock(gohcl.EncodeAsBlock(operatorJWTRoleData(subject, authPolicyNameUpgrade, jwtAudiences), "data"))
+			req.Body().AppendBlock(gohcl.EncodeAsBlock(operatorJWTRoleData(subject, additionalSubjects.Upgrade, authPolicyNameUpgrade, jwtAudiences), "data"))
 			initBody.AppendBlock(req)
 		}
 	}
@@ -200,7 +202,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 		{
 			subject := fmt.Sprintf("system:serviceaccount:%s:%s-restore-serviceaccount", cluster.Namespace, cluster.Name)
 			req := buildInitializeRequestBlock(reqCreateRestoreRole, opUpdate, fmt.Sprintf("%s%s", pathAuthJWTRolePrefix, restoreRoleName), false)
-			req.Body().AppendBlock(gohcl.EncodeAsBlock(operatorJWTRoleData(subject, authPolicyNameRestore, jwtAudiences), "data"))
+			req.Body().AppendBlock(gohcl.EncodeAsBlock(operatorJWTRoleData(subject, additionalSubjects.Restore, authPolicyNameRestore, jwtAudiences), "data"))
 			initBody.AppendBlock(req)
 		}
 	}
@@ -208,13 +210,12 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	return initBlock
 }
 
-func operatorJWTRoleData(subject, policy string, audiences []string) hclJWTRoleData {
+func operatorJWTRoleData(subject string, additionalSubjects []openbaov1alpha1.KubernetesServiceAccountSubject, policy string, audiences []string) hclJWTRoleData {
 	policies := []string{policy}
-	return hclJWTRoleData{
+	data := hclJWTRoleData{
 		RoleType:             authMethodJWT,
 		UserClaim:            "sub",
 		BoundAudiences:       audiences,
-		BoundSubject:         &subject,
 		TokenPolicies:        []string{policy},
 		Policies:             &policies,
 		TTL:                  operatorJWTTokenTTL,
@@ -225,6 +226,37 @@ func operatorJWTRoleData(subject, policy string, audiences []string) hclJWTRoleD
 		ExpirationLeeway:     operatorJWTLeeway,
 		NotBeforeLeeway:      operatorJWTLeeway,
 	}
+
+	subjects := exactJWTSubjects(subject, additionalSubjects)
+	if len(subjects) == 1 {
+		data.BoundSubject = &subjects[0]
+		return data
+	}
+
+	boundClaims := map[string][]string{"sub": subjects}
+	data.BoundClaims = &boundClaims
+	return data
+}
+
+func exactJWTSubjects(defaultSubject string, additional []openbaov1alpha1.KubernetesServiceAccountSubject) []string {
+	unique := map[string]struct{}{defaultSubject: {}}
+	for _, subject := range additional {
+		unique[string(subject)] = struct{}{}
+	}
+
+	subjects := make([]string, 0, len(unique))
+	for subject := range unique {
+		subjects = append(subjects, subject)
+	}
+	sort.Strings(subjects)
+	return subjects
+}
+
+func selfInitOIDCAdditionalSubjects(cluster *openbaov1alpha1.OpenBaoCluster) openbaov1alpha1.SelfInitOIDCAdditionalSubjects {
+	if cluster.Spec.SelfInit == nil || cluster.Spec.SelfInit.OIDC == nil || cluster.Spec.SelfInit.OIDC.AdditionalSubjects == nil {
+		return openbaov1alpha1.SelfInitOIDCAdditionalSubjects{}
+	}
+	return *cluster.Spec.SelfInit.OIDC.AdditionalSubjects
 }
 
 func jwtAuthAudiences(config OperatorBootstrapConfig) []string {
