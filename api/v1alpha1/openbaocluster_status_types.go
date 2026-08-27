@@ -248,6 +248,23 @@ type ReadReplicaStatus struct {
 	Storage ReadReplicaStorageStatus `json:"storage,omitempty"`
 }
 
+// ClusterRestoreStatus tracks the post-snapshot workload restart for the most
+// recent restore applied to the cluster.
+type ClusterRestoreStatus struct {
+	// Name is the name of the OpenBaoRestore whose snapshot was applied.
+	// +optional
+	Name string `json:"name,omitempty"`
+	// UID is the UID of the OpenBaoRestore whose snapshot was applied. The
+	// workload controller uses this value as a durable Pod-template rollout
+	// token.
+	// +optional
+	UID string `json:"uid,omitempty"`
+	// RestartCompletedAt is when all voter Pods completed the post-restore
+	// restart and became ready.
+	// +optional
+	RestartCompletedAt *metav1.Time `json:"restartCompletedAt,omitempty"`
+}
+
 // DriftStatus tracks drift detection and correction events for a cluster.
 // OpenBaoClusterStatus defines the observed state of an OpenBaoCluster.
 type OpenBaoClusterStatus struct {
@@ -303,6 +320,11 @@ type OpenBaoClusterStatus struct {
 	// +optional
 	// +kubebuilder:validation:Nullable
 	Backup *BackupStatus `json:"backup,omitempty"`
+	// Restore tracks the post-snapshot workload restart for the most recent
+	// OpenBaoRestore applied to this cluster.
+	// +optional
+	// +kubebuilder:validation:Nullable
+	Restore *ClusterRestoreStatus `json:"restore,omitempty"`
 	// BlueGreen tracks the state of blue/green upgrades (if enabled).
 	// +optional
 	// +kubebuilder:validation:Nullable

@@ -5450,6 +5450,28 @@ spec:
                   Ready.
                 format: int32
                 type: integer
+              restore:
+                description: |-
+                  Restore tracks the post-snapshot workload restart for the most recent
+                  OpenBaoRestore applied to this cluster.
+                properties:
+                  name:
+                    description: Name is the name of the OpenBaoRestore whose snapshot
+                      was applied.
+                    type: string
+                  restartCompletedAt:
+                    description: |-
+                      RestartCompletedAt is when all voter Pods completed the post-restore
+                      restart and became ready.
+                    format: date-time
+                    type: string
+                  uid:
+                    description: |-
+                      UID is the UID of the OpenBaoRestore whose snapshot was applied. The
+                      workload controller uses this value as a durable Pod-template rollout
+                      token.
+                    type: string
+                type: object
               selfInitialized:
                 description: |-
                   SelfInitialized indicates whether the cluster was initialized using

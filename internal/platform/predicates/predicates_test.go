@@ -23,6 +23,7 @@ func baseClusterForPredicate() *openbaov1alpha1.OpenBaoCluster {
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Upgrade: &openbaov1alpha1.UpgradeProgress{FromVersion: "2.4.4", TargetVersion: "2.4.5"},
 			Backup:  &openbaov1alpha1.BackupStatus{LastFailureReason: "none"},
+			Restore: &openbaov1alpha1.ClusterRestoreStatus{Name: "restore-a", UID: "uid-a"},
 			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
 				Phase: openbaov1alpha1.PhaseSyncing,
 			},
@@ -129,6 +130,14 @@ func TestShouldReconcileOpenBaoClusterUpdate_StatusOptions(t *testing.T) {
 			opts: OpenBaoClusterPredicateOptions{ReconcileOnBackupStatus: true},
 			mutate: func(newC *openbaov1alpha1.OpenBaoCluster) {
 				newC.Status.Backup = &openbaov1alpha1.BackupStatus{LastFailureReason: "failed"}
+			},
+			want: true,
+		},
+		{
+			name: "restore status change with option enabled",
+			opts: OpenBaoClusterPredicateOptions{ReconcileOnRestoreStatus: true},
+			mutate: func(newC *openbaov1alpha1.OpenBaoCluster) {
+				newC.Status.Restore = &openbaov1alpha1.ClusterRestoreStatus{Name: "restore-b", UID: "uid-b"}
 			},
 			want: true,
 		},

@@ -81,12 +81,16 @@ func runRestoreLifecycleModel(t *rapid.T, scenario restoreLifecycleScenario) {
 	namespace := newRestoreModelNamespace(t)
 	cluster := createRestoreModelCluster(t, namespace)
 	restoreObj := createRestoreModelRequest(t, namespace, cluster.Name, scenario)
-	mgr := restore.NewManager(
-		newRestoreModelControllerClient(t),
-		k8sScheme,
-		nil,
-		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-		"",
+	controllerClient := newRestoreModelControllerClient(t)
+	mgr := withIntegrationRestoreStatusPersistence(
+		restore.NewManager(
+			controllerClient,
+			k8sScheme,
+			nil,
+			security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+			"",
+		),
+		controllerClient,
 	)
 
 	latest := getRestoreModelRequest(t, namespace, restoreObj.Name)
@@ -155,7 +159,16 @@ func runRestoreLifecycleModel(t *rapid.T, scenario restoreLifecycleScenario) {
 		assertRestoreModelTerminal(t, latest, openbaov1alpha1.RestorePhaseFailed)
 	case restoreLifecycleSuccess, restoreLifecycleBlockedThenRelease, restoreLifecycleForceOverride:
 		markRestoreModelJobStatus(t, namespace, latest.Name, 1, 0)
-		reconcileRestoreModel(t, mgr, latest, "successful job")
+		reconcileRestoreModel(t, mgr, latest, "successful job requests voter restart")
+		latest = getRestoreModelRequest(t, namespace, restoreObj.Name)
+		assertRestoreModelPhase(t, latest, openbaov1alpha1.RestorePhaseRunning)
+		assertRestoreModelLock(t, namespace, cluster.Name, openbaov1alpha1.ClusterOperationRestore, true)
+		cluster = getRestoreModelCluster(t, namespace, cluster.Name)
+		if cluster.Status.Restore == nil || cluster.Status.Restore.UID != string(latest.UID) {
+			t.Fatalf("cluster restore status = %+v, want UID %q", cluster.Status.Restore, latest.UID)
+		}
+		createSettledRestoreVoterStatefulSet(controllerClient, cluster, latest, t.Fatalf)
+		reconcileRestoreModel(t, mgr, latest, "voter restart completed")
 		latest = getRestoreModelRequest(t, namespace, restoreObj.Name)
 		assertRestoreModelTerminal(t, latest, openbaov1alpha1.RestorePhaseCompleted)
 	default:

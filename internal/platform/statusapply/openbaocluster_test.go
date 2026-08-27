@@ -34,6 +34,10 @@ func TestApplyOpenBaoClusterAdminOpsStatus_PersistsFullAdminOpsPlane(t *testing.
 			Backup: &openbaov1alpha1.BackupStatus{
 				LastFailureReason: "backup-failed",
 			},
+			Restore: &openbaov1alpha1.ClusterRestoreStatus{
+				Name: "restore-a",
+				UID:  "restore-uid-a",
+			},
 			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
 				Phase: openbaov1alpha1.PhaseSyncing,
 			},
@@ -76,6 +80,9 @@ func TestApplyOpenBaoClusterAdminOpsStatus_PersistsFullAdminOpsPlane(t *testing.
 	}
 	if !reflect.DeepEqual(stored.Status.Backup, cluster.Status.Backup) {
 		t.Fatalf("stored backup = %#v, want %#v", stored.Status.Backup, cluster.Status.Backup)
+	}
+	if !reflect.DeepEqual(stored.Status.Restore, cluster.Status.Restore) {
+		t.Fatalf("stored restore = %#v, want %#v", stored.Status.Restore, cluster.Status.Restore)
 	}
 	if !reflect.DeepEqual(stored.Status.BlueGreen, cluster.Status.BlueGreen) {
 		t.Fatalf("stored blueGreen = %#v, want %#v", stored.Status.BlueGreen, cluster.Status.BlueGreen)

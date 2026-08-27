@@ -10,6 +10,7 @@ verifiedBy:
   - config/rbac/openbaocluster_restore_role.yaml
   - internal/service/restore/manager_validation.go
   - internal/service/restore/manager_running.go
+  - internal/service/restore/post_restore_restart.go
   - internal/service/restore/read_replica_restore.go
   - internal/service/workloadidentity/readiness.go
   - internal/service/restore/manager_test.go
@@ -130,13 +131,18 @@ kubectl -n <namespace> get openbaocluster <cluster> -o yaml
 `RestoreConfigurationReady` reports the operator-known auth, storage identity, Secret, and egress prerequisites.
 
 When steady read replicas are configured, the operator drains them before creating the restore Job. After the Job
-succeeds, it releases the restore lock and waits for the desired read replicas, `ReadReplicasReady`,
-`ReadServingAvailable`, and `RaftMembershipReady` before marking the restore `Completed`.
+succeeds, the operator keeps the restore lock and restarts every voter Pod through a StatefulSet rollout. The
+`OpenBaoCluster` records the restore name, UID, and voter restart completion time in `status.restore`.
+
+After all voter Pods run the restored revision and are Ready, the operator releases the restore lock. It then restores
+the desired read replicas and waits for `ReadReplicasReady`, `ReadServingAvailable`, and `RaftMembershipReady` before
+marking the restore `Completed`.
 
 {{< callout type="note" title="Completed is not full service validation" >}}
-Without steady read replicas, `Completed` means the restore Job succeeded. It does not require every voter to be
-Ready or prove client access. Verify seal state, leader, Raft membership, application data, and authentication after
-every restore.
+`Completed` means the restore Job succeeded and every voter completed the required post-restore restart. When read
+replicas are configured, it also means the read pool returned to its declared membership and readiness. The operator
+does not validate restored application data or authentication semantics. Verify seal state, leader, Raft membership,
+application data, and authentication after every restore.
 {{< /callout >}}
 
 ## Override a stuck operation lock

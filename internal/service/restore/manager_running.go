@@ -129,12 +129,46 @@ func (m *Manager) handleSucceededRestoreJob(
 	restore *openbaov1alpha1.OpenBaoRestore,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) error {
-	if !shouldWaitForSteadyReadReplicaRestore(cluster) {
-		return m.completeRestore(ctx, logger, restore, "Restore completed successfully")
+	if !clusterRestoreRestartCompleted(cluster, restore) {
+		done, err := m.renewRunningRestoreLock(ctx, logger, restore, cluster)
+		if err != nil {
+			return err
+		}
+		if done {
+			return nil
+		}
+
+		requested, err := m.requestPostRestoreRestart(ctx, cluster, restore)
+		if err != nil {
+			return err
+		}
+		if requested {
+			m.emitNormalEvent(restore, ReasonRestoreRestartRequested, "Requested voter Pod restart after snapshot application")
+		}
+
+		complete, message, err := m.postRestoreVoterRestartComplete(ctx, cluster, restore)
+		if err != nil {
+			return err
+		}
+		if !complete {
+			return m.patchRestoreProgressMessage(ctx, restore, message)
+		}
+
+		marked, err := m.markPostRestoreRestartCompleted(ctx, cluster, restore)
+		if err != nil {
+			return err
+		}
+		if marked {
+			m.emitNormalEvent(restore, ReasonRestoreRestartCompleted, "Voter Pods completed the post-restore restart")
+		}
 	}
 
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
-		return fmt.Errorf("failed to release cluster operation lock while waiting for steady read replicas to restore: %w", err)
+		return fmt.Errorf("failed to release cluster operation lock after post-restore voter restart: %w", err)
+	}
+
+	if !shouldWaitForSteadyReadReplicaRestore(cluster) {
+		return m.completeRestore(ctx, logger, restore, "Restore completed successfully after voter Pods restarted")
 	}
 
 	if steadyReadReplicaRestoreComplete(cluster) {

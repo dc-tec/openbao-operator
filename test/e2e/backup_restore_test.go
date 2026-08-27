@@ -580,6 +580,25 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		), func() {
 			Expect(backupKey).NotTo(BeEmpty(), "backup key should have been set by previous test")
 
+			voterPodUIDsBeforeRestore := map[string]types.UID{}
+			By("recording voter Pod identities before restore")
+			Eventually(func(g Gomega) {
+				pods := &corev1.PodList{}
+				err := admin.List(ctx, pods,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster:      drCluster.Name,
+						constants.LabelOpenBaoWorkloadPool: constants.LabelValueOpenBaoWorkloadPoolVoter,
+					},
+				)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(pods.Items).To(HaveLen(int(drCluster.Spec.Replicas)))
+				voterPodUIDsBeforeRestore = map[string]types.UID{}
+				for i := range pods.Items {
+					voterPodUIDsBeforeRestore[pods.Items[i].Name] = pods.Items[i].UID
+				}
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
 			restore := &openbaov1alpha1.OpenBaoRestore{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "s3-restore",
@@ -607,6 +626,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 			_, _ = fmt.Fprintf(GinkgoWriter, "Creating OpenBaoRestore CR: %s\n", restore.Name)
 			Expect(admin.Create(ctx, restore)).To(Succeed())
+			Expect(restore.UID).NotTo(BeEmpty())
 
 			By("verifying restore configuration is accepted before execution")
 			Eventually(func(g Gomega) {
@@ -665,6 +685,10 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 				cluster := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, cluster)).To(Succeed())
+				g.Expect(cluster.Status.Restore).NotTo(BeNil())
+				g.Expect(cluster.Status.Restore.Name).To(Equal(restore.Name))
+				g.Expect(cluster.Status.Restore.UID).To(Equal(string(restore.UID)))
+				g.Expect(cluster.Status.Restore.RestartCompletedAt).NotTo(BeNil())
 				g.Expect(cluster.Status.ReadReplicas).NotTo(BeNil())
 				g.Expect(cluster.Status.ReadReplicas.DesiredReplicas).To(Equal(int32(1)))
 				g.Expect(cluster.Status.ReadReplicas.ReadyReplicas).To(Equal(int32(1)))
@@ -685,6 +709,23 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 					Namespace: tenantNamespace,
 				}, readSts)).To(Succeed())
 				g.Expect(readSts.Status.ReadyReplicas).To(Equal(int32(1)))
+
+				voterPods := &corev1.PodList{}
+				g.Expect(admin.List(ctx, voterPods,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster:      drCluster.Name,
+						constants.LabelOpenBaoWorkloadPool: constants.LabelValueOpenBaoWorkloadPoolVoter,
+					},
+				)).To(Succeed())
+				g.Expect(voterPods.Items).To(HaveLen(int(drCluster.Spec.Replicas)))
+				for i := range voterPods.Items {
+					pod := voterPods.Items[i]
+					previousUID, found := voterPodUIDsBeforeRestore[pod.Name]
+					g.Expect(found).To(BeTrue(), "expected pre-restore UID for voter Pod %s", pod.Name)
+					g.Expect(pod.UID).NotTo(Equal(previousUID), "expected voter Pod %s to restart after restore", pod.Name)
+					g.Expect(pod.Annotations[constants.AnnotationRestoreRevision]).To(Equal(string(restore.UID)))
+				}
 			}, 15*time.Minute, 30*time.Second).Should(Succeed())
 
 			By("Verifying secret persists after restore")

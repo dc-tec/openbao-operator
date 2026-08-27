@@ -141,6 +141,7 @@ Covers: _none_
 Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore`
 
 Recorded checkpoints:
+- recording voter Pod identities before restore
 - verifying restore configuration is accepted before execution
 - waiting for restore to drain steady read replicas before execution continues
 - Verifying secret persists after restore

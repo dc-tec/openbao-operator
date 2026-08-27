@@ -255,6 +255,9 @@ resources:
       - path: status.backup.lastBackupTime
         classification: stable-automation
         rationale: This is the replacement for deprecated status.lastBackupTime.
+      - path: status.restore
+        classification: informational
+        owner: restore-status
       - path: status.blueGreen
         classification: informational
         owner: upgrade-status

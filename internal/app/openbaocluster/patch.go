@@ -133,6 +133,7 @@ func PatchAdminOpsOwnedFieldsWithReader(
 	if original.Status.AcceptedUpgradeStrategy == cluster.Status.AcceptedUpgradeStrategy &&
 		reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
 		reflect.DeepEqual(original.Status.UpgradeRequests, cluster.Status.UpgradeRequests) &&
+		reflect.DeepEqual(original.Status.Restore, cluster.Status.Restore) &&
 		reflect.DeepEqual(original.Status.BreakGlass, cluster.Status.BreakGlass) &&
 		reflect.DeepEqual(original.Status.AdminOps, cluster.Status.AdminOps) {
 		return nil
@@ -148,6 +149,7 @@ func PatchAdminOpsOwnedFieldsWithReader(
 		obj.Status.AcceptedUpgradeStrategy = cluster.Status.AcceptedUpgradeStrategy
 		obj.Status.BlueGreen = cluster.Status.BlueGreen
 		obj.Status.UpgradeRequests = cluster.Status.UpgradeRequests
+		obj.Status.Restore = cluster.Status.Restore
 		obj.Status.BreakGlass = cluster.Status.BreakGlass
 		obj.Status.AdminOps = adminOps
 		return nil
