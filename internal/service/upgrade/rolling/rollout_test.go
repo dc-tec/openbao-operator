@@ -746,6 +746,82 @@ func TestWaitForPodRevisionUpdated_DeletesStalePodWhenImageMismatchesTemplate(t 
 	}
 }
 
+func TestTargetPodAlreadyRolledOut_DoesNotDeletePodBeforePartitionAdvance(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = appsv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := testNamespace
+	name := "c1"
+	podName := name + "-0"
+	startedAt := metav1.Now()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				StartedAt:        &startedAt,
+				CurrentPartition: 1,
+			},
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: appsv1.StatefulSetSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  constants.ContainerBao,
+						Image: "openbao/openbao:2.6.2",
+					}},
+				},
+			},
+		},
+		Status: appsv1.StatefulSetStatus{UpdateRevision: "rev-new"},
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: ns,
+			Labels: map[string]string{
+				appsv1.StatefulSetRevisionLabel: "rev-old",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:  constants.ContainerBao,
+				Image: "openbao/openbao:2.5.5",
+			}},
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod).Build()
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+		return &openbaoapi.MockClusterActions{}, nil
+	}, nil)
+
+	rolledOut, err := mgr.targetPodAlreadyRolledOut(
+		context.Background(),
+		testr.New(t),
+		cluster,
+		rolloutTargetPod{CurrentPartition: 1, NextPartition: 0, Ordinal: 0, Name: podName},
+	)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if rolledOut {
+		t.Fatal("expected the pre-partition resume check to report the old pod as pending")
+	}
+
+	remainingPod := &corev1.Pod{}
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: podName}, remainingPod); err != nil {
+		t.Fatalf("expected the pre-partition resume check to preserve the pod, got %v", err)
+	}
+}
+
 func TestRollingWaitStages_TimeoutsMarkUpgradeFailed(t *testing.T) {
 	tests := []struct {
 		name       string
