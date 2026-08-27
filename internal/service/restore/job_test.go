@@ -203,6 +203,7 @@ func TestBuildRestoreEnvVars_S3(t *testing.T) {
 	assert.Equal(t, "backup.snap", envMap[constants.EnvRestoreKey])
 	assert.Equal(t, "test-bucket", envMap[constants.EnvRestoreBucket])
 	assert.Equal(t, "https://s3.amazonaws.com", envMap[constants.EnvRestoreEndpoint])
+	assert.Equal(t, "false", envMap[constants.EnvRestoreForce])
 
 	// Verify S3-specific env vars
 	assert.Equal(t, "us-west-2", envMap[constants.EnvBackupRegion])
@@ -218,6 +219,26 @@ func TestBuildRestoreEnvVars_S3(t *testing.T) {
 	assert.Empty(t, envMap[constants.EnvBackupGCSProject])
 	assert.Empty(t, envMap[constants.EnvBackupAzureStorageAccount])
 	assert.Empty(t, envMap[constants.EnvBackupAzureContainer])
+}
+
+func TestBuildRestoreEnvVars_Force(t *testing.T) {
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Force: true,
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{},
+			},
+		},
+	}
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+
+	envVars := buildRestoreEnvVars(restore, cluster)
+	envMap := make(map[string]string, len(envVars))
+	for _, env := range envVars {
+		envMap[env.Name] = env.Value
+	}
+
+	assert.Equal(t, "true", envMap[constants.EnvRestoreForce])
 }
 
 func TestBuildRestoreEnvVars_BlueGreenStatefulSetName(t *testing.T) {

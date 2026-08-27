@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
 )
 
@@ -20,6 +22,7 @@ type restoreSettings struct {
 	endpoint     string
 	region       string
 	usePathStyle bool
+	force        bool
 }
 
 // runRestore executes the restore operation.
@@ -83,7 +86,7 @@ func runRestore(ctx context.Context) error {
 	_, _ = fmt.Fprintf(os.Stdout, "Found snapshot: %s (size: %d bytes)\n", settings.key, objInfo.Size)
 	fmt.Println("Snapshot downloaded successfully")
 	fmt.Println("Restoring snapshot to cluster...")
-	if err := baoClient.Restore(ctx, reader); err != nil {
+	if err := baoClient.Restore(ctx, reader, portopenbao.RestoreOptions{Force: settings.force}); err != nil {
 		return categorizef(errSnapshotCategory, "failed to restore snapshot: %w", err)
 	}
 
@@ -178,6 +181,14 @@ func resolveRestoreSettings(cfg *backupconfig.ExecutorConfig) (restoreSettings, 
 	}
 
 	settings.usePathStyle = strings.EqualFold(strings.TrimSpace(os.Getenv(constants.EnvRestoreUsePathStyle)), "true")
+	forceValue := strings.TrimSpace(os.Getenv(constants.EnvRestoreForce))
+	if forceValue != "" {
+		force, err := strconv.ParseBool(forceValue)
+		if err != nil {
+			return restoreSettings{}, fmt.Errorf("invalid %s value %q: %w", constants.EnvRestoreForce, forceValue, err)
+		}
+		settings.force = force
+	}
 
 	return settings, nil
 }

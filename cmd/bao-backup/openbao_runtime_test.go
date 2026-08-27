@@ -26,7 +26,7 @@ const (
 	testInlineAuthJWTPath       = "auth/jwt-operator/login"
 	testInlineAuthOperation     = "update"
 	testBackupSnapshotPath      = "/v1/sys/storage/raft/snapshot"
-	testBackupRestorePath       = "/v1/sys/storage/raft/snapshot-force"
+	testBackupForceRestorePath  = "/v1/sys/storage/raft/snapshot-force"
 	testBackupJWTLoginPath      = "/v1/auth/jwt-operator/login"
 	testBackupJWTAuthRole       = "backup-role"
 	testBackupJWTToken          = "jwt-token"
@@ -98,50 +98,70 @@ func TestOpenClusterClient_JWTInlineSnapshotUsesInlineAuthHeaders(t *testing.T) 
 func TestOpenClusterClient_JWTInlineRestoreUsesInlineAuthHeaders(t *testing.T) {
 	t.Parallel()
 
-	var loginRequests int32
-	var restoreRequests int32
+	tests := []struct {
+		name    string
+		path    string
+		options portopenbao.RestoreOptions
+	}{
+		{name: "verified restore", path: testBackupSnapshotPath},
+		{name: "force restore", path: testBackupForceRestorePath, options: portopenbao.RestoreOptions{Force: true}},
+	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case testBackupJWTLoginPath:
-			atomic.AddInt32(&loginRequests, 1)
-			http.Error(w, "unexpected login", http.StatusInternalServerError)
-		case testBackupRestorePath:
-			atomic.AddInt32(&restoreRequests, 1)
-			if r.Method != http.MethodPost {
-				t.Errorf("restore method=%s, want POST", r.Method)
-			}
-			body, err := io.ReadAll(r.Body)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var loginRequests int32
+			var restoreRequests int32
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case testBackupJWTLoginPath:
+					atomic.AddInt32(&loginRequests, 1)
+					http.Error(w, "unexpected login", http.StatusInternalServerError)
+				case tt.path:
+					atomic.AddInt32(&restoreRequests, 1)
+					if r.Method != http.MethodPost {
+						t.Errorf("restore method=%s, want POST", r.Method)
+					}
+					body, err := io.ReadAll(r.Body)
+					if err != nil {
+						t.Errorf("failed to read restore body: %v", err)
+					}
+					if string(body) != testBackupRestoreData {
+						t.Errorf("restore body=%q, want %q", string(body), testBackupRestoreData)
+					}
+					requireInlineAuthHeaders(t, r, testBackupJWTAuthRole, testBackupJWTToken)
+					w.WriteHeader(http.StatusNoContent)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+
+			cfg := newInlineJWTBackupConfig()
+			client, cleanup, err := openClusterClient(cfg, "restore", server.URL, "")
 			if err != nil {
-				t.Errorf("failed to read restore body: %v", err)
+				t.Fatalf("openClusterClient() error: %v", err)
 			}
-			if string(body) != testBackupRestoreData {
-				t.Errorf("restore body=%q, want %q", string(body), testBackupRestoreData)
+			defer cleanup()
+
+			err = client.Restore(
+				context.Background(),
+				bytes.NewBufferString(testBackupRestoreData),
+				tt.options,
+			)
+			if err != nil {
+				t.Fatalf("Restore() error: %v", err)
 			}
-			requireInlineAuthHeaders(t, r, testBackupJWTAuthRole, testBackupJWTToken)
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
 
-	cfg := newInlineJWTBackupConfig()
-	client, cleanup, err := openClusterClient(cfg, "restore", server.URL, "")
-	if err != nil {
-		t.Fatalf("openClusterClient() error: %v", err)
-	}
-	defer cleanup()
-
-	if err := client.Restore(context.Background(), bytes.NewBufferString(testBackupRestoreData)); err != nil {
-		t.Fatalf("Restore() error: %v", err)
-	}
-
-	if got := atomic.LoadInt32(&loginRequests); got != 0 {
-		t.Fatalf("login requests=%d, want 0", got)
-	}
-	if got := atomic.LoadInt32(&restoreRequests); got != 1 {
-		t.Fatalf("restore requests=%d, want 1", got)
+			if got := atomic.LoadInt32(&loginRequests); got != 0 {
+				t.Fatalf("login requests=%d, want 0", got)
+			}
+			if got := atomic.LoadInt32(&restoreRequests); got != 1 {
+				t.Fatalf("restore requests=%d, want 1", got)
+			}
+		})
 	}
 }
 

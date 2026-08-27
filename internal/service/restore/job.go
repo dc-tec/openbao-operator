@@ -234,6 +234,10 @@ func buildRestoreEnvVars(
 			Name:  constants.EnvRestoreEndpoint,
 			Value: restore.Spec.Source.Target.Endpoint,
 		},
+		{
+			Name:  constants.EnvRestoreForce,
+			Value: fmt.Sprintf("%t", restore.Spec.Force),
+		},
 	}
 
 	envVars = storageenv.AppendProviderEnvVars(envVars, restore.Spec.Source.Target)

@@ -45,7 +45,7 @@ initialize "operator-bootstrap" {
     operation = "update"
     path      = "sys/policies/acl/openbao-operator-restore"
     data {
-      policy = "path \"sys/storage/raft/snapshot-force\" { capabilities = [\"update\"] }"
+      policy = "path \"sys/storage/raft/snapshot\" { capabilities = [\"update\"] }\npath \"sys/storage/raft/snapshot-force\" { capabilities = [\"update\"] }"
     }
   }
   request "create-restore-jwt-role" {

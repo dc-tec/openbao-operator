@@ -70,6 +70,7 @@ type OpenBaoRestoreSpec struct {
 	// (projected ServiceAccount token) instead of a static token.
 	//
 	// The role must be configured in OpenBao and must grant the "update" capability on
+	// sys/storage/raft/snapshot. To support force: true, it must also grant "update" on
 	// sys/storage/raft/snapshot-force. The role must bind to the restore ServiceAccount
 	// (<cluster-name>-restore-serviceaccount) in the cluster namespace.
 	//
@@ -84,7 +85,9 @@ type OpenBaoRestoreSpec struct {
 	// The Secret must exist in the same namespace as the OpenBaoRestore.
 	// Cross-namespace references are not allowed for security reasons.
 	//
-	// The token must have permission to update sys/storage/raft/snapshot-force.
+	// The token must have permission to update sys/storage/raft/snapshot. To support
+	// force: true, it must also have permission to update
+	// sys/storage/raft/snapshot-force.
 	//
 	// If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
 	// +optional
@@ -97,9 +100,14 @@ type OpenBaoRestoreSpec struct {
 	// +optional
 	Image string `json:"image,omitempty"`
 
-	// Force allows restore even if the cluster appears unhealthy.
-	// This is required for disaster recovery scenarios where the cluster
-	// may be in a degraded state.
+	// Force uses OpenBao's force-restore endpoint. This bypasses verification that
+	// the snapshot is compatible with the target cluster's Shamir or auto-unseal
+	// configuration. It also skips the controller checks that require the target
+	// cluster to be initialized and not upgrading.
+	//
+	// Use this break-glass option only when the normal verified restore cannot run
+	// and the snapshot source and target seal compatibility have been validated by
+	// another trusted process.
 	// +kubebuilder:default=false
 	// +optional
 	Force bool `json:"force,omitempty"`

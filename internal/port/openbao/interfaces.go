@@ -5,6 +5,12 @@ import (
 	"io"
 )
 
+// RestoreOptions controls snapshot restore behavior.
+type RestoreOptions struct {
+	// Force bypasses OpenBao's seal-consistency verification for the snapshot.
+	Force bool
+}
+
 // ClusterActions defines the contract for performing cluster-level OpenBao operations.
 type ClusterActions interface {
 	IsSealed(ctx context.Context) (bool, error)
@@ -13,7 +19,7 @@ type ClusterActions interface {
 	StepDownLeader(ctx context.Context) error
 	Snapshot(ctx context.Context, writer io.Writer) error
 	LoginJWT(ctx context.Context, role, jwtToken string) (string, int, error)
-	Restore(ctx context.Context, reader io.Reader) error
+	Restore(ctx context.Context, reader io.Reader, options RestoreOptions) error
 }
 
 // RaftActions extends ClusterActions with Raft-specific operations.

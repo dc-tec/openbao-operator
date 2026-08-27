@@ -1937,6 +1937,7 @@ func TestBuildRestoreEnvVars(t *testing.T) {
 	assert.Equal(t, "backup-2024-01-01.snap", envMap["RESTORE_KEY"])
 	assert.Equal(t, "my-bucket", envMap["RESTORE_BUCKET"])
 	assert.Equal(t, "https://s3.example.com", envMap["RESTORE_ENDPOINT"])
+	assert.Equal(t, "false", envMap[constants.EnvRestoreForce])
 	assert.Equal(t, "restore-role", envMap["BACKUP_JWT_AUTH_ROLE"])
 	assert.Equal(t, "jwt", envMap["BACKUP_AUTH_METHOD"])
 }

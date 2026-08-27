@@ -3,6 +3,8 @@ package openbao
 import (
 	"context"
 	"io"
+
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // MockClusterActions is a test implementation of the OpenBao ClusterActions port.
@@ -13,7 +15,7 @@ type MockClusterActions struct {
 	StepDownLeaderFunc func(ctx context.Context) error
 	SnapshotFunc       func(ctx context.Context, writer io.Writer) error
 	LoginJWTFunc       func(ctx context.Context, role, jwtToken string) (string, int, error)
-	RestoreFunc        func(ctx context.Context, reader io.Reader) error
+	RestoreFunc        func(ctx context.Context, reader io.Reader, options portopenbao.RestoreOptions) error
 }
 
 func (m *MockClusterActions) IsSealed(ctx context.Context) (bool, error) {
@@ -58,9 +60,9 @@ func (m *MockClusterActions) LoginJWT(ctx context.Context, role, jwtToken string
 	return "mock-token", 0, nil
 }
 
-func (m *MockClusterActions) Restore(ctx context.Context, reader io.Reader) error {
+func (m *MockClusterActions) Restore(ctx context.Context, reader io.Reader, options portopenbao.RestoreOptions) error {
 	if m.RestoreFunc != nil {
-		return m.RestoreFunc(ctx, reader)
+		return m.RestoreFunc(ctx, reader, options)
 	}
 	return nil
 }

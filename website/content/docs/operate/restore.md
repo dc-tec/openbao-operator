@@ -11,6 +11,8 @@ verifiedBy:
   - internal/service/restore/manager_validation.go
   - internal/service/restore/manager_running.go
   - internal/service/restore/post_restore_restart.go
+  - internal/adapter/openbao/client_bootstrap.go
+  - cmd/bao-backup/restore_flow.go
   - internal/service/restore/read_replica_restore.go
   - internal/service/workloadidentity/readiness.go
   - internal/service/restore/manager_test.go
@@ -20,7 +22,7 @@ aliases:
   - /docs/next/validated-deployments/runbooks/restore-from-s3-compatible-snapshot/
 ---
 
-An `OpenBaoRestore` is an explicit, immutable request to download a snapshot and force it into a target cluster. It
+An `OpenBaoRestore` is an explicit, immutable request to download a snapshot and apply it to a target cluster. It
 uses a dedicated Job and identity, owns the cluster operation lock while destructive work runs, and records a terminal
 result.
 
@@ -36,13 +38,14 @@ a second operator before applying the request.
 - The target `OpenBaoCluster` exists in the same namespace as the restore request.
 - The exact snapshot key exists and has been tested in an isolated restore rehearsal.
 - The restore Job can reach object storage and the target cluster.
-- A restore JWT role or labeled static-token Secret grants update on `sys/storage/raft/snapshot-force`.
+- A restore JWT role or labeled static-token Secret grants update on `sys/storage/raft/snapshot`. Grant update on
+  `sys/storage/raft/snapshot-force` only when the identity must support `force: true`.
 - The storage identity is bound to the generated `<cluster>-restore-serviceaccount` or supplied explicitly.
 - Prevent an upgrade or backup from running concurrently.
 {{< /checklist >}}
 
-Without `force`, the target must be initialized and must not have `Upgrading=True`. `force: true` skips those two
-cluster-state checks; it does not validate the snapshot or prove the target is otherwise safe.
+By default, OpenBao verifies that the snapshot is compatible with the target cluster's Shamir or auto-unseal
+configuration. The target must also be initialized and must not have `Upgrading=True`.
 
 For Hardened targets, configure explicit, port-scoped `spec.network.egressRules` on the target cluster and set
 `credentialsSecretRef`, workload-identity metadata, or S3 `roleArn` on the restore source.
@@ -144,6 +147,22 @@ replicas are configured, it also means the read pool returned to its declared me
 does not validate restored application data or authentication semantics. Verify seal state, leader, Raft membership,
 application data, and authentication after every restore.
 {{< /callout >}}
+
+## Use a force restore
+
+Set `force: true` only when disaster recovery cannot use the normal verified restore:
+
+{{< command label="configure" title="Bypass snapshot seal-consistency verification" >}}
+spec:
+  force: true
+{{< /command >}}
+
+This option uses OpenBao's `sys/storage/raft/snapshot-force` endpoint. It bypasses verification that the snapshot is
+compatible with the target cluster's Shamir or auto-unseal configuration. It also skips the controller checks that
+require the target to be initialized and not upgrading.
+
+The force endpoint does not make incompatible seal material usable after the restore. Validate the snapshot source and
+seal compatibility through another trusted process before you use it.
 
 ## Override a stuck operation lock
 
