@@ -41,8 +41,16 @@ type Manager struct {
 	clientConfig          portopenbao.ClientConfig
 	imageVerifier         imageverify.Verifier
 	operatorImageVerifier imageverify.Verifier
+	adminOpsMutator       adminOpsStatusMutator
 	Platform              string
 }
+
+type adminOpsStatusMutator func(
+	ctx context.Context,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
+	forceOwnership bool,
+) error
 
 // NewManager constructs a Manager.
 func NewManager(
@@ -81,6 +89,14 @@ func NewManager(
 func (m *Manager) WithReader(reader client.Reader) *Manager {
 	if reader != nil {
 		m.reader = reader
+	}
+	return m
+}
+
+// WithAdminOpsStatusMutator configures the adminops-plane status persistence hook.
+func (m *Manager) WithAdminOpsStatusMutator(mutator adminOpsStatusMutator) *Manager {
+	if mutator != nil {
+		m.adminOpsMutator = mutator
 	}
 	return m
 }

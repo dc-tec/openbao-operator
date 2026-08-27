@@ -16,7 +16,10 @@ limitations under the License.
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+)
 
 // UpgradeProgress tracks the state of an in-progress upgrade.
 type UpgradeProgress struct {
@@ -106,10 +109,84 @@ const (
 	PhaseRollbackCleanup BlueGreenPhase = "RollbackCleanup"
 )
 
+// BlueGreenValidationHookStage identifies the durable execution boundary
+// reached by a pre-promotion validation hook.
+// +kubebuilder:validation:Enum=Prepared;Committed;Created;TerminalObserved;Unknown
+type BlueGreenValidationHookStage string
+
+const (
+	// BlueGreenValidationHookStagePrepared indicates that the expected Job
+	// identity is durable, but Job creation has not been committed.
+	BlueGreenValidationHookStagePrepared BlueGreenValidationHookStage = "Prepared"
+	// BlueGreenValidationHookStageCommitted indicates that the controller
+	// durably committed to one Job creation attempt. A missing Job after this
+	// point is ambiguous and is not recreated automatically.
+	BlueGreenValidationHookStageCommitted BlueGreenValidationHookStage = "Committed"
+	// BlueGreenValidationHookStageCreated indicates that the controller
+	// persisted the created Job identity.
+	BlueGreenValidationHookStageCreated BlueGreenValidationHookStage = "Created"
+	// BlueGreenValidationHookStageTerminalObserved indicates that the controller
+	// persisted the terminal Job result.
+	BlueGreenValidationHookStageTerminalObserved BlueGreenValidationHookStage = "TerminalObserved"
+	// BlueGreenValidationHookStageUnknown indicates that the controller cannot
+	// prove whether the committed validation hook ran.
+	BlueGreenValidationHookStageUnknown BlueGreenValidationHookStage = "Unknown"
+)
+
+// BlueGreenValidationHookResult is the persisted terminal result of a
+// pre-promotion validation hook Job.
+// +kubebuilder:validation:Enum=Succeeded;Failed
+type BlueGreenValidationHookResult string
+
+const (
+	// BlueGreenValidationHookResultSucceeded indicates that the validation hook
+	// Job succeeded.
+	BlueGreenValidationHookResultSucceeded BlueGreenValidationHookResult = "Succeeded"
+	// BlueGreenValidationHookResultFailed indicates that the validation hook Job
+	// failed.
+	BlueGreenValidationHookResultFailed BlueGreenValidationHookResult = "Failed"
+)
+
+// BlueGreenValidationHookStatus records the expected identity and durable
+// receipts for one pre-promotion validation hook execution.
+type BlueGreenValidationHookStatus struct {
+	// OperationID identifies the blue/green upgrade attempt that owns this hook.
+	OperationID string `json:"operationID"`
+	// GreenRevision identifies the Green revision validated by this hook.
+	GreenRevision string `json:"greenRevision"`
+	// SpecHash identifies the normalized validation hook specification.
+	SpecHash string `json:"specHash"`
+	// Stage is the latest durable execution boundary observed by the controller.
+	Stage BlueGreenValidationHookStage `json:"stage"`
+	// JobName is the expected validation hook Job name.
+	JobName string `json:"jobName"`
+	// JobUID is the UID returned for the created validation hook Job.
+	// +optional
+	JobUID types.UID `json:"jobUID,omitempty"`
+	// PreparedAt is when the expected hook identity became durable.
+	// +optional
+	PreparedAt *metav1.Time `json:"preparedAt,omitempty"`
+	// CommittedAt is when the controller committed to one Job creation attempt.
+	// +optional
+	CommittedAt *metav1.Time `json:"committedAt,omitempty"`
+	// CreatedAt is when the controller persisted the created Job receipt.
+	// +optional
+	CreatedAt *metav1.Time `json:"createdAt,omitempty"`
+	// TerminalResult is the persisted terminal Job result.
+	// +optional
+	TerminalResult BlueGreenValidationHookResult `json:"terminalResult,omitempty"`
+	// TerminalObservedAt is when the controller persisted the terminal Job result.
+	// +optional
+	TerminalObservedAt *metav1.Time `json:"terminalObservedAt,omitempty"`
+}
+
 // BlueGreenStatus tracks the lifecycle of the "Green" revision during blue/green upgrades.
 type BlueGreenStatus struct {
 	// Phase is the current phase of the blue/green upgrade.
 	Phase BlueGreenPhase `json:"phase,omitempty"`
+	// OperationID identifies the current blue/green upgrade attempt.
+	// +optional
+	OperationID string `json:"operationID,omitempty"`
 	// BlueRevision is the hash/name of the currently active cluster.
 	BlueRevision string `json:"blueRevision,omitempty"`
 	// BlueControllerRevision is the Kubernetes StatefulSet controller revision
@@ -140,6 +217,10 @@ type BlueGreenStatus struct {
 	// PreUpgradeSnapshotJobName is the name of the backup job triggered at upgrade start.
 	// +optional
 	PreUpgradeSnapshotJobName string `json:"preUpgradeSnapshotJobName,omitempty"`
+	// ValidationHook records the expected identity and durable execution receipts
+	// for the current pre-promotion validation hook.
+	// +optional
+	ValidationHook *BlueGreenValidationHookStatus `json:"validationHook,omitempty"`
 	// RollbackReason records why a rollback was triggered (if any).
 	// +optional
 	RollbackReason string `json:"rollbackReason,omitempty"`

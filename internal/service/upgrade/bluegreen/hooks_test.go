@@ -9,12 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -119,6 +117,12 @@ func TestEnsurePrePromotionHookJob_ImageVerification(t *testing.T) {
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					OperatorImageVerification: tt.config,
 				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+						OperationID:   "operation-1",
+						GreenRevision: "green-revision",
+					},
+				},
 			}
 
 			k8sClient := fake.NewClientBuilder().
@@ -132,22 +136,36 @@ func TestEnsurePrePromotionHookJob_ImageVerification(t *testing.T) {
 				Platform:              constants.PlatformKubernetes,
 			}
 
-			result, err := mgr.ensurePrePromotionHookJob(
+			hook := &openbaov1alpha1.ValidationHookConfig{Image: hookImage}
+			specHash, hashErr := validationHookSpecHash(hook)
+			require.NoError(t, hashErr)
+			receipt := &openbaov1alpha1.BlueGreenValidationHookStatus{
+				OperationID:   cluster.Status.BlueGreen.OperationID,
+				GreenRevision: cluster.Status.BlueGreen.GreenRevision,
+				SpecHash:      specHash,
+				JobName: validationHookJobName(
+					cluster.Name,
+					cluster.Status.BlueGreen.OperationID,
+					cluster.Status.BlueGreen.GreenRevision,
+					specHash,
+				),
+			}
+			job, err := mgr.buildValidationHookJob(
 				context.Background(),
 				logr.Discard(),
 				cluster,
-				&openbaov1alpha1.ValidationHookConfig{Image: hookImage},
+				receipt,
+				hook,
 			)
 			if tt.wantReason != "" {
 				require.Error(t, err)
 				reason, ok := operatorerrors.Reason(err)
 				require.True(t, ok)
 				require.Equal(t, tt.wantReason, reason)
-				require.Nil(t, result)
+				require.Nil(t, job)
 			} else {
 				require.NoError(t, err)
-				require.NotNil(t, result)
-				require.True(t, result.Running)
+				require.NotNil(t, job)
 			}
 
 			require.Equal(t, tt.wantVerifyRun, tt.verifier.called)
@@ -155,19 +173,13 @@ func TestEnsurePrePromotionHookJob_ImageVerification(t *testing.T) {
 				require.Equal(t, hookImage, tt.verifier.imageRef)
 			}
 
-			job := &batchv1.Job{}
-			err = k8sClient.Get(context.Background(), client.ObjectKey{
-				Namespace: cluster.Namespace,
-				Name:      "test-cluster-validation-hook",
-			}, job)
 			if !tt.wantJob {
-				require.True(t, apierrors.IsNotFound(err))
 				return
 			}
 
-			require.NoError(t, err)
 			require.Len(t, job.Spec.Template.Spec.Containers, 1)
 			require.Equal(t, tt.wantImage, job.Spec.Template.Spec.Containers[0].Image)
+			require.Nil(t, job.Spec.TTLSecondsAfterFinished)
 		})
 	}
 }
@@ -191,6 +203,12 @@ func TestEnsurePrePromotionHookJob_AppliesRestrictedPodSecurityDefaults(t *testi
 				{Name: "registry-creds"},
 			},
 		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+				OperationID:   "operation-1",
+				GreenRevision: "green-revision",
+			},
+		},
 	}
 
 	k8sClient := fake.NewClientBuilder().
@@ -204,20 +222,27 @@ func TestEnsurePrePromotionHookJob_AppliesRestrictedPodSecurityDefaults(t *testi
 		Platform: constants.PlatformKubernetes,
 	}
 
-	result, err := mgr.ensurePrePromotionHookJob(context.Background(), logr.Discard(), cluster, &openbaov1alpha1.ValidationHookConfig{
+	hook := &openbaov1alpha1.ValidationHookConfig{
 		Image:   "openbao/openbao:2.4.4",
 		Command: []string{"/bin/sh", "-ec"},
 		Args:    []string{"echo test"},
-	})
+	}
+	specHash, err := validationHookSpecHash(hook)
 	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.True(t, result.Running)
-
-	job := &batchv1.Job{}
-	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKey{
-		Namespace: cluster.Namespace,
-		Name:      "test-cluster-validation-hook",
-	}, job))
+	receipt := &openbaov1alpha1.BlueGreenValidationHookStatus{
+		OperationID:   cluster.Status.BlueGreen.OperationID,
+		GreenRevision: cluster.Status.BlueGreen.GreenRevision,
+		SpecHash:      specHash,
+		JobName: validationHookJobName(
+			cluster.Name,
+			cluster.Status.BlueGreen.OperationID,
+			cluster.Status.BlueGreen.GreenRevision,
+			specHash,
+		),
+	}
+	job, err := mgr.buildValidationHookJob(context.Background(), logr.Discard(), cluster, receipt, hook)
+	require.NoError(t, err)
+	require.NotNil(t, job)
 
 	require.Equal(t, ptr.To(false), job.Spec.Template.Spec.AutomountServiceAccountToken)
 	require.Empty(t, job.Spec.Template.Spec.ServiceAccountName)
@@ -241,4 +266,5 @@ func TestEnsurePrePromotionHookJob_AppliesRestrictedPodSecurityDefaults(t *testi
 	require.Equal(t, resource.MustParse("128Mi"), container.Resources.Requests[corev1.ResourceMemory])
 	require.Equal(t, resource.MustParse("500m"), container.Resources.Limits[corev1.ResourceCPU])
 	require.Equal(t, resource.MustParse("512Mi"), container.Resources.Limits[corev1.ResourceMemory])
+	require.Nil(t, job.Spec.TTLSecondsAfterFinished)
 }

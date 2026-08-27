@@ -55,6 +55,9 @@ func ResetBlueGreenTransientState(status *openbaov1alpha1.BlueGreenStatus) {
 	status.StartTime = nil
 	status.JobFailureCount = 0
 	status.LastJobFailure = ""
+	if status.ValidationHook == nil {
+		status.OperationID = ""
+	}
 }
 
 // FinalizeBlueGreenTerminalState applies the shared status transition for a

@@ -414,6 +414,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `phase` _[BlueGreenPhase](#bluegreenphase)_ | Phase is the current phase of the blue/green upgrade. |  | Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RestoringReadReplicas RollingBack RollbackCleanup] <br /> |
+| `operationID` _string_ | OperationID identifies the current blue/green upgrade attempt. |  | Optional: \{\} <br /> |
 | `blueRevision` _string_ | BlueRevision is the hash/name of the currently active cluster. |  |  |
 | `blueControllerRevision` _string_ | BlueControllerRevision is the Kubernetes StatefulSet controller revision<br />of Blue. It identifies an unrevisioned rolling workload after switching to<br />BlueGreen without requiring the existing Pods to be restarted or relabeled. |  | Optional: \{\} <br /> |
 | `blueImage` _string_ | BlueImage is the container image used by the Blue cluster.<br />This ensures the Blue cluster is not actively upgraded when spec.image changes. |  |  |
@@ -423,9 +424,78 @@ _Appears in:_
 | `jobFailureCount` _integer_ | JobFailureCount tracks consecutive job failures in the current phase.<br />Reset to 0 on phase transition or successful job completion. |  | Optional: \{\} <br /> |
 | `lastJobFailure` _string_ | LastJobFailure records the name of the last failed job for debugging. |  | Optional: \{\} <br /> |
 | `preUpgradeSnapshotJobName` _string_ | PreUpgradeSnapshotJobName is the name of the backup job triggered at upgrade start. |  | Optional: \{\} <br /> |
+| `validationHook` _[BlueGreenValidationHookStatus](#bluegreenvalidationhookstatus)_ | ValidationHook records the expected identity and durable execution receipts<br />for the current pre-promotion validation hook. |  | Optional: \{\} <br /> |
 | `rollbackReason` _string_ | RollbackReason records why a rollback was triggered (if any). |  | Optional: \{\} <br /> |
 | `rollbackStartTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | RollbackStartTime is when the rollback was initiated. |  | Optional: \{\} <br /> |
 | `rollbackAttempt` _integer_ | RollbackAttempt increments each time rollback automation is retried.<br />It is used to produce stable, deterministic Job names per attempt. |  | Optional: \{\} <br /> |
+
+
+#### BlueGreenValidationHookResult
+
+_Underlying type:_ _string_
+
+BlueGreenValidationHookResult is the persisted terminal result of a
+pre-promotion validation hook Job.
+
+_Validation:_
+- Enum: [Succeeded Failed]
+
+_Appears in:_
+- [BlueGreenValidationHookStatus](#bluegreenvalidationhookstatus)
+
+| Field | Description |
+| --- | --- |
+| `Succeeded` | BlueGreenValidationHookResultSucceeded indicates that the validation hook<br />Job succeeded.<br /> |
+| `Failed` | BlueGreenValidationHookResultFailed indicates that the validation hook Job<br />failed.<br /> |
+
+
+#### BlueGreenValidationHookStage
+
+_Underlying type:_ _string_
+
+BlueGreenValidationHookStage identifies the durable execution boundary
+reached by a pre-promotion validation hook.
+
+_Validation:_
+- Enum: [Prepared Committed Created TerminalObserved Unknown]
+
+_Appears in:_
+- [BlueGreenValidationHookStatus](#bluegreenvalidationhookstatus)
+
+| Field | Description |
+| --- | --- |
+| `Prepared` | BlueGreenValidationHookStagePrepared indicates that the expected Job<br />identity is durable, but Job creation has not been committed.<br /> |
+| `Committed` | BlueGreenValidationHookStageCommitted indicates that the controller<br />durably committed to one Job creation attempt. A missing Job after this<br />point is ambiguous and is not recreated automatically.<br /> |
+| `Created` | BlueGreenValidationHookStageCreated indicates that the controller<br />persisted the created Job identity.<br /> |
+| `TerminalObserved` | BlueGreenValidationHookStageTerminalObserved indicates that the controller<br />persisted the terminal Job result.<br /> |
+| `Unknown` | BlueGreenValidationHookStageUnknown indicates that the controller cannot<br />prove whether the committed validation hook ran.<br /> |
+
+
+#### BlueGreenValidationHookStatus
+
+
+
+BlueGreenValidationHookStatus records the expected identity and durable
+receipts for one pre-promotion validation hook execution.
+
+
+
+_Appears in:_
+- [BlueGreenStatus](#bluegreenstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `operationID` _string_ | OperationID identifies the blue/green upgrade attempt that owns this hook. |  |  |
+| `greenRevision` _string_ | GreenRevision identifies the Green revision validated by this hook. |  |  |
+| `specHash` _string_ | SpecHash identifies the normalized validation hook specification. |  |  |
+| `stage` _[BlueGreenValidationHookStage](#bluegreenvalidationhookstage)_ | Stage is the latest durable execution boundary observed by the controller. |  | Enum: [Prepared Committed Created TerminalObserved Unknown] <br /> |
+| `jobName` _string_ | JobName is the expected validation hook Job name. |  |  |
+| `jobUID` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#uid-types-pkg)_ | JobUID is the UID returned for the created validation hook Job. |  | Optional: \{\} <br /> |
+| `preparedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | PreparedAt is when the expected hook identity became durable. |  | Optional: \{\} <br /> |
+| `committedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | CommittedAt is when the controller committed to one Job creation attempt. |  | Optional: \{\} <br /> |
+| `createdAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | CreatedAt is when the controller persisted the created Job receipt. |  | Optional: \{\} <br /> |
+| `terminalResult` _[BlueGreenValidationHookResult](#bluegreenvalidationhookresult)_ | TerminalResult is the persisted terminal Job result. |  | Enum: [Succeeded Failed] <br />Optional: \{\} <br /> |
+| `terminalObservedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | TerminalObservedAt is when the controller persisted the terminal Job result. |  | Optional: \{\} <br /> |
 
 
 #### BreakGlassReason
@@ -2246,7 +2316,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `minSyncDuration` _string_ | MinSyncDuration ensures the Green cluster stays healthy as a non-voter<br />for at least this duration before promotion (e.g., "5m"). |  | Optional: \{\} <br /> |
-| `prePromotionHook` _[ValidationHookConfig](#validationhookconfig)_ | PrePromotionHook specifies a Job template to run before promoting Green.<br />The job must complete successfully (exit 0) for promotion to proceed.<br />If the job fails, the operator either aborts or rolls back automatically<br />when blueGreen.autoRollback.onValidationFailure is enabled; otherwise it<br />holds for manual resolution. |  | Optional: \{\} <br /> |
+| `prePromotionHook` _[ValidationHookConfig](#validationhookconfig)_ | PrePromotionHook specifies a Job template to run before promoting Green.<br />The job must complete successfully (exit 0) for promotion to proceed.<br />If the job fails, the operator either aborts or rolls back automatically<br />when blueGreen.autoRollback.onValidationFailure is enabled; otherwise it<br />holds for manual resolution.<br />The operator assigns the hook a stable identity for each upgrade attempt.<br />It does not recreate a missing Job after Job creation is committed. |  | Optional: \{\} <br /> |
 
 
 #### WorkloadControllerStatus

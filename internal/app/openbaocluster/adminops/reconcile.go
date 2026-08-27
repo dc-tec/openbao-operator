@@ -200,7 +200,7 @@ func buildReconcilers(deps Dependencies) reconcilerPlan {
 				deps.OperatorImageVerifier,
 				deps.Platform,
 				deps.Recorder,
-			).WithReader(deps.APIReader),
+			).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
 			rollingupgrade.NewManager(
 				deps.Client,
 				deps.Scheme,

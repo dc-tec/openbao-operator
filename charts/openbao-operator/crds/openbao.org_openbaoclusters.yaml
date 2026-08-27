@@ -4966,6 +4966,8 @@ spec:
                               If the job fails, the operator either aborts or rolls back automatically
                               when blueGreen.autoRollback.onValidationFailure is enabled; otherwise it
                               holds for manual resolution.
+                              The operator assigns the hook a stable identity for each upgrade attempt.
+                              It does not recreate a missing Job after Job creation is committed.
                             properties:
                               args:
                                 description: Args are arguments passed to the command.
@@ -5275,6 +5277,10 @@ spec:
                       promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote
                       when the upgrade starts.
                     type: boolean
+                  operationID:
+                    description: OperationID identifies the current blue/green upgrade
+                      attempt.
+                    type: string
                   phase:
                     description: Phase is the current phase of the blue/green upgrade.
                     enum:
@@ -5311,6 +5317,74 @@ spec:
                     description: StartTime is when the current phase began.
                     format: date-time
                     type: string
+                  validationHook:
+                    description: |-
+                      ValidationHook records the expected identity and durable execution receipts
+                      for the current pre-promotion validation hook.
+                    properties:
+                      committedAt:
+                        description: CommittedAt is when the controller committed
+                          to one Job creation attempt.
+                        format: date-time
+                        type: string
+                      createdAt:
+                        description: CreatedAt is when the controller persisted the
+                          created Job receipt.
+                        format: date-time
+                        type: string
+                      greenRevision:
+                        description: GreenRevision identifies the Green revision validated
+                          by this hook.
+                        type: string
+                      jobName:
+                        description: JobName is the expected validation hook Job name.
+                        type: string
+                      jobUID:
+                        description: JobUID is the UID returned for the created validation
+                          hook Job.
+                        type: string
+                      operationID:
+                        description: OperationID identifies the blue/green upgrade
+                          attempt that owns this hook.
+                        type: string
+                      preparedAt:
+                        description: PreparedAt is when the expected hook identity
+                          became durable.
+                        format: date-time
+                        type: string
+                      specHash:
+                        description: SpecHash identifies the normalized validation
+                          hook specification.
+                        type: string
+                      stage:
+                        description: Stage is the latest durable execution boundary
+                          observed by the controller.
+                        enum:
+                        - Prepared
+                        - Committed
+                        - Created
+                        - TerminalObserved
+                        - Unknown
+                        type: string
+                      terminalObservedAt:
+                        description: TerminalObservedAt is when the controller persisted
+                          the terminal Job result.
+                        format: date-time
+                        type: string
+                      terminalResult:
+                        description: TerminalResult is the persisted terminal Job
+                          result.
+                        enum:
+                        - Succeeded
+                        - Failed
+                        type: string
+                    required:
+                    - greenRevision
+                    - jobName
+                    - operationID
+                    - specHash
+                    - stage
+                    type: object
                 type: object
               breakGlass:
                 description: |-

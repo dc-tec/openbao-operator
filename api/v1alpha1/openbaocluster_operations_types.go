@@ -85,6 +85,8 @@ type VerificationConfig struct {
 	// If the job fails, the operator either aborts or rolls back automatically
 	// when blueGreen.autoRollback.onValidationFailure is enabled; otherwise it
 	// holds for manual resolution.
+	// The operator assigns the hook a stable identity for each upgrade attempt.
+	// It does not recreate a missing Job after Job creation is committed.
 	// +optional
 	PrePromotionHook *ValidationHookConfig `json:"prePromotionHook,omitempty"`
 }
