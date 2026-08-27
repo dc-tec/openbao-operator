@@ -93,3 +93,24 @@ func TestFinalizeBlueGreenTerminalState(t *testing.T) {
 	require.Empty(t, cluster.Status.BlueGreen.LastJobFailure)
 	require.NotNil(t, cluster.Status.BlueGreen.RollbackStartTime)
 }
+
+func TestResetBlueGreenTransientStatePreservesOperationUntilHookCleanup(t *testing.T) {
+	t.Parallel()
+
+	status := &openbaov1alpha1.BlueGreenStatus{
+		Phase:       openbaov1alpha1.PhaseSyncing,
+		OperationID: "operation-1",
+		ValidationHook: &openbaov1alpha1.BlueGreenValidationHookStatus{
+			OperationID: "operation-1",
+			Stage:       openbaov1alpha1.BlueGreenValidationHookStageTerminalObserved,
+			JobName:     "validation-hook",
+		},
+	}
+	core.ResetBlueGreenTransientState(status)
+	require.Equal(t, "operation-1", status.OperationID)
+	require.NotNil(t, status.ValidationHook)
+
+	status.ValidationHook = nil
+	core.ResetBlueGreenTransientState(status)
+	require.Empty(t, status.OperationID)
+}

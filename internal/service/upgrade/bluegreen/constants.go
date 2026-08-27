@@ -36,6 +36,12 @@ const (
 
 	// AnnotationSnapshotPhase labels snapshot Jobs with their role (e.g. pre-upgrade).
 	AnnotationSnapshotPhase = "openbao.org/snapshot-phase"
+	// AnnotationValidationHookOperationID records the upgrade attempt that owns a validation hook Job.
+	AnnotationValidationHookOperationID = "openbao.org/validation-hook-operation-id"
+	// AnnotationValidationHookGreenRevision records the Green revision validated by a hook Job.
+	AnnotationValidationHookGreenRevision = "openbao.org/validation-hook-green-revision"
+	// AnnotationValidationHookSpecHash records the normalized hook specification identity.
+	AnnotationValidationHookSpecHash = "openbao.org/validation-hook-spec-hash"
 
 	// ComponentValidationHook is the component name for validation hook.
 	ComponentValidationHook = "validation-hook"

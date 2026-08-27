@@ -22,7 +22,6 @@ import (
 
 const (
 	jobNamePrefix = "upgrade-"
-	jobTTLSeconds = 3600 // 1 hour TTL for completed/failed jobs
 )
 
 type JobResult = upgrade.JobResult

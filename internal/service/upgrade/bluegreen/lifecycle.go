@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/uuid"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -29,6 +30,9 @@ func (m *Manager) recordBlueGreenUpgradeStart(logger logr.Logger, cluster *openb
 	))
 
 	core.InitializeBlueGreenManualPromotion(cluster)
+	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.OperationID == "" {
+		cluster.Status.BlueGreen.OperationID = string(uuid.NewUUID())
+	}
 }
 
 func blueGreenPreUpgradeSnapshotEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {

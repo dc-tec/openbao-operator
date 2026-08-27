@@ -55,6 +55,10 @@ func (m *Manager) prepareBlueGreenReconcile(
 
 	m.ensureBlueGreenStatus(ctx, logger, cluster)
 
+	if handled, result, err := m.reconcileValidationHookOutsideSyncing(ctx, logger, cluster); handled || err != nil {
+		return result, true, err
+	}
+
 	if m.shouldHaltForBreakGlass(logger, cluster) {
 		return requeueStandard(), true, nil
 	}

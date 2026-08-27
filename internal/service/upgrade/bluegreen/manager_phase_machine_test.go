@@ -42,6 +42,15 @@ func newPhaseMachineCluster() *openbaov1alpha1.OpenBaoCluster {
 	return cluster
 }
 
+func mustValidationHookSpecHash(t *testing.T, hook *openbaov1alpha1.ValidationHookConfig) string {
+	t.Helper()
+	hash, err := validationHookSpecHash(hook)
+	if err != nil {
+		t.Fatalf("validationHookSpecHash() error = %v", err)
+	}
+	return hash
+}
+
 func newRevisionPod(cluster *openbaov1alpha1.OpenBaoCluster, revision, name string) *corev1.Pod {
 	pod := newGreenPod(cluster, revision, name)
 	pod.Status.Phase = corev1.PodRunning
@@ -360,6 +369,24 @@ func TestPhaseHandlers_ExecutorDrivenTransitions(t *testing.T) {
 	}
 }
 
+func TestRecordBlueGreenUpgradeStartAssignsStableOperationID(t *testing.T) {
+	t.Parallel()
+
+	cluster := newPhaseMachineCluster()
+	cluster.Status.BlueGreen.OperationID = ""
+	manager := &Manager{}
+	manager.recordBlueGreenUpgradeStart(logr.Discard(), cluster)
+	firstOperationID := cluster.Status.BlueGreen.OperationID
+	if firstOperationID == "" {
+		t.Fatal("OperationID is empty after blue/green upgrade start")
+	}
+
+	manager.recordBlueGreenUpgradeStart(logr.Discard(), cluster)
+	if cluster.Status.BlueGreen.OperationID != firstOperationID {
+		t.Fatalf("OperationID changed from %q to %q", firstOperationID, cluster.Status.BlueGreen.OperationID)
+	}
+}
+
 func TestHandlePhaseSyncing_Branches(t *testing.T) {
 	t.Parallel()
 
@@ -532,22 +559,19 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 				Args:    []string{"exit 1"},
 			},
 		}
+		cluster.Status.BlueGreen.OperationID = "operation-1"
+		hookSpecHash := mustValidationHookSpecHash(t, cluster.Spec.Upgrade.BlueGreen.Verification.PrePromotionHook)
+		cluster.Status.BlueGreen.ValidationHook = &openbaov1alpha1.BlueGreenValidationHookStatus{
+			OperationID:    cluster.Status.BlueGreen.OperationID,
+			GreenRevision:  cluster.Status.BlueGreen.GreenRevision,
+			SpecHash:       hookSpecHash,
+			Stage:          openbaov1alpha1.BlueGreenValidationHookStageTerminalObserved,
+			JobName:        validationHookJobName(cluster.Name, cluster.Status.BlueGreen.OperationID, cluster.Status.BlueGreen.GreenRevision, hookSpecHash),
+			TerminalResult: openbaov1alpha1.BlueGreenValidationHookResultFailed,
+		}
 		blueRevision := cluster.Status.BlueGreen.BlueRevision
 		greenRevision := cluster.Status.BlueGreen.GreenRevision
 		waitSyncedJob := succeededExecutorJob(cluster, ActionWaitGreenSynced)
-		hookJob := managedBlueGreenJob(&batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      cluster.Name + "-validation-hook",
-				Namespace: cluster.Namespace,
-			},
-			Status: batchv1.JobStatus{
-				Conditions: []batchv1.JobCondition{{
-					Type:   batchv1.JobFailed,
-					Status: corev1.ConditionTrue,
-				}},
-				Failed: 1,
-			},
-		}, cluster)
 		greenStatefulSet := &appsv1.StatefulSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name + "-" + cluster.Status.BlueGreen.GreenRevision,
@@ -557,7 +581,7 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 		client := fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
-			WithObjects(cluster, waitSyncedJob, hookJob, greenStatefulSet).
+			WithObjects(cluster, waitSyncedJob, greenStatefulSet).
 			Build()
 		manager := &Manager{client: client, reader: client, scheme: scheme}
 

@@ -2095,6 +2095,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseSyncing))
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty())
+				g.Expect(updated.Status.BlueGreen.ValidationHook).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.ValidationHook.JobName).NotTo(BeEmpty())
 
 				waitSyncedJobs := &batchv1.JobList{}
 				g.Expect(admin.List(ctx, waitSyncedJobs,
@@ -2111,7 +2113,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 
 				hookJob := &batchv1.Job{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Name:      fmt.Sprintf("%s-validation-hook", gatedCluster.Name),
+					Name:      updated.Status.BlueGreen.ValidationHook.JobName,
 					Namespace: tenantNamespace,
 				}, hookJob)).To(Succeed())
 				g.Expect(jobSucceeded(hookJob)).To(BeTrue(), "pre-promotion hook should succeed before promotion is approved")
@@ -2295,6 +2297,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 
 			By("Waiting for the pre-promotion hook to fail after green finishes syncing")
 			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: hookFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.ValidationHook).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.ValidationHook.JobName).NotTo(BeEmpty())
+
 				waitSyncedJobs := &batchv1.JobList{}
 				g.Expect(admin.List(ctx, waitSyncedJobs,
 					client.InNamespace(tenantNamespace),
@@ -2310,7 +2318,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 
 				hookJob := &batchv1.Job{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Name:      fmt.Sprintf("%s-validation-hook", hookFailCluster.Name),
+					Name:      updated.Status.BlueGreen.ValidationHook.JobName,
 					Namespace: tenantNamespace,
 				}, hookJob)).To(Succeed())
 				g.Expect(jobFailed(hookJob)).To(BeTrue(), "pre-promotion hook should fail")

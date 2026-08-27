@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -43,16 +44,24 @@ func (m *Manager) ensurePrePromotionHookComplete(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (phaseOutcome, bool, error) {
-	if cluster.Spec.Upgrade.BlueGreen == nil ||
-		cluster.Spec.Upgrade.BlueGreen.Verification == nil ||
-		cluster.Spec.Upgrade.BlueGreen.Verification.PrePromotionHook == nil {
+	if cluster == nil || cluster.Status.BlueGreen == nil {
+		return phaseOutcome{}, true, fmt.Errorf("blue/green status is required")
+	}
+
+	var hook *openbaov1alpha1.ValidationHookConfig
+	if cluster.Spec.Upgrade.BlueGreen != nil && cluster.Spec.Upgrade.BlueGreen.Verification != nil {
+		hook = cluster.Spec.Upgrade.BlueGreen.Verification.PrePromotionHook
+	}
+	if hook == nil && cluster.Status.BlueGreen.ValidationHook == nil {
 		return phaseOutcome{}, false, nil
 	}
 
-	hook := cluster.Spec.Upgrade.BlueGreen.Verification.PrePromotionHook
-	hookResult, err := m.ensurePrePromotionHookJob(ctx, logger, cluster, hook)
+	hookResult, receiptAdvanced, err := m.reconcilePrePromotionHookJob(ctx, logger, cluster, hook)
 	if err != nil {
-		return phaseOutcome{}, true, fmt.Errorf("failed to ensure pre-promotion hook job: %w", err)
+		return phaseOutcome{}, true, fmt.Errorf("failed to reconcile pre-promotion hook Job: %w", err)
+	}
+	if receiptAdvanced || hookResult == nil {
+		return requeueAfterOutcome(constants.RequeueShort), true, nil
 	}
 	hookDecision, err := prePromotionHookDecision(autoRollbackSettings(cluster), hookResult, "pre-promotion hook failed")
 	if err != nil {
