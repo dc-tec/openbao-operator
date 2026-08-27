@@ -7,7 +7,7 @@
     "provenance_index": "provenance-index.json"
   },
   "channel": "edge",
-  "generated_at": "2026-08-26T23:25:32Z",
+  "generated_at": "2026-08-27T06:31:18Z",
   "images": {
     "backup_executor": {
       "digest": "sha256:3e735d2f0e7ebcb3925ef8b4c0a4ad72688233275750d8927c366939a6f4f4fb",
