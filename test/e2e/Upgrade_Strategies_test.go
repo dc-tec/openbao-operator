@@ -1223,6 +1223,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: expectedJobName, Namespace: tenantNamespace}, job)).To(Succeed())
 				g.Expect(job.UID).NotTo(Equal(failedJobUID), "snapshot retry should recreate the deterministic job after deleting the failed attempt")
 				g.Expect(jobSucceeded(job)).To(BeTrue(), "recreated snapshot job should succeed")
+				g.Expect(job.Labels).To(HaveKeyWithValue(constants.LabelOpenBaoBackupType, constants.BackupTypePreUpgrade))
+				g.Expect(job.Annotations).NotTo(HaveKey("openbao.org/backup-key"))
 				successfulJobUID = job.UID
 			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 			Expect(successfulJobUID).NotTo(BeZero())
@@ -1234,6 +1236,11 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
 				g.Expect(updated.Status.Upgrade).To(BeNil())
 				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.ClusterPhaseRunning))
+				degraded := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+				if degraded != nil {
+					g.Expect(degraded.Message).NotTo(ContainSubstring("without openbao.org/backup-key"),
+						"scheduled backup manager must ignore successful pre-upgrade snapshot Jobs")
+				}
 			}, 30*time.Minute, 10*time.Second).Should(Succeed())
 		})
 	})

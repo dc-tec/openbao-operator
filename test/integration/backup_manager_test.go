@@ -464,10 +464,11 @@ func createCompletedBackupJobForCluster(
 				),
 			},
 			Labels: map[string]string{
-				constants.LabelAppInstance:      clusterName,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   clusterName,
-				constants.LabelOpenBaoComponent: backup.ComponentBackup,
+				constants.LabelAppInstance:       clusterName,
+				constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:    clusterName,
+				constants.LabelOpenBaoComponent:  backup.ComponentBackup,
+				constants.LabelOpenBaoBackupType: constants.BackupTypeScheduled,
 			},
 			Annotations: map[string]string{
 				constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
