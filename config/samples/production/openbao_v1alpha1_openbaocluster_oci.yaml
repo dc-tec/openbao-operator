@@ -55,6 +55,39 @@ spec:
   # Self-initialization (required for Hardened profile)
   selfInit:
     enabled: true
+    requests:
+      # Replace the example issuer and audience with values tested against your identity provider.
+      - name: enable-human-jwt-auth
+        operation: update
+        path: sys/auth/jwt
+        authMethod:
+          type: jwt
+      - name: configure-human-jwt-auth
+        operation: update
+        path: auth/jwt/config
+        data:
+          jwks_url: "https://idp.example.com/.well-known/jwks.json"
+          bound_issuer: "https://idp.example.com/"
+      - name: create-platform-operator-policy
+        operation: update
+        path: sys/policies/acl/platform-operator
+        policy:
+          policy: |
+            path "*" {
+              capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+            }
+      - name: bind-platform-operator-role
+        operation: update
+        path: auth/jwt/role/platform-operator
+        data:
+          role_type: jwt
+          bound_audiences:
+            - openbao
+          bound_claims:
+            groups: platform-operators
+          user_claim: sub
+          token_policies:
+            - platform-operator
 ---
 # Example: Create OCI KMS credentials Secret (only if using authTypeAPIKey: true)
 # apiVersion: v1

@@ -167,7 +167,7 @@ func (m *Manager) ensureSecretsRole(ctx context.Context, namespace string, roleN
 	if role.GetName() != roleName || role.GetNamespace() != namespace {
 		return fmt.Errorf("failed to build Role %s/%s: factory returned %s/%s", namespace, roleName, role.GetNamespace(), role.GetName())
 	}
-	m.logger.Info("Applying tenant secrets Role", "namespace", namespace, "role", roleName)
+	m.logger.V(1).Info("Applying tenant secrets Role", "namespace", namespace, "role", roleName)
 	if err := m.applyResource(ctx, role); err != nil {
 		return fmt.Errorf("failed to apply secrets Role %s/%s: %w", namespace, roleName, err)
 	}
@@ -207,7 +207,7 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 	if roleBinding.RoleRef.Name != roleName {
 		return fmt.Errorf("failed to build RoleBinding %s/%s: roleRef.name=%q want %q", namespace, roleBindingName, roleBinding.RoleRef.Name, roleName)
 	}
-	m.logger.Info("Applying tenant secrets RoleBinding", "namespace", namespace, "rolebinding", roleBindingName)
+	m.logger.V(1).Info("Applying tenant secrets RoleBinding", "namespace", namespace, "rolebinding", roleBindingName)
 	if err := m.applyResource(ctx, roleBinding); err != nil {
 		return fmt.Errorf("failed to apply secrets RoleBinding %s/%s: %w", namespace, roleBindingName, err)
 	}

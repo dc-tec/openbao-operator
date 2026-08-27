@@ -101,7 +101,7 @@ func (r *infraReconciler) verifyImageDigestWithPolicy(
 
 	digest, err := verify(verifyCtx)
 	if err == nil {
-		logger.Info(opts.successMessage, "digest", digest)
+		logger.V(1).Info(opts.successMessage, "digest", digest)
 		return digest, nil
 	}
 

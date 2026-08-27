@@ -49,7 +49,7 @@ func VerifyOperatorImageDigest(
 
 	digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, verifier, cluster, imageRef)
 	if err == nil {
-		logger.Info("Operator image verified successfully", "digest", digest)
+		logger.V(1).Info("Operator image verified successfully", "digest", digest)
 		return digest, nil
 	}
 

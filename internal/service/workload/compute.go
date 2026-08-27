@@ -139,7 +139,7 @@ func (m *Manager) EnsureStatefulSet(ctx context.Context, logger logr.Logger, clu
 	if !initialized {
 		logger.Info("Cluster not yet initialized; applying staged replica count", "statefulset", name, "desiredReplicas", desiredReplicas, "pool", spec.Pool)
 	} else {
-		logger.Info("Cluster initialized; ensuring StatefulSet has desired replicas", "statefulset", name, "desiredReplicas", desiredReplicas, "pool", spec.Pool)
+		logger.V(1).Info("Cluster initialized; ensuring StatefulSet has desired replicas", "statefulset", name, "desiredReplicas", desiredReplicas, "pool", spec.Pool)
 	}
 
 	desired, buildErr := buildStatefulSetForSpec(cluster, configContent, initialized, spec, m.platform)

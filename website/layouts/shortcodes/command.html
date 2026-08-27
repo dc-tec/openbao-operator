@@ -1,3 +1,22 @@
+{{- $content := .Inner -}}
+{{- $indent := "" -}}
+{{- $foundContent := false -}}
+{{- range split $content "\n" -}}
+  {{- if and (not $foundContent) (ne (strings.TrimSpace .) "") -}}
+    {{- $foundContent = true -}}
+    {{- $matches := findRE `^[ \t]*` . 1 -}}
+    {{- if gt (len $matches) 0 -}}
+      {{- $indent = index $matches 0 -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if ne $indent "" -}}
+  {{- $content = replaceRE (printf `(?m)^%s` $indent) "" $content -}}
+{{- end -}}
+{{- $content = strings.TrimSpace $content -}}
+{{- if or (hasPrefix $content "apiVersion:") (hasPrefix $content "spec:") (hasPrefix $content "image:") (hasPrefix $content "metrics:") (hasPrefix $content "- name:") -}}
+  {{- $validatedManifest := transform.Unmarshal $content -}}
+{{- end -}}
 <div class="command-block">
   <div class="command-head">
     <div>
@@ -6,5 +25,5 @@
     </div>
     <button type="button" data-copy-button>Copy</button>
   </div>
-  <pre><code>{{ .Inner | strings.TrimSpace | htmlEscape | safeHTML }}</code></pre>
+  <pre><code>{{ $content | htmlEscape | safeHTML }}</code></pre>
 </div>

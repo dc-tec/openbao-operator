@@ -36,17 +36,19 @@ func NewKubernetesReloadSignaler(clientset kubernetes.Interface) *KubernetesRelo
 	}
 }
 
-// SignalReload annotates all ready OpenBao pods in the cluster with the current
-// TLS certificate hash. Implementations running inside the pod (for example,
-// a sidecar container) may watch this annotation or the underlying volume and
-// send SIGHUP to the OpenBao process when a new hash is observed.
+// SignalReload annotates all ready OpenBao workload pods in the cluster with
+// the current TLS certificate hash. Implementations running inside the pod
+// (for example, a sidecar container) may watch this annotation or the
+// underlying volume and send SIGHUP to the OpenBao process when a new hash is
+// observed.
 func (k *KubernetesReloadSignaler) SignalReload(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, certHash string) error {
 	// List all pods for this cluster using the same labels as the StatefulSet
 	podList, err := k.clientset.CoreV1().Pods(cluster.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: labels.Set(map[string]string{
-			constants.LabelAppInstance:  cluster.Name,
-			constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
-			constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			constants.LabelAppInstance:      cluster.Name,
+			constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+			constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+			constants.LabelOpenBaoComponent: constants.ComponentOpenBaoCluster,
 		}).String(),
 	})
 	if err != nil {
@@ -58,7 +60,7 @@ func (k *KubernetesReloadSignaler) SignalReload(ctx context.Context, logger logr
 	}
 
 	if len(podList.Items) == 0 {
-		logger.Info("No pods found for OpenBaoCluster; skipping TLS reload signal")
+		logger.V(1).Info("No pods found for OpenBaoCluster; skipping TLS reload signal")
 		return nil
 	}
 
@@ -70,7 +72,7 @@ func (k *KubernetesReloadSignaler) SignalReload(ctx context.Context, logger logr
 
 		// Check if pod is ready
 		if !isPodReady(pod) {
-			logger.Info("Skipping TLS reload for pod that is not ready", "pod", pod.Name)
+			logger.V(1).Info("Skipping TLS reload for pod that is not ready", "pod", pod.Name)
 			continue
 		}
 
@@ -98,7 +100,7 @@ func (k *KubernetesReloadSignaler) SignalReload(ctx context.Context, logger logr
 	}
 
 	if updatedCount == 0 && lastErr == nil {
-		logger.Info("No pods required TLS reload annotation update", "totalPods", len(podList.Items))
+		logger.V(1).Info("No pods required TLS reload annotation update", "totalPods", len(podList.Items))
 		return nil
 	}
 

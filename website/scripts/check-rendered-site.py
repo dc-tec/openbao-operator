@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from collections import Counter
 from html.parser import HTMLParser
@@ -21,16 +22,75 @@ class Document(HTMLParser):
         self.ids: list[str] = []
         self.hrefs: list[str] = []
         self.text: list[str] = []
+        self.command_blocks: list[str] = []
+        self._command_div_depth = 0
+        self._command_code: list[str] | None = None
 
-    def handle_starttag(self, _tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
         if values.get("id"):
             self.ids.append(values["id"] or "")
         if values.get("href"):
             self.hrefs.append(values["href"] or "")
 
+        classes = (values.get("class") or "").split()
+        if tag == "div":
+            if self._command_div_depth > 0:
+                self._command_div_depth += 1
+            elif "command-block" in classes:
+                self._command_div_depth = 1
+        elif tag == "code" and self._command_div_depth > 0:
+            self._command_code = []
+
     def handle_data(self, data: str) -> None:
         self.text.append(data)
+        if self._command_code is not None:
+            self._command_code.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "code" and self._command_code is not None:
+            self.command_blocks.append("".join(self._command_code))
+            self._command_code = None
+        elif tag == "div" and self._command_div_depth > 0:
+            self._command_div_depth -= 1
+
+
+def yaml_line_opens_block(stripped: str) -> bool:
+    if stripped.startswith("- "):
+        return True
+    without_comment = stripped.split(" #", 1)[0].rstrip()
+    return re.search(r":\s*(?:[|>][-+0-9]*)?$", without_comment) is not None
+
+
+def validate_kubernetes_yaml(code: str) -> str | None:
+    """Return a rendering or indentation error for a Kubernetes YAML block."""
+    documents: list[list[str]] = [[]]
+    for line in code.splitlines():
+        if line.strip() == "---":
+            documents.append([])
+        else:
+            documents[-1].append(line.rstrip())
+
+    for document in documents:
+        significant = [line for line in document if line.strip() and not line.lstrip().startswith("#")]
+        if not significant or not significant[0].startswith("apiVersion:"):
+            continue
+
+        top_level = {line.split(":", 1)[0] for line in significant if line == line.lstrip() and ":" in line}
+        missing = {"apiVersion", "kind", "metadata"} - top_level
+        if missing:
+            return f"top-level fields are indented or missing: {', '.join(sorted(missing))}"
+
+        previous_indent = 0
+        previous_stripped = significant[0].strip()
+        for line_number, line in enumerate(significant[1:], start=2):
+            indent = len(line) - len(line.lstrip(" "))
+            if indent > previous_indent and not yaml_line_opens_block(previous_stripped):
+                return f"line {line_number} is nested below a scalar value: {line.strip()!r}"
+            previous_indent = indent
+            previous_stripped = line.strip()
+
+    return None
 
 
 def route_for(root: Path, html_file: Path) -> str:
@@ -111,6 +171,11 @@ def main() -> int:
             if marker in text:
                 errors.append(f"encoding marker {marker!r}: {route}")
 
+        for index, code in enumerate(document.command_blocks, start=1):
+            yaml_error = validate_kubernetes_yaml(code)
+            if yaml_error:
+                errors.append(f"invalid rendered Kubernetes YAML: {route}: block {index}: {yaml_error}")
+
         for href in document.hrefs:
             try:
                 target = normalize_internal_path(route, href)
@@ -136,7 +201,7 @@ def main() -> int:
     print(
         f"Rendered HTML: {len(html_files)}; "
         f"duplicate IDs: {sum(error.startswith('duplicate id:') for error in errors)}; "
-        f"target, fragment, and encoding errors: "
+        f"content, target, fragment, and encoding errors: "
         f"{sum(not error.startswith('duplicate id:') for error in errors)}"
     )
     if errors:
