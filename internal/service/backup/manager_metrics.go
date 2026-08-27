@@ -72,10 +72,11 @@ func (m *Manager) syncBackupStatusMetrics(cluster *openbaov1alpha1.OpenBaoCluste
 func (m *Manager) collectBackupJobMetricsSnapshot(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, metrics *Metrics) (backupJobMetricsSnapshot, error) {
 	jobList := &batchv1.JobList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
-		constants.LabelAppInstance:      cluster.Name,
-		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster:   cluster.Name,
-		constants.LabelOpenBaoComponent: ComponentBackup,
+		constants.LabelAppInstance:       cluster.Name,
+		constants.LabelAppManagedBy:      constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:    cluster.Name,
+		constants.LabelOpenBaoComponent:  ComponentBackup,
+		constants.LabelOpenBaoBackupType: constants.BackupTypeScheduled,
 	})
 
 	if err := m.reader.List(ctx, jobList,
