@@ -44,9 +44,37 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 	return nil
 }
 
+// podRevisionAlreadyUpdated checks whether a target pod is already at the
+// StatefulSet update revision without changing the pod. The rolling manager
+// calls this before leader transfer and the partition update.
+func (m *Manager) podRevisionAlreadyUpdated(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	podName string,
+) (bool, error) {
+	return m.checkPodRevisionUpdated(ctx, logger, cluster, podName, false)
+}
+
 // waitForPodRevisionUpdated checks whether a pod has rolled to the StatefulSet
-// update revision.
-func (m *Manager) waitForPodRevisionUpdated(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
+// update revision. It repairs a stale pod only after the caller has completed
+// leader transfer and advanced the partition for that pod.
+func (m *Manager) waitForPodRevisionUpdated(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	podName string,
+) (bool, error) {
+	return m.checkPodRevisionUpdated(ctx, logger, cluster, podName, true)
+}
+
+func (m *Manager) checkPodRevisionUpdated(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	podName string,
+	repairStalePod bool,
+) (bool, error) {
 	if err := failUpgradeIfStartedTimeout(cluster, podRevisionTimeout(podName)); err != nil {
 		return false, err
 	}
@@ -85,7 +113,7 @@ func (m *Manager) waitForPodRevisionUpdated(ctx context.Context, logger logr.Log
 		// If the pod no longer matches the StatefulSet template, waiting alone can stall
 		// forever after a failed retry because the StatefulSet controller does not replace
 		// an already-existing stale pod on its own. Force a fresh recreate instead.
-		if desiredImage != "" && podImage != desiredImage {
+		if repairStalePod && desiredImage != "" && podImage != desiredImage {
 			if err := m.client.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
 				return false, fmt.Errorf("failed to delete stale pod %s while waiting for revision update: %w", podName, err)
 			}

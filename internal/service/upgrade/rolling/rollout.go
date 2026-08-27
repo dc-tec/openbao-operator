@@ -74,7 +74,7 @@ func (m *Manager) targetPodAlreadyRolledOut(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	target rolloutTargetPod,
 ) (bool, error) {
-	revisionUpdated, err := m.waitForPodRevisionUpdated(ctx, logger, cluster, target.Name)
+	revisionUpdated, err := m.podRevisionAlreadyUpdated(ctx, logger, cluster, target.Name)
 	if err != nil || !revisionUpdated {
 		return false, err
 	}
