@@ -958,6 +958,49 @@ func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
 	}
 }
 
+func TestEnsureTenantSecretRBAC_IncludesReservedRetentionNames(t *testing.T) {
+	namespace := testNamespace
+	clusterName := "self-init-external"
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true},
+			Unseal:   &openbaov1alpha1.UnsealConfig{Type: "awskms"},
+		},
+	}
+
+	k8sClient := newTestClient(t, cluster)
+	manager, err := NewManager(k8sClient, logr.Discard())
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	if err := manager.EnsureTenantSecretRBAC(context.Background(), namespace); err != nil {
+		t.Fatalf("EnsureTenantSecretRBAC() error = %v", err)
+	}
+
+	writerRole := &rbacv1.Role{}
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{
+		Namespace: namespace,
+		Name:      TenantSecretsWriterRoleName,
+	}, writerRole); err != nil {
+		t.Fatalf("expected writer Role to exist: %v", err)
+	}
+
+	resourceNames := extractSecretResourceNames(writerRole.Rules)
+	for _, name := range []string{
+		clusterName + constants.SuffixRootToken,
+		clusterName + constants.SuffixUnsealKey,
+	} {
+		if !slices.Contains(resourceNames, name) {
+			t.Errorf("writer Role allowlist = %v, want reserved retention Secret %q", resourceNames, name)
+		}
+	}
+}
+
 func TestAccumulateRestoreTenantSecretNames_SkipsTokenSecretWhenJWTAuthConfigured(t *testing.T) {
 	restore := &openbaov1alpha1.OpenBaoRestore{
 		Spec: openbaov1alpha1.OpenBaoRestoreSpec{

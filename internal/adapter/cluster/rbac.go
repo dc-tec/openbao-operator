@@ -53,22 +53,20 @@ func GetRequiredSecretPermissions(c *openbaov1alpha1.OpenBaoCluster) []SecretPer
 		)
 	}
 
-	// Root token: writer if SelfInit is not enabled
-	selfInitEnabled := c.Spec.SelfInit != nil && c.Spec.SelfInit.Enabled
-	if !selfInitEnabled {
-		perms = append(perms, SecretPermission{
+	// Retention secrets use reserved names. Always grant name-scoped writer
+	// access so retained deletion can distinguish an absent Secret from an
+	// authorization failure and can preserve a Secret created by an earlier
+	// cluster configuration.
+	perms = append(perms,
+		SecretPermission{
 			Name:       c.Name + suffixRootToken,
 			Permission: PermissionWrite,
-		})
-	}
-
-	// Unseal key: writer if static unseal
-	if IsStaticUnseal(c) {
-		perms = append(perms, SecretPermission{
+		},
+		SecretPermission{
 			Name:       c.Name + suffixUnsealKey,
 			Permission: PermissionWrite,
-		})
-	}
+		},
+	)
 
 	// Referenced secrets from spec (read-only)
 	if c.Spec.Unseal != nil && c.Spec.Unseal.CredentialsSecretRef != nil {
@@ -112,15 +110,4 @@ func GetRequiredSecretPermissions(c *openbaov1alpha1.OpenBaoCluster) []SecretPer
 	}
 
 	return perms
-}
-
-// IsStaticUnseal returns true if the cluster uses static (Shamir) unsealing.
-func IsStaticUnseal(c *openbaov1alpha1.OpenBaoCluster) bool {
-	if c == nil || c.Spec.Unseal == nil {
-		return true
-	}
-	if c.Spec.Unseal.Type == "" {
-		return true
-	}
-	return c.Spec.Unseal.Type == "static"
 }
