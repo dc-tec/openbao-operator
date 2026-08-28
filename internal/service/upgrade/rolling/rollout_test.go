@@ -371,6 +371,69 @@ func TestStepDownLeader_SkipsJobWhenTargetPodIsNotLeader(t *testing.T) {
 	}
 }
 
+func TestStepDownLeader_PassesStableRevisionToExecutorJob(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	const (
+		name           = "c1"
+		stableRevision = "active-revision"
+	)
+	podName := name + "-" + stableRevision + "-0"
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: testNamespace, UID: "cluster-uid"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Image:       "openbao-upgrade:test",
+				JWTAuthRole: "upgrade-role",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{BlueRevision: stableRevision},
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion: "2.6.2",
+				FromVersion:   "2.5.5",
+			},
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).Build()
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+		return &openbaoapi.MockClusterActions{IsLeaderFunc: func(context.Context) (bool, error) {
+			return true, nil
+		}}, nil
+	}, nil)
+
+	complete, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(testNamespace, name))
+	if err != nil {
+		t.Fatalf("stepDownLeader() error = %v", err)
+	}
+	if complete {
+		t.Fatal("stepDownLeader() complete = true, want running executor Job")
+	}
+
+	job := &batchv1.Job{}
+	jobName := rollingStepDownJobName(cluster, podName)
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: jobName}, job); err != nil {
+		t.Fatalf("get step-down Job: %v", err)
+	}
+	foundRevision := false
+	for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+		if env.Name == constants.EnvUpgradeBlueRevision {
+			foundRevision = true
+			if env.Value != stableRevision {
+				t.Fatalf("%s = %q, want %q", constants.EnvUpgradeBlueRevision, env.Value, stableRevision)
+			}
+		}
+	}
+	if !foundRevision {
+		t.Fatalf("step-down Job is missing %s", constants.EnvUpgradeBlueRevision)
+	}
+}
+
 func TestEnsureTargetPodLeadershipTransferred_SkipsSingleReplicaStepDown(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)

@@ -106,7 +106,7 @@ func (m *Manager) cleanupStepDownJobForRetry(ctx context.Context, logger logr.Lo
 
 	targetOrdinal := cluster.Status.Upgrade.CurrentPartition - 1
 	targetPod := upgrade.StableVoterPodName(cluster, targetOrdinal)
-	jobName := upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, targetPod, "", "")
+	jobName := rollingStepDownJobName(cluster, targetPod)
 	jobKey := types.NamespacedName{Namespace: cluster.Namespace, Name: jobName}
 
 	job, err := opslifecycle.ReadManagedJob(
