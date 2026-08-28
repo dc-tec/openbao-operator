@@ -4,8 +4,8 @@ description: >-
   OpenBao Operator installs the OpenBao Kubernetes operator and its required
   cluster-scoped resources.
 type: application
-version: 0.5.0-rc.5
-appVersion: 0.5.0-rc.5
+version: 0.5.0-rc.6
+appVersion: 0.5.0-rc.6
 icon: >-
   https://raw.githubusercontent.com/dc-tec/openbao-operator/main/website/static/img/brand/logo.svg
 home: https://github.com/dc-tec/openbao-operator
@@ -30,40 +30,16 @@ annotations:
   artifacthub.io/containsSecurityUpdates: 'false'
   artifacthub.io/changes: |
     - kind: fixed
-      description: "admission: allow namespace controller cleanup"
-    - kind: fixed
-      description: "backup: ignore pre-upgrade jobs in scheduled observation"
-    - kind: fixed
-      description: "backup: recover after ignoring pre-upgrade jobs"
-    - kind: fixed
-      description: "controller: reduce steady-state log noise"
-    - kind: fixed
-      description: "logging: reduce steady-state bootstrap noise"
-    - kind: fixed
-      description: "restore: persist execution receipts"
-    - kind: fixed
-      description: "restore: preserve target lifecycle JWT identities"
-    - kind: fixed
-      description: "restore: restart voters after snapshot restore"
-    - kind: fixed
-      description: "restore: verify snapshot seal by default"
-    - kind: fixed
-      description: "retention: authorize reserved secret names"
-    - kind: fixed
-      description: "retention: preserve unrelated secret owners"
-    - kind: fixed
-      description: "upgrade: make validation hooks attempt-safe"
-    - kind: fixed
-      description: "upgrade: preserve rolling leader ordering"
+      description: "upgrade: resolve leaders on revisioned rolling workloads"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.5.0-rc.5
+      image: ghcr.io/dc-tec/openbao-operator:0.5.0-rc.6
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.5.0-rc.5
+      image: ghcr.io/dc-tec/openbao-init:0.5.0-rc.6
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.5.0-rc.5
+      image: ghcr.io/dc-tec/openbao-backup:0.5.0-rc.6
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0-rc.5
+      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0-rc.6
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
