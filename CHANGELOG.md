@@ -2,6 +2,25 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.5.0-rc.5](https://github.com/dc-tec/openbao-operator/compare/0.5.0-rc.4...0.5.0-rc.5) (2026-08-28)
+
+
+### Bug Fixes
+
+* **admission:** allow namespace controller cleanup ([#663](https://github.com/dc-tec/openbao-operator/issues/663)) ([2d8d3db](https://github.com/dc-tec/openbao-operator/commit/2d8d3db16721caa4c8fdf656ef5fc10818563283))
+* **backup:** ignore pre-upgrade jobs in scheduled observation ([#661](https://github.com/dc-tec/openbao-operator/issues/661)) ([b7ed39f](https://github.com/dc-tec/openbao-operator/commit/b7ed39fa18f974340755288926fdc22fb38e4ee0))
+* **backup:** recover after ignoring pre-upgrade jobs ([#662](https://github.com/dc-tec/openbao-operator/issues/662)) ([30e0c9f](https://github.com/dc-tec/openbao-operator/commit/30e0c9f4d05e706da4413ef6888d382e6afd3b81))
+* **controller:** reduce steady-state log noise ([#656](https://github.com/dc-tec/openbao-operator/issues/656)) ([fd7462e](https://github.com/dc-tec/openbao-operator/commit/fd7462e107aeee823153f8097271a5b87eb7925c))
+* **logging:** reduce steady-state bootstrap noise ([#671](https://github.com/dc-tec/openbao-operator/issues/671)) ([d6656f4](https://github.com/dc-tec/openbao-operator/commit/d6656f4eb27f22a3fcd514a6f30f747f474528dc))
+* **restore:** persist execution receipts ([#666](https://github.com/dc-tec/openbao-operator/issues/666)) ([9a84346](https://github.com/dc-tec/openbao-operator/commit/9a843463c0f65b066edde228b6563d81ecaf1201))
+* **restore:** preserve target lifecycle JWT identities ([#664](https://github.com/dc-tec/openbao-operator/issues/664)) ([58411f1](https://github.com/dc-tec/openbao-operator/commit/58411f1f81cde9bd03946dfb5baa0de4e24de7f8))
+* **restore:** restart voters after snapshot restore ([#658](https://github.com/dc-tec/openbao-operator/issues/658)) ([a1b5bb1](https://github.com/dc-tec/openbao-operator/commit/a1b5bb1e3e9e7ad61dab1bccefb3f549d1cb7c18))
+* **restore:** verify snapshot seal by default ([#659](https://github.com/dc-tec/openbao-operator/issues/659)) ([2071a1c](https://github.com/dc-tec/openbao-operator/commit/2071a1c836fdd112e65e1992c43e9a5c42b022b2))
+* **retention:** authorize reserved secret names ([#670](https://github.com/dc-tec/openbao-operator/issues/670)) ([1fd26fc](https://github.com/dc-tec/openbao-operator/commit/1fd26fcec8f0cb4791e05dac814d0aa0adeece10))
+* **retention:** preserve unrelated secret owners ([#667](https://github.com/dc-tec/openbao-operator/issues/667)) ([de8e32f](https://github.com/dc-tec/openbao-operator/commit/de8e32f1ee102b31ebddda61a329b3932552a7cd))
+* **upgrade:** make validation hooks attempt-safe ([#668](https://github.com/dc-tec/openbao-operator/issues/668)) ([7184aa4](https://github.com/dc-tec/openbao-operator/commit/7184aa4179d15e1c5dae1d0e0a686069d0be6963))
+* **upgrade:** preserve rolling leader ordering ([#665](https://github.com/dc-tec/openbao-operator/issues/665)) ([cf9c2cc](https://github.com/dc-tec/openbao-operator/commit/cf9c2ccdbebc034cc3d03f48920a3172199f97a0))
+
 ## [0.5.0-rc.4](https://github.com/dc-tec/openbao-operator/compare/0.5.0-rc.3...0.5.0-rc.4) (2026-08-25)
 
 
