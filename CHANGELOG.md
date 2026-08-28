@@ -2,6 +2,13 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.5.0-rc.6](https://github.com/dc-tec/openbao-operator/compare/0.5.0-rc.5...0.5.0-rc.6) (2026-08-28)
+
+
+### Bug Fixes
+
+* **upgrade:** resolve leaders on revisioned rolling workloads ([#674](https://github.com/dc-tec/openbao-operator/issues/674)) ([3c8e58d](https://github.com/dc-tec/openbao-operator/commit/3c8e58d4849748525b73eab97dbe80f7c791f179))
+
 ## [0.5.0-rc.5](https://github.com/dc-tec/openbao-operator/compare/0.5.0-rc.4...0.5.0-rc.5) (2026-08-28)
 
 
