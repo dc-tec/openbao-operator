@@ -53,7 +53,8 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		return false, fmt.Errorf("upgrade state is nil")
 	}
 
-	jobName := upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, podName, "", "")
+	stableRevision := upgrade.StableVoterRevision(cluster)
+	jobName := rollingStepDownJobName(cluster, podName)
 	jobKey := types.NamespacedName{Namespace: cluster.Namespace, Name: jobName}
 
 	var stepDownJob *batchv1.Job
@@ -106,7 +107,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		cluster,
 		upgrade.ExecutorActionRollingStepDownLeader,
 		podName,
-		"",
+		stableRevision,
 		"",
 		m.clientConfig,
 		m.operatorImageVerifier,
@@ -205,6 +206,19 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 
 	logger.V(1).Info("Waiting for leadership transfer", "pod", podName)
 	return false, nil // Requeue
+}
+
+func rollingStepDownJobName(cluster *openbaov1alpha1.OpenBaoCluster, podName string) string {
+	if cluster == nil {
+		return ""
+	}
+	return upgrade.ExecutorJobName(
+		cluster.Name,
+		upgrade.ExecutorActionRollingStepDownLeader,
+		podName,
+		upgrade.StableVoterRevision(cluster),
+		"",
+	)
 }
 
 func (m *Manager) isTargetPodLeader(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {

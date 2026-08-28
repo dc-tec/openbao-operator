@@ -35,15 +35,18 @@ func TestRunRollingStepDownLeaderWithFuncs_RetriesUntilLeaderChanges(t *testing.
 	cfg := &ExecutorConfig{
 		ClusterName:     "vault",
 		ClusterReplicas: 3,
+		BlueRevision:    "active-revision",
 	}
 	client := &rollingStepDownStubClient{}
+	var searchedRevisions []string
 
 	err := runRollingStepDownLeaderWithFuncs(
 		context.Background(),
 		logr.Discard(),
 		cfg,
 		RetryPolicy{MaxAttempts: 3},
-		func(context.Context, *ExecutorConfig, string) (string, error) {
+		func(_ context.Context, _ *ExecutorConfig, revision string) (string, error) {
+			searchedRevisions = append(searchedRevisions, revision)
 			return testRollingLeaderURL0, nil
 		},
 		func(context.Context, string) (LeaderTransferClient, error) {
@@ -61,6 +64,14 @@ func TestRunRollingStepDownLeaderWithFuncs_RetriesUntilLeaderChanges(t *testing.
 	}
 	if client.stepDownCalls != 2 {
 		t.Fatalf("stepDownCalls = %d, want 2", client.stepDownCalls)
+	}
+	if len(searchedRevisions) != 2 {
+		t.Fatalf("searched revisions = %v, want two searches", searchedRevisions)
+	}
+	for _, revision := range searchedRevisions {
+		if revision != cfg.BlueRevision {
+			t.Fatalf("searched revision = %q, want active revision %q", revision, cfg.BlueRevision)
+		}
 	}
 }
 

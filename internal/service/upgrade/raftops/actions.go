@@ -44,7 +44,7 @@ func runRollingStepDownLeaderWithFuncs(
 	for _, attempt := range AttemptOrdinals(policy.MaxAttempts) {
 		attemptNumber := attempt + 1
 
-		leaderURL, err := findLeader(ctx, cfg, "")
+		leaderURL, err := findLeader(ctx, cfg, cfg.BlueRevision)
 		if err != nil {
 			return fmt.Errorf("failed to find leader: %w", err)
 		}
