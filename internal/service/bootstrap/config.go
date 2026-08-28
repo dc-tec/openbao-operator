@@ -79,7 +79,7 @@ func (m *Manager) ensureUnsealSecret(ctx context.Context, logger logr.Logger, cl
 			if proofErr := m.requireExistingSecretOwnerProof(ctx, cluster, secretName, "use existing unseal Secret"); proofErr != nil {
 				return proofErr
 			}
-			logger.Info("Unseal Secret already exists; skipping creation", "secret", secretName)
+			logger.V(1).Info("Unseal Secret already exists; skipping creation", "secret", secretName)
 			return nil
 		}
 		return fmt.Errorf("failed to create unseal Secret %s/%s: %w", cluster.Namespace, secretName, err)

@@ -11,6 +11,8 @@ verifiedBy:
   - config/policy/openbao-validate-openbaocluster.yaml
   - internal/adapter/config/builder.go
   - internal/adapter/config/render_listener.go
+  - internal/controller/openbaocluster/split_reconcilers.go
+  - internal/platform/constants/timing.go
   - internal/platform/observability/metrics.go
   - internal/service/networking/metrics.go
   - internal/service/networking/services.go
@@ -60,6 +62,31 @@ VictoriaMetrics users can set `metrics.victoriaMetrics.enabled: true` instead. A
 scrape a reachable operator metrics Service on HTTPS port 8443 with a bearer token authorized for `GET /metrics`.
 
 The selector defaults to `metrics: enabled`.
+
+## Estimate multi-tenant API request load
+
+Multi-tenant mode avoids cluster-wide watches for namespaced child resources. The workload reconciler instead uses a
+periodic refresh to detect drift. Kubernetes API request volume therefore increases approximately linearly with the
+number of `OpenBaoCluster` resources. See [tenancy watch boundaries](../../architecture/invariants-and-boundaries/#account-for-tenancy-watch-boundaries)
+for the underlying controller design.
+
+The 0.5.0 pre-release qualification run on Kubernetes 1.36.1 measured the following steady-state controller traffic:
+
+| Test shape | Controller requests |
+| --- | ---: |
+| 25 clusters | 2,328 per minute, or 38.8 per second |
+| Increment for 19 one-replica `Development` clusters | 1,691 per minute |
+| Observed incremental slope | 89 per cluster per minute |
+
+Each added cluster contributed 63 successful `GET` requests, 14 expected `GET` requests that returned `404`, 11
+no-op `PATCH` requests, and one expected `POST` request that returned `409` per minute. A representative
+`resourceVersion` sample did not change during the measurement, so the no-op patches did not persist object updates
+in that sample.
+
+Use this result as an initial capacity estimate, not as a supported-cluster limit or a capacity guarantee. Cluster
+profiles, enabled features, object state, API server latency, and reconciliation activity change the request rate.
+Measure `rest_client_requests_total` and API server throttling, latency, and errors under a representative workload
+before you consolidate many clusters under one operator installation.
 
 ## Scrape the active OpenBao node
 
