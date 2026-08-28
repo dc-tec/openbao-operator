@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"slices"
 	"sort"
 	"testing"
 
@@ -110,7 +111,7 @@ func TestGetRequiredSecretPermissions(t *testing.T) {
 			},
 		},
 		{
-			name: "SelfInit enabled - no root token written",
+			name: "SelfInit enabled - root token name remains writable for retention",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: objectMeta("selfinit"),
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -124,13 +125,14 @@ func TestGetRequiredSecretPermissions(t *testing.T) {
 				},
 			},
 			wantWriters: []string{
+				"selfinit-root-token",
 				"selfinit-tls-ca",
 				"selfinit-tls-server",
 				"selfinit-unseal-key",
 			},
 		},
 		{
-			name: "Cloud unseal (awskms) - no unseal key written",
+			name: "Cloud unseal (awskms) - unseal key name remains writable for retention",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: objectMeta("cloud"),
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -150,6 +152,7 @@ func TestGetRequiredSecretPermissions(t *testing.T) {
 				"cloud-root-token",
 				"cloud-tls-ca",
 				"cloud-tls-server",
+				"cloud-unseal-key",
 			},
 			wantReaders: []string{
 				"aws-creds",
@@ -337,80 +340,33 @@ func TestGetRequiredSecretPermissions(t *testing.T) {
 	}
 }
 
-func TestIsStaticUnseal(t *testing.T) {
+func TestGetRequiredSecretPermissions_RetentionNamesAreAlwaysWritable(t *testing.T) {
 	tests := []struct {
-		name    string
-		cluster *openbaov1alpha1.OpenBaoCluster
-		want    bool
+		name     string
+		selfInit bool
+		unseal   string
 	}{
-		{
-			name:    "nil cluster is static",
-			cluster: nil,
-			want:    true,
-		},
-		{
-			name: "nil Unseal is static",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: objectMeta("test"),
-				Spec:       openbaov1alpha1.OpenBaoClusterSpec{},
-			},
-			want: true,
-		},
-		{
-			name: "empty type is static",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: objectMeta("test"),
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Unseal: &openbaov1alpha1.UnsealConfig{
-						Type: "",
-					},
-				},
-			},
-			want: true,
-		},
-		{
-			name: "explicit static type",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: objectMeta("test"),
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Unseal: &openbaov1alpha1.UnsealConfig{
-						Type: "static",
-					},
-				},
-			},
-			want: true,
-		},
-		{
-			name: "awskms is not static",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: objectMeta("test"),
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Unseal: &openbaov1alpha1.UnsealConfig{
-						Type: "awskms",
-					},
-				},
-			},
-			want: false,
-		},
-		{
-			name: "gcpkms is not static",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: objectMeta("test"),
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Unseal: &openbaov1alpha1.UnsealConfig{
-						Type: "gcpkms",
-					},
-				},
-			},
-			want: false,
-		},
+		{name: "manual init with static unseal", unseal: "static"},
+		{name: "self init with static unseal", selfInit: true, unseal: "static"},
+		{name: "manual init with external unseal", unseal: "awskms"},
+		{name: "self init with external unseal", selfInit: true, unseal: "awskms"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IsStaticUnseal(tt.cluster)
-			if got != tt.want {
-				t.Errorf("IsStaticUnseal() = %v, want %v", got, tt.want)
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: objectMeta("retained"),
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: tt.selfInit},
+					Unseal:   &openbaov1alpha1.UnsealConfig{Type: tt.unseal},
+				},
+			}
+
+			writers := filterByPermission(GetRequiredSecretPermissions(cluster), PermissionWrite)
+			for _, name := range []string{"retained-root-token", "retained-unseal-key"} {
+				if !slices.Contains(writers, name) {
+					t.Errorf("writers = %v, want reserved retention Secret %q", writers, name)
+				}
 			}
 		})
 	}
