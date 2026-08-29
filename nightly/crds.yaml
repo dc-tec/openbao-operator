@@ -3735,6 +3735,71 @@ spec:
                       This is for Operator authentication only - users must configure their own
                       authentication methods via spec.selfInit.requests.
                     properties:
+                      additionalSubjects:
+                        description: |-
+                          AdditionalSubjects adds exact Kubernetes ServiceAccount subjects to the
+                          generated Operator JWT roles. Use these bindings when a snapshot must
+                          remain operable after restore to a target with different ServiceAccount
+                          subjects. Configure the source cluster before self-initialization so the
+                          bindings are present in each snapshot.
+
+                          These bindings do not configure JWT issuer or signature verification for
+                          another Kubernetes control plane. The jwt-operator auth method must also
+                          trust the target's projected ServiceAccount tokens.
+                        properties:
+                          backup:
+                            description: Backup lists additional backup Job ServiceAccount
+                              subjects.
+                            items:
+                              description: |-
+                                KubernetesServiceAccountSubject is the exact subject claim in a projected
+                                Kubernetes ServiceAccount token.
+                              maxLength: 340
+                              pattern: ^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                              type: string
+                            maxItems: 32
+                            type: array
+                            x-kubernetes-list-type: set
+                          operator:
+                            description: Operator lists additional controller ServiceAccount
+                              subjects.
+                            items:
+                              description: |-
+                                KubernetesServiceAccountSubject is the exact subject claim in a projected
+                                Kubernetes ServiceAccount token.
+                              maxLength: 340
+                              pattern: ^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                              type: string
+                            maxItems: 32
+                            type: array
+                            x-kubernetes-list-type: set
+                          restore:
+                            description: Restore lists additional restore Job ServiceAccount
+                              subjects.
+                            items:
+                              description: |-
+                                KubernetesServiceAccountSubject is the exact subject claim in a projected
+                                Kubernetes ServiceAccount token.
+                              maxLength: 340
+                              pattern: ^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                              type: string
+                            maxItems: 32
+                            type: array
+                            x-kubernetes-list-type: set
+                          upgrade:
+                            description: Upgrade lists additional upgrade Job ServiceAccount
+                              subjects.
+                            items:
+                              description: |-
+                                KubernetesServiceAccountSubject is the exact subject claim in a projected
+                                Kubernetes ServiceAccount token.
+                              maxLength: 340
+                              pattern: ^system:serviceaccount:[a-z0-9]([-a-z0-9]*[a-z0-9])?:[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                              type: string
+                            maxItems: 32
+                            type: array
+                            x-kubernetes-list-type: set
+                        type: object
                       audience:
                         description: |-
                           Audience, if set, must match the operator installation audience used for
@@ -3752,6 +3817,9 @@ spec:
                     required:
                     - enabled
                     type: object
+                    x-kubernetes-validations:
+                    - message: spec.selfInit.oidc.additionalSubjects requires spec.selfInit.oidc.enabled=true
+                      rule: '!has(self.additionalSubjects) || self.enabled'
                   requests:
                     description: |-
                       Requests defines the API operations to execute during self-initialization.
@@ -4896,6 +4964,8 @@ spec:
                               If the job fails, the operator either aborts or rolls back automatically
                               when blueGreen.autoRollback.onValidationFailure is enabled; otherwise it
                               holds for manual resolution.
+                              The operator assigns the hook a stable identity for each upgrade attempt.
+                              It does not recreate a missing Job after Job creation is committed.
                             properties:
                               args:
                                 description: Args are arguments passed to the command.
@@ -5205,6 +5275,10 @@ spec:
                       promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote
                       when the upgrade starts.
                     type: boolean
+                  operationID:
+                    description: OperationID identifies the current blue/green upgrade
+                      attempt.
+                    type: string
                   phase:
                     description: Phase is the current phase of the blue/green upgrade.
                     enum:
@@ -5241,6 +5315,74 @@ spec:
                     description: StartTime is when the current phase began.
                     format: date-time
                     type: string
+                  validationHook:
+                    description: |-
+                      ValidationHook records the expected identity and durable execution receipts
+                      for the current pre-promotion validation hook.
+                    properties:
+                      committedAt:
+                        description: CommittedAt is when the controller committed
+                          to one Job creation attempt.
+                        format: date-time
+                        type: string
+                      createdAt:
+                        description: CreatedAt is when the controller persisted the
+                          created Job receipt.
+                        format: date-time
+                        type: string
+                      greenRevision:
+                        description: GreenRevision identifies the Green revision validated
+                          by this hook.
+                        type: string
+                      jobName:
+                        description: JobName is the expected validation hook Job name.
+                        type: string
+                      jobUID:
+                        description: JobUID is the UID returned for the created validation
+                          hook Job.
+                        type: string
+                      operationID:
+                        description: OperationID identifies the blue/green upgrade
+                          attempt that owns this hook.
+                        type: string
+                      preparedAt:
+                        description: PreparedAt is when the expected hook identity
+                          became durable.
+                        format: date-time
+                        type: string
+                      specHash:
+                        description: SpecHash identifies the normalized validation
+                          hook specification.
+                        type: string
+                      stage:
+                        description: Stage is the latest durable execution boundary
+                          observed by the controller.
+                        enum:
+                        - Prepared
+                        - Committed
+                        - Created
+                        - TerminalObserved
+                        - Unknown
+                        type: string
+                      terminalObservedAt:
+                        description: TerminalObservedAt is when the controller persisted
+                          the terminal Job result.
+                        format: date-time
+                        type: string
+                      terminalResult:
+                        description: TerminalResult is the persisted terminal Job
+                          result.
+                        enum:
+                        - Succeeded
+                        - Failed
+                        type: string
+                    required:
+                    - greenRevision
+                    - jobName
+                    - operationID
+                    - specHash
+                    - stage
+                    type: object
                 type: object
               breakGlass:
                 description: |-
@@ -5984,6 +6126,68 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              execution:
+                description: Execution records the stable operation identity and durable
+                  lifecycle receipts.
+                properties:
+                  committedAt:
+                    description: CommittedAt is when the controller committed to one
+                      Job creation attempt.
+                    format: date-time
+                    type: string
+                  createdAt:
+                    description: CreatedAt is when the controller persisted the created
+                      Job receipt.
+                    format: date-time
+                    type: string
+                  followThroughCompletedAt:
+                    description: FollowThroughCompletedAt is when post-restore recovery
+                      completed.
+                    format: date-time
+                    type: string
+                  jobName:
+                    description: JobName is the expected restore Job name for this
+                      execution.
+                    type: string
+                  jobUID:
+                    description: JobUID is the UID returned for the created restore
+                      Job.
+                    type: string
+                  operationID:
+                    description: OperationID identifies this immutable restore execution.
+                    type: string
+                  preparedAt:
+                    description: PreparedAt is when validation and execution preparation
+                      completed.
+                    format: date-time
+                    type: string
+                  stage:
+                    description: Stage is the latest durable execution boundary observed
+                      by the controller.
+                    enum:
+                    - Prepared
+                    - Committed
+                    - Created
+                    - TerminalObserved
+                    - FollowThroughComplete
+                    - Unknown
+                    type: string
+                  terminalObservedAt:
+                    description: TerminalObservedAt is when the controller persisted
+                      the terminal Job result.
+                    format: date-time
+                    type: string
+                  terminalResult:
+                    description: TerminalResult is the persisted terminal Job result.
+                    enum:
+                    - Succeeded
+                    - Failed
+                    type: string
+                required:
+                - jobName
+                - operationID
+                - stage
+                type: object
               message:
                 description: Message provides additional details about the current
                   phase.
@@ -5997,6 +6201,7 @@ spec:
                 - Running
                 - Completed
                 - Failed
+                - Unknown
                 type: string
               snapshotKey:
                 description: SnapshotKey is the key of the snapshot that was restored.
