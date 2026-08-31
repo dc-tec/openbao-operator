@@ -23,7 +23,9 @@ notes whose installation commands reference a version that has not been publishe
 the latest release-candidate tag. After release-please creates the stable release PR, replace only that new section
 with a concise rollup from the previous stable release to <code>X.Y.0</code>. Use the previous stable tag in the comparison link,
 and keep the incremental release-candidate sections below it. Do not add the stable section before release-please
-creates the PR because that can produce duplicate version headings.</p><p>For a patch, make the conventional commit or squash title describe the user-visible fix. Release-please uses that text
+creates the PR because that can produce duplicate version headings.</p><p>If the final release candidate contains all user-facing commits, the pinned exact-version wrapper permits release-please
+to create a stable PR with only the new version heading. Replace that heading-only section with the same reviewed
+previous-stable rollup before you authorize the release.</p><p>For a patch, make the conventional commit or squash title describe the user-visible fix. Release-please uses that text
 to generate the changelog.</p><div class=command-block><div class=command-head><div><span>verify</span><p>Check release automation locally</p></div><button type=button data-copy-button>Copy</button></div><pre><code>devenv test
 devenv tasks run operator:bootstrap
 devenv tasks run operator:doctor
