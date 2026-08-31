@@ -47,6 +47,10 @@ with a concise rollup from the previous stable release to `X.Y.0`. Use the previ
 and keep the incremental release-candidate sections below it. Do not add the stable section before release-please
 creates the PR because that can produce duplicate version headings.
 
+If the final release candidate contains all user-facing commits, the pinned exact-version wrapper permits release-please
+to create a stable PR with only the new version heading. Replace that heading-only section with the same reviewed
+previous-stable rollup before you authorize the release.
+
 For a patch, make the conventional commit or squash title describe the user-visible fix. Release-please uses that text
 to generate the changelog.
 
