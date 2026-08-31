@@ -4,8 +4,8 @@ description: >-
   OpenBao Operator installs the OpenBao Kubernetes operator and its required
   cluster-scoped resources.
 type: application
-version: 0.5.0-rc.6
-appVersion: 0.5.0-rc.6
+version: 0.5.0
+appVersion: 0.5.0
 icon: >-
   https://raw.githubusercontent.com/dc-tec/openbao-operator/main/website/static/img/brand/logo.svg
 home: https://github.com/dc-tec/openbao-operator
@@ -26,20 +26,52 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/operator: 'true'
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: "true"
-  artifacthub.io/containsSecurityUpdates: 'false'
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/containsSecurityUpdates: 'true'
   artifacthub.io/changes: |
+    - kind: added
+      description: "api: document selected field, omission, update, and condition contracts within v1alpha1"
+    - kind: added
+      description: "config: add plugin-backed KMS seals and OpenBao 2.6 self-init request controls"
+    - kind: added
+      description: "upgrade: allow idle changes between RollingUpdate and BlueGreen"
+    - kind: added
+      description: "workload: configure voter OpenBao container resources independently"
     - kind: fixed
-      description: "upgrade: resolve leaders on revisioned rolling workloads"
+      description: "restore: persist execution receipts, prevent replay of missing committed Jobs, and recover voter and read-replica state"
+    - kind: fixed
+      description: "upgrade: bind validation hooks to an upgrade attempt and preserve leader ordering across revisioned workloads"
+    - kind: fixed
+      description: "backup: separate scheduled backups from pre-upgrade snapshots"
+    - kind: fixed
+      description: "retention: preserve unrelated Secret owners when pruning retained backups"
+    - kind: fixed
+      description: "tenancy: remove tenant governance resources after the last claim and preserve resources shared by active claims"
+    - kind: fixed
+      description: "networking: derive Gateway readiness from Route conditions and require external TLS certificates to cover extraSANs"
+    - kind: fixed
+      description: "controller: reduce steady-state reconciliation and bootstrap log noise"
+    - kind: security
+      description: "admission: reject prohibited inline unseal credentials in Hardened clusters"
+    - kind: security
+      description: "lifecycle: require ownership proof for managed Jobs"
+    - kind: security
+      description: "upgrade: verify custom BlueGreen validation-hook images through the configured operator image policy"
+    - kind: security
+      description: "deps: remediate vulnerable Go and website dependencies"
+    - kind: changed
+      description: "compatibility: validate Kubernetes 1.34, 1.35, and 1.36, with Kubernetes 1.36.1 as the primary target"
+    - kind: changed
+      description: "compatibility: use OpenBao 2.6.2 as the primary target and check configuration compatibility with 2.4.4 and 2.5.5"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-operator:0.5.0
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-init:0.5.0
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-backup:0.5.0
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1

@@ -2,6 +2,48 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.5.0](https://github.com/dc-tec/openbao-operator/compare/0.4.2...0.5.0) (2026-08-31)
+
+OpenBao Operator 0.5.0 defines a selected compatibility boundary within the
+`openbao.org/v1alpha1` API. The API remains alpha. This release rolls up the
+`0.5.0-rc.1` through `0.5.0-rc.6` line.
+
+### Features
+
+* **api:** document selected field, omission, update, and condition contracts within `v1alpha1`
+* **config:** add plugin-backed KMS seals and OpenBao 2.6 self-init request controls
+* **upgrade:** allow idle changes between `RollingUpdate` and `BlueGreen`
+* **workload:** configure voter OpenBao container resources independently
+
+### Bug Fixes
+
+* **restore:** persist execution receipts, prevent replay of missing committed Jobs, and recover voter and read-replica state
+* **upgrade:** bind validation hooks to an upgrade attempt and preserve leader ordering across revisioned workloads
+* **backup:** separate scheduled backups from pre-upgrade snapshots
+* **retention:** preserve unrelated Secret owners when pruning retained backups
+* **tenancy:** remove tenant governance resources after the last claim and preserve resources shared by active claims
+* **networking:** derive Gateway readiness from Route conditions and require external TLS certificates to cover `extraSANs`
+* **controller:** reduce steady-state reconciliation and bootstrap log noise
+
+### Security
+
+* **admission:** reject prohibited inline unseal credentials in Hardened clusters
+* **lifecycle:** require ownership proof for managed Jobs
+* **upgrade:** verify custom BlueGreen validation-hook images through the configured operator image policy
+* **deps:** remediate vulnerable Go and website dependencies
+
+### Compatibility
+
+* Validate Kubernetes 1.34, 1.35, and 1.36, with Kubernetes 1.36.1 as the primary target.
+* Use OpenBao 2.6.2 as the primary target. Configuration compatibility checks also cover OpenBao 2.4.4 and 2.5.5.
+
+### Upgrade Notes
+
+* Upgrade 0.4.0 or 0.4.1 installations to 0.4.2 before installing 0.5.0.
+* Update restore authorization, remove prohibited Hardened inline credentials, and migrate stored manifests before applying the 0.5.0 CRDs.
+* Use `RollingUpdate` when upgrading OpenBao from a version before 2.6 to 2.6.x.
+* Read the [0.5.0 release notes](https://github.com/dc-tec/openbao-operator/blob/0.5.0/release-notes/0.5.0.md) before upgrading.
+
 ## [0.5.0-rc.6](https://github.com/dc-tec/openbao-operator/compare/0.5.0-rc.5...0.5.0-rc.6) (2026-08-28)
 
 
