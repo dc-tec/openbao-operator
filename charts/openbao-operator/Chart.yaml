@@ -26,20 +26,120 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/operator: 'true'
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: 'true'
-  artifacthub.io/containsSecurityUpdates: 'false'
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/containsSecurityUpdates: 'true'
   artifacthub.io/changes: |
     - kind: fixed
+      description: "release: allow unchanged RC promotion"
+    - kind: fixed
       description: "upgrade: resolve leaders on revisioned rolling workloads"
+    - kind: fixed
+      description: "admission: allow namespace controller cleanup"
+    - kind: fixed
+      description: "backup: ignore pre-upgrade jobs in scheduled observation"
+    - kind: fixed
+      description: "backup: recover after ignoring pre-upgrade jobs"
+    - kind: fixed
+      description: "controller: reduce steady-state log noise"
+    - kind: fixed
+      description: "logging: reduce steady-state bootstrap noise"
+    - kind: fixed
+      description: "restore: persist execution receipts"
+    - kind: fixed
+      description: "restore: preserve target lifecycle JWT identities"
+    - kind: fixed
+      description: "restore: restart voters after snapshot restore"
+    - kind: fixed
+      description: "restore: verify snapshot seal by default"
+    - kind: fixed
+      description: "retention: authorize reserved secret names"
+    - kind: fixed
+      description: "retention: preserve unrelated secret owners"
+    - kind: fixed
+      description: "upgrade: make validation hooks attempt-safe"
+    - kind: fixed
+      description: "upgrade: preserve rolling leader ordering"
+    - kind: fixed
+      description: "release: honor exact versions in manifest mode"
+    - kind: fixed
+      description: "release: isolate pending label cleanup"
+    - kind: fixed
+      description: "release: unblock RC publication checks"
+    - kind: fixed
+      description: "release: compare packaged chart metadata semantically"
+    - kind: changed
+      description: "main: request release 0.5.0-rc.3"
+    - kind: fixed
+      description: "release: checkout before image scans"
+    - kind: changed
+      description: "main: request release 0.5.0-rc.2"
+    - kind: added
+      description: "api: stabilize v1alpha1 contracts"
+    - kind: added
+      description: "config: support plugin-backed KMS seals"
+    - kind: added
+      description: "config: support self-init profile controls"
+    - kind: added
+      description: "tooling: make devenv the contributor entry point"
+    - kind: added
+      description: "upgrade: allow idle strategy switching"
+    - kind: fixed
+      description: "api: align status and lifecycle contracts"
+    - kind: fixed
+      description: "api: configure voter resources"
+    - kind: fixed
+      description: "charts: allow provisioner metrics traffic"
+    - kind: fixed
+      description: "charts: set single-tenant controller watch namespace"
+    - kind: fixed
+      description: "compat: qualify OpenBao 2.6.0"
+    - kind: fixed
+      description: "config: omit plugin directory without plugins"
+    - kind: fixed
+      description: "deps: remediate website security advisories"
+    - kind: security
+      description: "deps: remediate website transitive vulnerabilities"
+    - kind: fixed
+      description: "deps: update golang.org/x/mod to v0.40.0"
+    - kind: security
+      description: "deps: update vulnerable brace-expansion"
+    - kind: security
+      description: "deps: update vulnerable Go modules"
+    - kind: security
+      description: "deps: update vulnerable website transitive dependencies"
+    - kind: fixed
+      description: "docs: improve ultrawide layout"
+    - kind: fixed
+      description: "docs: restore TypeScript compatibility"
+    - kind: fixed
+      description: "lifecycle: require ownership proof for managed jobs"
+    - kind: fixed
+      description: "networking: align Gateway and TLS readiness"
+    - kind: fixed
+      description: "provisioner: clean up tenant governance resources"
+    - kind: fixed
+      description: "release: harden release candidate gates"
+    - kind: fixed
+      description: "release: preserve release-as through squash"
+    - kind: fixed
+      description: "release: preserve SPDX schema validity"
+    - kind: fixed
+      description: "resolve 0.5.0-rc.1 safety blockers"
+    - kind: fixed
+      description: "upgrade: verify blue-green validation hook images"
+    - kind: changed
+      description: "tooling: reduce devenv base closure"
+    - kind: changed
+      description: "main: request release 0.5.0-rc.1"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-operator:0.5.0
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-init:0.5.0
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-backup:0.5.0
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
