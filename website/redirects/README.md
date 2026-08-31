@@ -1,7 +1,7 @@
 # Legacy route continuity
 
-`legacy_redirects.tsv` preserves every public route from the former documentation site and the initial `/0.4.x/`
-surface.
+`legacy_redirects.tsv` preserves every public route from the former documentation site. The `/0.4.x/` routes remain
+canonical after 0.5.x becomes the unprefixed stable line.
 
 The tab-separated columns are:
 
@@ -12,7 +12,8 @@ The tab-separated columns are:
 Mappings follow these boundaries:
 
 - unprefixed and `latest` routes resolve to the current unprefixed stable line;
-- Docusaurus `0.4.0` and initial Hugo `0.4.x` routes resolve to the unprefixed `0.4.x` contract;
+- Docusaurus `0.4.0` routes resolve to the release archive, while initial Hugo `0.4.x` routes remain on the versioned
+  0.4.x contract;
 - `docs/next` and `dev` routes remain on the unreleased `/next/` line;
 - unsupported `0.1.x`, `0.2.x`, and `0.3.x` snapshots resolve to their release archive rather than a newer runtime
   contract; and

@@ -11,6 +11,8 @@ verifiedBy:
   - charts/openbao-operator/templates/admission
   - config/default/kustomization.yaml
   - config/overlays/custom-identity/kustomization.yaml
+  - internal/adapter/config/builder.go
+  - cmd/bao-backup/restore_flow.go
   - .github/workflows/release.yml
 ---
 
@@ -176,6 +178,13 @@ make deploy IMG=ghcr.io/dc-tec/openbao-operator:dev
 ## Upgrade the operator
 
 Helm does not upgrade installed CRDs. For every release with CRD changes, apply the release CRDs before the controller:
+
+{{< callout type="warning" title="Update 0.4.2 restore policies before the controller" >}}
+OpenBao Operator 0.4.2 generated restore policies with only `update` on
+`sys/storage/raft/snapshot-force`. In 0.5.0, a restore with `force` omitted or set to `false` uses
+`sys/storage/raft/snapshot`. Add `update` on the normal endpoint through an authenticated administration path before
+you upgrade the controller. Self-init does not update an existing policy.
+{{< /callout >}}
 
 {{< command label="upgrade" title="Upgrade to 0.5.0" >}}
 kubectl apply -f \

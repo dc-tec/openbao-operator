@@ -4,8 +4,8 @@ description: Generated fields, defaults, and validation for the OpenBao Operator
 eyebrow: Reference
 weight: 1
 verifiedBy:
-  - api/v1alpha1 at bf538212baa79eadb65f74f4db1e204d39870651
-  - docs/reference/api.md at bf538212baa79eadb65f74f4db1e204d39870651
+  - api/v1alpha1 at 590ae5a92364ae88c294dda46868c3409ddfce67
+  - docs/reference/api.md at 590ae5a92364ae88c294dda46868c3409ddfce67
 ---
 
 Use these pages when you need the exact field name, type, default, or validation rule for an operator custom resource.

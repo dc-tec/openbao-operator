@@ -32,16 +32,17 @@ devenv shell make docs-build
 
 The API sync reads each line's exact `sourceRef` from `data/version_lines.yaml` and splits its generated reference into
 one Hugo page per custom resource. The 0.4.x line retains three release-specific runtime errata; later lines publish
-their matching generated source directly. The generated site is written to `website/public/` and is ignored by Git.
+their matching generated source directly. A first-stable line can declare a qualified `fallbackSourceRef` so pre-tag
+checks generate the final-tag pages before that tag exists. The tagged build uses `sourceRef` and must produce the same
+content. The generated site is written to `website/public/` and is ignored by Git.
 
 The redirect post-processing step writes version-aware compatibility pages into that generated destination. Its
 declarative policy and validation instructions live under `redirects/`.
 
 ## Version policy
 
-- The unprefixed site is the current stable `0.4.x` line through OpenBao Operator 0.4.2.
-- `/0.5.x/` is the planned 0.5 minor-line contract. It remains visibly marked as planned and does not become the
-  unprefixed default until 0.5.0 is tagged.
+- The unprefixed site is the current stable `0.5.x` line through OpenBao Operator 0.5.0.
+- `/0.4.x/` retains the previous stable 0.4 minor-line contract through 0.4.2.
 - `/next/` tracks unreleased behavior on `main`. It must never be presented as a stable production contract.
 - `/latest/` and its retained suffix routes are compatibility redirects to the equivalent unprefixed stable pages.
   They do not track `main` and are not another editable content tree.
