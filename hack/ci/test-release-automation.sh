@@ -12,6 +12,7 @@ RELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release.yml"
 RELEASE_PLEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release-please.yml"
 RELEASE_PLEASE_PACKAGE="${ROOT_DIR}/hack/ci/release-please/package.json"
 RELEASE_PLEASE_LOCK="${ROOT_DIR}/hack/ci/release-please/package-lock.json"
+RELEASE_PLEASE_EXACT_RUNNER="${ROOT_DIR}/hack/ci/run-release-please-exact.js"
 RELEASE_PR_GATE_WORKFLOW="${ROOT_DIR}/.github/workflows/release-pr-gate.yml"
 
 tmp_dir="$(mktemp -d)"
@@ -130,12 +131,14 @@ bash -n \
 assert_contains "${RELEASE_PLEASE_WORKFLOW}" "Resolve Release-As override"
 assert_contains "${RELEASE_PLEASE_WORKFLOW}" "bash hack/ci/resolve-release-as-override.sh"
 assert_contains "${RELEASE_PLEASE_WORKFLOW}" "Run release-please action (normal manifest PR)"
-assert_contains "${RELEASE_PLEASE_WORKFLOW}" "Run release-please CLI (exact-version manifest PR)"
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" "Run release-please wrapper (exact-version manifest PR)"
 assert_contains "${RELEASE_PLEASE_PACKAGE}" '"release-please": "17.6.0"'
-assert_contains "${RELEASE_PLEASE_WORKFLOW}" '--release-as="${RELEASE_AS}"'
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" "node hack/ci/run-release-please-exact.js"
+assert_contains "${RELEASE_PLEASE_EXACT_RUNNER}" "PINNED_RELEASE_PLEASE_VERSION = '17.6.0'"
 assert_contains "${RELEASE_PLEASE_WORKFLOW}" "exact-version release PR does not match requested version"
 assert_contains "${RELEASE_PLEASE_WORKFLOW}" "release-please did not create the requested"
 assert_not_contains "${RELEASE_PLEASE_WORKFLOW}" 'release-as: ${{ steps.release-as.outputs.release_as }}'
+node "${RELEASE_PLEASE_EXACT_RUNNER}" --self-test
 release_please_lock_version="$(jq -er '.packages["node_modules/release-please"].version' "${RELEASE_PLEASE_LOCK}")"
 [[ "${release_please_lock_version}" == "17.6.0" ]] || fail "release-please lockfile version is not pinned to 17.6.0"
 release_please_lock_integrity="$(jq -er '.packages["node_modules/release-please"].integrity' "${RELEASE_PLEASE_LOCK}")"

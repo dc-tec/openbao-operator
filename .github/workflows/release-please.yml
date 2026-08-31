@@ -125,8 +125,9 @@ jobs:
           skip-github-release: true
 
       # release-please-action v5 silently ignores release-as in manifest mode.
-      # Use the matching pinned CLI until googleapis/release-please-action#1220 is fixed.
-      - name: Run release-please CLI (exact-version manifest PR)
+      # The pinned wrapper also permits an exact stable promotion when the latest
+      # release candidate contains all user-facing commits.
+      - name: Run release-please wrapper (exact-version manifest PR)
         if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' && steps.release-as.outputs.release_as != '' }}
         env:
           RELEASE_AS: ${{ steps.release-as.outputs.release_as }}
@@ -140,13 +141,8 @@ jobs:
           umask 077
           printf '%s' "${RELEASE_PLEASE_TOKEN}" > "${token_file}"
 
-          hack/ci/release-please/node_modules/.bin/release-please release-pr \
-            --repo-url="${REPOSITORY}" \
-            --target-branch="${TARGET_BRANCH}" \
-            --token="${token_file}" \
-            --config-file=release-please-config.json \
-            --manifest-file=.release-please-manifest.json \
-            --release-as="${RELEASE_AS}"
+          RELEASE_PLEASE_TOKEN_FILE="${token_file}" \
+            node hack/ci/run-release-please-exact.js
 
       - name: Locate open release PR
         id: release-pr
