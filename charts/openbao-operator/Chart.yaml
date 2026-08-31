@@ -29,108 +29,40 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/containsSecurityUpdates: 'true'
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "release: allow unchanged RC promotion"
-    - kind: fixed
-      description: "upgrade: resolve leaders on revisioned rolling workloads"
-    - kind: fixed
-      description: "admission: allow namespace controller cleanup"
-    - kind: fixed
-      description: "backup: ignore pre-upgrade jobs in scheduled observation"
-    - kind: fixed
-      description: "backup: recover after ignoring pre-upgrade jobs"
-    - kind: fixed
-      description: "controller: reduce steady-state log noise"
-    - kind: fixed
-      description: "logging: reduce steady-state bootstrap noise"
-    - kind: fixed
-      description: "restore: persist execution receipts"
-    - kind: fixed
-      description: "restore: preserve target lifecycle JWT identities"
-    - kind: fixed
-      description: "restore: restart voters after snapshot restore"
-    - kind: fixed
-      description: "restore: verify snapshot seal by default"
-    - kind: fixed
-      description: "retention: authorize reserved secret names"
-    - kind: fixed
-      description: "retention: preserve unrelated secret owners"
-    - kind: fixed
-      description: "upgrade: make validation hooks attempt-safe"
-    - kind: fixed
-      description: "upgrade: preserve rolling leader ordering"
-    - kind: fixed
-      description: "release: honor exact versions in manifest mode"
-    - kind: fixed
-      description: "release: isolate pending label cleanup"
-    - kind: fixed
-      description: "release: unblock RC publication checks"
-    - kind: fixed
-      description: "release: compare packaged chart metadata semantically"
-    - kind: changed
-      description: "main: request release 0.5.0-rc.3"
-    - kind: fixed
-      description: "release: checkout before image scans"
-    - kind: changed
-      description: "main: request release 0.5.0-rc.2"
     - kind: added
-      description: "api: stabilize v1alpha1 contracts"
+      description: "api: document selected field, omission, update, and condition contracts within v1alpha1"
     - kind: added
-      description: "config: support plugin-backed KMS seals"
+      description: "config: add plugin-backed KMS seals and OpenBao 2.6 self-init request controls"
     - kind: added
-      description: "config: support self-init profile controls"
+      description: "upgrade: allow idle changes between RollingUpdate and BlueGreen"
     - kind: added
-      description: "tooling: make devenv the contributor entry point"
-    - kind: added
-      description: "upgrade: allow idle strategy switching"
+      description: "workload: configure voter OpenBao container resources independently"
     - kind: fixed
-      description: "api: align status and lifecycle contracts"
+      description: "restore: persist execution receipts, prevent replay of missing committed Jobs, and recover voter and read-replica state"
     - kind: fixed
-      description: "api: configure voter resources"
+      description: "upgrade: bind validation hooks to an upgrade attempt and preserve leader ordering across revisioned workloads"
     - kind: fixed
-      description: "charts: allow provisioner metrics traffic"
+      description: "backup: separate scheduled backups from pre-upgrade snapshots"
     - kind: fixed
-      description: "charts: set single-tenant controller watch namespace"
+      description: "retention: preserve unrelated Secret owners when pruning retained backups"
     - kind: fixed
-      description: "compat: qualify OpenBao 2.6.0"
+      description: "tenancy: remove tenant governance resources after the last claim and preserve resources shared by active claims"
     - kind: fixed
-      description: "config: omit plugin directory without plugins"
+      description: "networking: derive Gateway readiness from Route conditions and require external TLS certificates to cover extraSANs"
     - kind: fixed
-      description: "deps: remediate website security advisories"
+      description: "controller: reduce steady-state reconciliation and bootstrap log noise"
     - kind: security
-      description: "deps: remediate website transitive vulnerabilities"
-    - kind: fixed
-      description: "deps: update golang.org/x/mod to v0.40.0"
+      description: "admission: reject prohibited inline unseal credentials in Hardened clusters"
     - kind: security
-      description: "deps: update vulnerable brace-expansion"
+      description: "lifecycle: require ownership proof for managed Jobs"
     - kind: security
-      description: "deps: update vulnerable Go modules"
+      description: "upgrade: verify custom BlueGreen validation-hook images through the configured operator image policy"
     - kind: security
-      description: "deps: update vulnerable website transitive dependencies"
-    - kind: fixed
-      description: "docs: improve ultrawide layout"
-    - kind: fixed
-      description: "docs: restore TypeScript compatibility"
-    - kind: fixed
-      description: "lifecycle: require ownership proof for managed jobs"
-    - kind: fixed
-      description: "networking: align Gateway and TLS readiness"
-    - kind: fixed
-      description: "provisioner: clean up tenant governance resources"
-    - kind: fixed
-      description: "release: harden release candidate gates"
-    - kind: fixed
-      description: "release: preserve release-as through squash"
-    - kind: fixed
-      description: "release: preserve SPDX schema validity"
-    - kind: fixed
-      description: "resolve 0.5.0-rc.1 safety blockers"
-    - kind: fixed
-      description: "upgrade: verify blue-green validation hook images"
+      description: "deps: remediate vulnerable Go and website dependencies"
     - kind: changed
-      description: "tooling: reduce devenv base closure"
+      description: "compatibility: validate Kubernetes 1.34, 1.35, and 1.36, with Kubernetes 1.36.1 as the primary target"
     - kind: changed
-      description: "main: request release 0.5.0-rc.1"
+      description: "compatibility: use OpenBao 2.6.2 as the primary target and check configuration compatibility with 2.4.4 and 2.5.5"
   artifacthub.io/images: |
     - name: openbao-operator
       image: ghcr.io/dc-tec/openbao-operator:0.5.0
