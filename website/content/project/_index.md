@@ -6,8 +6,8 @@ weight: 7
 hideChildren: true
 ---
 
-The operator handbook is being prepared for the 0.5.x contract. This section records future direction and design work
-that is not part of that release.
+The operator handbook documents the 0.5.x contract. This section records future direction and design work that is not
+part of that release.
 
 <div class="link-grid">
   <a href="roadmap/"><strong>Roadmap</strong><p>Current lifecycle foundation, future modules, principles, and explicit non-goals.</p></a>

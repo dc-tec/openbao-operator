@@ -1,13 +1,12 @@
 ---
 title: Documentation
-description: Planned 0.5.x guidance for installing, configuring, operating, securing, and understanding OpenBao Operator.
+description: Install, configure, operate, secure, and understand OpenBao Operator 0.5.x.
 eyebrow: Operator handbook
 weight: 1
 hideChildren: true
 ---
 
-Use the route that matches the work in front of you. This manual is prepared for 0.5.0 and remains separate from the
-current stable line until that release is published.
+Use the route that matches the work in front of you. This manual describes the stable 0.5.x release line.
 
 <div class="link-grid">
   <a href="get-started/"><strong>Get started</strong><p>Choose a deployment model, install the operator, and create the first cluster.</p></a>
@@ -20,5 +19,5 @@ current stable line until that release is published.
 
 {{< callout type="note" title="About versions" >}}
 The unprefixed manual is the current stable minor line. Patch releases roll into that line. Use **Next** for unreleased
-behavior on `main`; use this line to review the planned 0.5.x release contract.
+behavior on `main`; use **0.4.x** for the previous stable minor line.
 {{< /callout >}}

@@ -3,7 +3,7 @@ locale = "en-US"
 title = "OpenBao Operator"
 enableGitInfo = true
 disableKinds = ["taxonomy", "term", "RSS"]
-defaultContentVersion = "0.4.x"
+defaultContentVersion = "0.5.x"
 defaultContentVersionInSubdir = false
 
 [params]
@@ -32,7 +32,7 @@ source = "content"
 target = "content"
 files = ["project/**", "releases/**", "contribute/**"]
 [module.mounts.sites.matrix]
-versions = ["0.4.x"]
+versions = ["0.5.x"]
 
 [[module.mounts]]
 source = "content-versions/0.4.x"

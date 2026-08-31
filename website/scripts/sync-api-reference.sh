@@ -53,6 +53,8 @@ trap 'rm -rf "${SYNC_TMP_DIR}"' EXIT
 generate_line() {
   local line="$1"
   local source_ref
+  local fallback_source_ref
+  local read_ref
   local content_root
   local output_dir
   local source_path
@@ -63,6 +65,7 @@ generate_line() {
   local line_tmp="${SYNC_TMP_DIR}/${line//./-}"
 
   source_ref="$(version_field "${line}" sourceRef)"
+  fallback_source_ref="$(version_field "${line}" fallbackSourceRef)"
   content_root="$(version_field "${line}" contentRoot)"
   if [[ -z "${source_ref}" || -z "${content_root}" ]]; then
     echo "missing sourceRef or contentRoot for documentation line ${line}" >&2
@@ -73,11 +76,20 @@ generate_line() {
   source_path="${line_tmp}/api.md"
   mkdir -p "${line_tmp}"
 
-  if git -C "${REPO_DIR}" cat-file -e "${source_ref}:website/generated/api-reference.md" 2>/dev/null; then
+  read_ref="${source_ref}"
+  if ! git -C "${REPO_DIR}" cat-file -e "${source_ref}^{commit}" 2>/dev/null; then
+    if [[ -z "${fallback_source_ref}" ]]; then
+      echo "documentation source ref not found for ${line}: ${source_ref}" >&2
+      return 1
+    fi
+    read_ref="${fallback_source_ref}"
+  fi
+
+  if git -C "${REPO_DIR}" cat-file -e "${read_ref}:website/generated/api-reference.md" 2>/dev/null; then
     source_location="website/generated/api-reference.md"
     source_marker='<!-- BEGIN RESOURCE '
     source_end_marker='<!-- END RESOURCE -->'
-  elif git -C "${REPO_DIR}" cat-file -e "${source_ref}:docs/reference/api.md" 2>/dev/null; then
+  elif git -C "${REPO_DIR}" cat-file -e "${read_ref}:docs/reference/api.md" 2>/dev/null; then
     # Release lines created before the Hugo migration retain the historical
     # generated Docusaurus source in Git. Read it without keeping that site in
     # the current tree.
@@ -85,10 +97,10 @@ generate_line() {
     source_marker='<TabItem value="'
     source_end_marker='</TabItem>'
   else
-    echo "generated API source not found at ${source_ref} for ${line}" >&2
+    echo "generated API source not found at ${read_ref} for ${line}" >&2
     return 1
   fi
-  git -C "${REPO_DIR}" show "${source_ref}:${source_location}" > "${source_path}"
+  git -C "${REPO_DIR}" show "${read_ref}:${source_location}" > "${source_path}"
 
   if [[ "${line}" == "0.4.x" ]]; then
     apply_errata="true"

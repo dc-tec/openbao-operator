@@ -32,9 +32,9 @@ Documentation is versioned by minor release, not by patch:
 
 | Route | Contract |
 | --- | --- |
-| Unprefixed | Current stable 0.4.x line through 0.4.2 |
+| Unprefixed | Current stable 0.5.x line through 0.5.0 |
 | `/latest/` | Compatibility redirect to the current stable home |
-| `/0.5.x/` | Reviewed 0.5.x contract awaiting the 0.5.0 release |
+| `/0.4.x/` | Previous stable 0.4.x line through 0.4.2 |
 | `/next/` | Unreleased behavior on `main`; evaluation only |
 
 A patch release updates the existing minor line and its release note. Before a new `0.X.0` release, the reviewed

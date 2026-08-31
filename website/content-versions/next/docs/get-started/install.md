@@ -16,7 +16,7 @@ source when you are developing the operator. Do not treat either path as a stabl
 
 {{< callout type="warning" title="Use stable documentation for production" >}}
 The edge channel is mutable and advances after successful `main` validation. Use the current stable documentation
-and a pinned release for production. The planned 0.5.x line becomes executable only after 0.5.0 is published.
+and a pinned release for production. OpenBao Operator 0.5.0 is the current stable release.
 {{< /callout >}}
 
 ## Before you begin

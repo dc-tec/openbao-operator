@@ -6,17 +6,25 @@ weight: 10
 verifiedBy:
   - api/v1alpha1/openbaorestore_types.go
   - api/v1alpha1/openbaocluster_operations_types.go
+  - api/v1alpha1/openbaocluster_selfinit_types.go
   - config/policy/openbao-validate-openbaorestore.yaml
   - config/rbac/openbaocluster_restore_role.yaml
   - internal/service/restore/manager_validation.go
   - internal/service/restore/manager_running.go
+  - internal/service/restore/post_restore_restart.go
+  - internal/adapter/openbao/client_bootstrap.go
+  - internal/adapter/config/selfinit_gohcl.go
+  - cmd/bao-backup/restore_flow.go
   - internal/service/restore/read_replica_restore.go
   - internal/service/workloadidentity/readiness.go
   - internal/service/restore/manager_test.go
   - internal/service/bootstrap/unseal_validation_transit.go
+aliases:
+  - /docs/validated-deployments/runbooks/restore-from-s3-compatible-snapshot/
+  - /docs/next/validated-deployments/runbooks/restore-from-s3-compatible-snapshot/
 ---
 
-An `OpenBaoRestore` is an explicit, immutable request to download a snapshot and force it into a target cluster. It
+An `OpenBaoRestore` is an explicit, immutable request to download a snapshot and apply it to a target cluster. It
 uses a dedicated Job and identity, owns the cluster operation lock while destructive work runs, and records a terminal
 result.
 
@@ -32,13 +40,14 @@ a second operator before applying the request.
 - The target `OpenBaoCluster` exists in the same namespace as the restore request.
 - The exact snapshot key exists and has been tested in an isolated restore rehearsal.
 - The restore Job can reach object storage and the target cluster.
-- A restore JWT role or labeled static-token Secret grants update on `sys/storage/raft/snapshot-force`.
+- A restore JWT role or labeled static-token Secret grants update on `sys/storage/raft/snapshot`. Grant update on
+  `sys/storage/raft/snapshot-force` only when the identity must support `force: true`.
 - The storage identity is bound to the generated `<cluster>-restore-serviceaccount` or supplied explicitly.
 - Prevent an upgrade or backup from running concurrently.
 {{< /checklist >}}
 
-Without `force`, the target must be initialized and must not have `Upgrading=True`. `force: true` skips those two
-cluster-state checks; it does not validate the snapshot or prove the target is otherwise safe.
+By default, OpenBao verifies that the snapshot is compatible with the target cluster's Shamir or auto-unseal
+configuration. The target must also be initialized and must not have `Upgrading=True`.
 
 For Hardened targets, configure explicit, port-scoped `spec.network.egressRules` on the target cluster and set
 `credentialsSecretRef`, workload-identity metadata, or S3 `roleArn` on the restore source.
@@ -55,6 +64,41 @@ rehearsal and support decision.
 
 Keep traffic on the source until the target is unsealed, has a leader and expected Raft membership, accepts a real
 human or workload login, and returns representative restored data. Cut over traffic manually after those checks.
+
+### Preserve lifecycle JWT identities
+
+The first restore authenticates against the target's current JWT configuration. The applied snapshot then replaces
+that configuration with the source cluster's roles. A later backup, restore, or upgrade fails if the restored role
+does not accept the target Job's ServiceAccount subject.
+
+For a planned recovery target on the same Kubernetes JWT trust domain, add its exact subjects to the source cluster
+before the source self-initializes:
+
+{{< command label="configure" title="Authorize one recovery target without combining role privileges" >}}
+selfInit:
+  enabled: true
+  oidc:
+    enabled: true
+    additionalSubjects:
+      backup:
+        - system:serviceaccount:recovery:prod-recovery-backup-serviceaccount
+      restore:
+        - system:serviceaccount:recovery:prod-recovery-restore-serviceaccount
+      upgrade:
+        - system:serviceaccount:recovery:prod-recovery-upgrade-serviceaccount
+{{< /command >}}
+
+The operator adds each subject only to its corresponding generated role. Add `operator` subjects only when a recovery
+target uses a different controller ServiceAccount. A same-cluster restore does not need additional subjects because
+the generated identities do not change.
+
+Self-init is one-shot. Adding these fields to an initialized source does not update its OpenBao roles. Update each
+role through an authenticated administration path before taking the recovery snapshot, or create and initialize the
+source with the bindings already declared.
+
+The subject allowlist does not extend JWT issuer or signature trust. For a target on another Kubernetes control plane,
+the restored `jwt-operator` auth method must also validate that control plane's projected tokens. Qualify that trust
+configuration separately before relying on the recovery path.
 
 ## Choose restore authentication
 
@@ -124,17 +168,50 @@ kubectl -n <namespace> get openbaocluster <cluster> -o yaml
 {{< /command >}}
 
 `status.phase` moves through `Pending`, `Validating`, and `Running`, then ends at `Completed` or `Failed`.
+It changes to `Unknown` when the controller cannot prove whether a committed restore Job ran. The operator never
+recreates that Job automatically. Inspect the retained Job when it exists, verify the cluster state, and delete the
+immutable `OpenBaoRestore` only after you decide that another operation can proceed.
 `RestoreConfigurationReady` reports the operator-known auth, storage identity, Secret, and egress prerequisites.
 
+`status.execution` records the stable operation ID, expected Job name and UID, and the `Prepared`, `Committed`,
+`Created`, `TerminalObserved`, and `FollowThroughComplete` receipts. The operator retains the Job without a TTL until
+the terminal result and post-restore recovery are durable. It then removes the Job deliberately.
+
 When steady read replicas are configured, the operator drains them before creating the restore Job. After the Job
-succeeds, it releases the restore lock and waits for the desired read replicas, `ReadReplicasReady`,
-`ReadServingAvailable`, and `RaftMembershipReady` before marking the restore `Completed`.
+succeeds, the operator keeps the restore lock and restarts every voter Pod through a StatefulSet rollout. The
+`OpenBaoCluster` records the restore name, UID, and voter restart completion time in `status.restore`.
+
+After all voter Pods run the restored revision and are Ready, the operator restores the desired read replicas. It waits
+for `ReadReplicasReady`, `ReadServingAvailable`, and `RaftMembershipReady` before recording follow-through completion,
+marking the restore `Completed`, and releasing the restore lock.
+
+Deleting a restore before execution is committed cancels it. Deleting a committed restore does not terminate its Job.
+The finalizer observes the terminal result, completes voter and read-replica recovery, and then removes the Job and the
+restore request. Loss of an admission-policy dependency still blocks new restore work, but it does not stop this narrow
+committed-execution drain path.
 
 {{< callout type="note" title="Completed is not full service validation" >}}
-Without steady read replicas, `Completed` means the restore Job succeeded. It does not require every voter to be
-Ready or prove client access. Verify seal state, leader, Raft membership, application data, and authentication after
-every restore.
+`Completed` means the restore Job succeeded and every voter completed the required post-restore restart. When read
+replicas are configured, it also means the read pool returned to its declared membership and readiness. The operator
+does not validate restored application data or authentication semantics. Verify seal state, leader, Raft membership,
+application data, and authentication after every restore.
 {{< /callout >}}
+
+## Use a force restore
+
+Set `force: true` only when disaster recovery cannot use the normal verified restore:
+
+{{< command label="configure" title="Bypass snapshot seal-consistency verification" >}}
+spec:
+  force: true
+{{< /command >}}
+
+This option uses OpenBao's `sys/storage/raft/snapshot-force` endpoint. It bypasses verification that the snapshot is
+compatible with the target cluster's Shamir or auto-unseal configuration. It also skips the controller checks that
+require the target to be initialized and not upgrading.
+
+The force endpoint does not make incompatible seal material usable after the restore. Validate the snapshot source and
+seal compatibility through another trusted process before you use it.
 
 ## Override a stuck operation lock
 
