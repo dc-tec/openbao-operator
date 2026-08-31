@@ -26,20 +26,20 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/operator: 'true'
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: 'true'
+  artifacthub.io/prerelease: "true"
   artifacthub.io/containsSecurityUpdates: 'false'
   artifacthub.io/changes: |
     - kind: fixed
-      description: "upgrade: resolve leaders on revisioned rolling workloads"
+      description: "release: allow unchanged RC promotion"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-operator:0.5.1-rc.6
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-init:0.5.1-rc.6
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-backup:0.5.1-rc.6
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0-rc.6
+      image: ghcr.io/dc-tec/openbao-upgrade:0.5.1-rc.6
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
