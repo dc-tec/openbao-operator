@@ -534,7 +534,7 @@ jobs:
       - name: Setup repo tools
         uses: ./.github/actions/setup-repo-tools
 
-      - name: Run unit and integration tests with coverage gate
+      - name: Run unit, integration, and cluster-independent E2E support tests with coverage gate
         run: make test-ci
 
   fuzz:

@@ -60,18 +60,25 @@ verify-fmt: ## Verify all Go code is gofmt'd (does not modify files).
 		exit 1; \
 	fi
 
+E2E_SUITE_PACKAGE := $(shell GOFLAGS="$(GOFLAGS_VENDOR)" go list -m)/test/e2e
+
 .PHONY: vet
 vet: ## Run go vet against code.
 	GOFLAGS="$(GOFLAGS_VENDOR)" go vet ./...
 
+.PHONY: vet-tagged
+vet-tagged: ## Run go vet against integration and E2E tagged code without a cluster.
+	GOFLAGS="$(GOFLAGS_VENDOR)" go vet -tags=integration ./...
+	GOFLAGS="$(GOFLAGS_VENDOR)" go vet -tags=e2e ./test/e2e/...
+
 .PHONY: test
 test: manifests generate fmt vet ## Run unit tests (fast, no envtest).
-	GOFLAGS="$(GOFLAGS_VENDOR)" go test $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e) -coverprofile cover.out
+	GOFLAGS="$(GOFLAGS_VENDOR)" go test $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -vx '$(E2E_SUITE_PACKAGE)') -coverprofile cover.out
 
 .PHONY: test-sum
 test-sum: manifests generate fmt vet gotestsum ## Run unit tests with gotestsum output and JUnit XML.
 	@mkdir -p "$(TEST_ARTIFACT_DIR)"
-	GOFLAGS="$(GOFLAGS_VENDOR)" "$(GOTESTSUM)" --format="$(GOTESTSUM_FORMAT)" --junitfile "$(TEST_ARTIFACT_DIR)/unit.xml" -- -coverprofile "$(TEST_ARTIFACT_DIR)/unit.cover.out" $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e)
+	GOFLAGS="$(GOFLAGS_VENDOR)" "$(GOTESTSUM)" --format="$(GOTESTSUM_FORMAT)" --junitfile "$(TEST_ARTIFACT_DIR)/unit.xml" -- -coverprofile "$(TEST_ARTIFACT_DIR)/unit.cover.out" $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -vx '$(E2E_SUITE_PACKAGE)')
 
 COVERAGE_PROFILE ?= cover.out
 COVERAGE_MIN_INTERNAL ?= 68.0
@@ -83,24 +90,24 @@ verify-coverage: ## Verify production code under internal/ meets the coverage re
 		--minimum "$(COVERAGE_MIN_INTERNAL)"
 
 .PHONY: test-ci
-test-ci: manifests generate vet setup-envtest gotestsum ## Run unit + integration tests and enforce the coverage floor.
+test-ci: manifests generate vet setup-envtest gotestsum test-e2e-support ## Run unit, integration, and E2E support tests and enforce the coverage floor.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
 		GOFLAGS="$(GOFLAGS_VENDOR)" \
 		"$(GOTESTSUM)" --format="$(GOTESTSUM_FORMAT)" -- \
 		-tags=integration \
 		-count=1 \
 		-coverprofile "$(COVERAGE_PROFILE)" \
-		$$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e)
+		$$(GOFLAGS="$(GOFLAGS_VENDOR)" go list -tags=integration ./... | grep -vx '$(E2E_SUITE_PACKAGE)')
 	$(MAKE) verify-coverage COVERAGE_PROFILE="$(COVERAGE_PROFILE)" COVERAGE_MIN_INTERNAL="$(COVERAGE_MIN_INTERNAL)"
 
 .PHONY: test-integration
 test-integration: manifests generate vet setup-envtest ## Run envtest-based integration tests (envtest; requires -tags=integration).
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" GOFLAGS="$(GOFLAGS_VENDOR)" go test $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e) -tags=integration -count=1 -v
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" GOFLAGS="$(GOFLAGS_VENDOR)" go test $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list -tags=integration ./... | grep -vx '$(E2E_SUITE_PACKAGE)') -tags=integration -count=1 -v
 
 .PHONY: test-integration-sum
 test-integration-sum: manifests generate vet setup-envtest gotestsum ## Run envtest-based integration tests with gotestsum output and JUnit XML.
 	@mkdir -p "$(TEST_ARTIFACT_DIR)"
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" GOFLAGS="$(GOFLAGS_VENDOR)" "$(GOTESTSUM)" --format="$(GOTESTSUM_FORMAT)" --junitfile "$(TEST_ARTIFACT_DIR)/integration.xml" -- -tags=integration -count=1 -coverprofile "$(TEST_ARTIFACT_DIR)/integration.cover.out" $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e)
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" GOFLAGS="$(GOFLAGS_VENDOR)" "$(GOTESTSUM)" --format="$(GOTESTSUM_FORMAT)" --junitfile "$(TEST_ARTIFACT_DIR)/integration.xml" -- -tags=integration -count=1 -coverprofile "$(TEST_ARTIFACT_DIR)/integration.cover.out" $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list -tags=integration ./... | grep -vx '$(E2E_SUITE_PACKAGE)')
 
 .PHONY: fuzz
 fuzz: ## Run the curated fuzz smoke sweep across repo fuzz targets.
@@ -483,6 +490,10 @@ MUTATION_INCREMENTAL ?= false
 MUTATION_TOP_SURVIVORS ?= 20
 MUTATION_GOFLAGS ?= -p=1
 MUTATION_GOMEMLIMIT ?= 8GiB
+
+.PHONY: test-e2e-support
+test-e2e-support: ## Run cluster-independent tests for E2E framework and helper packages.
+	GOFLAGS="$(GOFLAGS_VENDOR)" go test -tags=e2e -count=1 ./test/e2e/framework ./test/e2e/helpers
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
@@ -906,7 +917,7 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	"$(GOLANGCI_LINT)" config verify
 
 .PHONY: lint-ci
-lint-ci: lint-config lint verify-arch-policy lint-testonly-exports test-ast lint-ast ## Run CI lint gates (golangci-lint + test-only export audit + ast-grep tests/scans).
+lint-ci: lint-config lint vet-tagged verify-arch-policy lint-testonly-exports test-ast lint-ast ## Run CI lint gates (golangci-lint + tagged vet + test-only export audit + ast-grep tests/scans).
 
 .PHONY: vulncheck
 vulncheck: govulncheck govulncheck-ignore ## Run govulncheck to scan for known vulnerabilities (production code only). Findings listed in .govulnignore are ignored. Set VULNCHECK_SHOW_IGNORED=true to print traces even if all findings are ignored.
