@@ -266,10 +266,10 @@ func drainAndClose(resp *http.Response) {
 	_ = resp.Body.Close()
 }
 
-func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op string) (*http.Response, []byte, error) {
+func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op string) (int, []byte, error) {
 	resp, err := c.doRequest(req, httpClient, op)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, err
 	}
 
 	defer drainAndClose(resp)
@@ -281,9 +281,9 @@ func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op str
 		}
 		wrapped := fmt.Errorf("%s: failed to read response body: %w", op, err)
 		if operatorerrors.IsTransientConnection(err) {
-			return nil, nil, operatorerrors.WrapTransientConnection(wrapped)
+			return 0, nil, operatorerrors.WrapTransientConnection(wrapped)
 		}
-		return nil, nil, wrapped
+		return 0, nil, wrapped
 	}
 
 	// The health endpoint encodes state in HTTP status codes (sealed, standby, etc.),
@@ -293,14 +293,14 @@ func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op str
 			if c.state != nil {
 				c.state.after(req, false)
 			}
-			return nil, nil, operatorerrors.WrapTransientRemoteOverloaded(portopenbao.NewAPIError(op, resp.StatusCode, body))
+			return 0, nil, operatorerrors.WrapTransientRemoteOverloaded(portopenbao.NewAPIError(op, resp.StatusCode, body))
 		}
 	}
 
 	if c.state != nil {
 		c.state.after(req, true)
 	}
-	return resp, body, nil
+	return resp.StatusCode, body, nil
 }
 
 // clientForContextDeadline returns a clone of the default HTTP client with a timeout

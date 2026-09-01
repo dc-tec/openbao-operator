@@ -116,12 +116,12 @@ func (c *Client) Restore(ctx context.Context, reader io.Reader, options portopen
 		Timeout:   portopenbao.DefaultSnapshotTimeout,
 	}
 
-	resp, body, err := c.doAndReadAll(req, restoreClient, "failed to execute restore request")
+	statusCode, body, err := c.doAndReadAll(req, restoreClient, "failed to execute restore request")
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return portopenbao.NewAPIError("restore request failed", resp.StatusCode, body)
+	if statusCode != http.StatusOK && statusCode != http.StatusNoContent {
+		return portopenbao.NewAPIError("restore request failed", statusCode, body)
 	}
 
 	return nil
@@ -140,13 +140,13 @@ func (c *Client) Init(ctx context.Context, req InitRequest) (*InitResponse, erro
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, respBody, err := c.doAndReadAll(httpReq, c.clientForContextDeadline(ctx), "failed to execute init request")
+	statusCode, respBody, err := c.doAndReadAll(httpReq, c.clientForContextDeadline(ctx), "failed to execute init request")
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		apiErr := portopenbao.NewAPIError("init request failed", resp.StatusCode, respBody)
-		if resp.StatusCode == http.StatusBadRequest && initResponseAlreadyInitialized(respBody) {
+	if statusCode != http.StatusOK {
+		apiErr := portopenbao.NewAPIError("init request failed", statusCode, respBody)
+		if statusCode == http.StatusBadRequest && initResponseAlreadyInitialized(respBody) {
 			return nil, fmt.Errorf("%w: %w", portopenbao.ErrAlreadyInitialized, apiErr)
 		}
 		return nil, apiErr
@@ -190,14 +190,14 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, i
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, respBody, err := c.doAndReadAll(req, nil, "failed to execute JWT auth request")
+	statusCode, respBody, err := c.doAndReadAll(req, nil, "failed to execute JWT auth request")
 	if err != nil {
 		recordAuthLoginError("request_error")
 		return "", 0, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		recordAuthLoginError(fmt.Sprintf("status_%d", resp.StatusCode))
-		return "", 0, portopenbao.NewAPIError("JWT auth request failed", resp.StatusCode, respBody)
+	if statusCode != http.StatusOK {
+		recordAuthLoginError(fmt.Sprintf("status_%d", statusCode))
+		return "", 0, portopenbao.NewAPIError("JWT auth request failed", statusCode, respBody)
 	}
 
 	var authResp JWTAuthLoginResponse

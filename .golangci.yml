@@ -4,6 +4,7 @@ run:
 linters:
   default: none
   enable:
+    - bodyclose
     - copyloopvar
     - dupl
     - errcheck
