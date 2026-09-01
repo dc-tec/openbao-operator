@@ -29,7 +29,7 @@ import (
 	"strings"
 
 	gcrname "github.com/google/go-containerregistry/pkg/name"
-	. "github.com/onsi/ginkgo/v2" // nolint:revive,staticcheck
+	"github.com/onsi/ginkgo/v2"
 )
 
 const (
@@ -43,7 +43,7 @@ const (
 )
 
 func warnError(err error) {
-	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
+	_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "warning: %v\n", err)
 }
 
 // lookPathNoDot behaves like exec.LookPath, but ignores empty/ "." PATH entries.
@@ -137,7 +137,7 @@ func Run(cmd *exec.Cmd) (string, error) {
 	cmd.Dir = dir
 
 	if err := os.Chdir(cmd.Dir); err != nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "chdir dir: %q\n", err)
+		_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "chdir dir: %q\n", err)
 	}
 
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
@@ -145,7 +145,7 @@ func Run(cmd *exec.Cmd) (string, error) {
 		return "", err
 	}
 	command := strings.Join(cmd.Args, " ")
-	_, _ = fmt.Fprintf(GinkgoWriter, "running: %q\n", command)
+	_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "running: %q\n", command)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("%q failed with error %q: %w", command, string(output), err)
@@ -398,7 +398,7 @@ func LoadImageToKindClusterWithName(imageName string) error {
 				imageName, errors.Join(originalErr, retryErr))
 		}
 
-		_, _ = fmt.Fprintf(GinkgoWriter,
+		_, _ = fmt.Fprintf(ginkgo.GinkgoWriter,
 			"kind load fallback succeeded for %q using %s/%s digest %q\n",
 			imageName, kindFallbackPlatformOS, fallbackArch, fallbackRef,
 		)

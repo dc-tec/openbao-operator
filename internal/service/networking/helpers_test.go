@@ -18,7 +18,6 @@ var testScheme = func() *runtime.Scheme {
 	return scheme
 }()
 
-//nolint:unparam // namespace is used by tests across the package
 func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 	return &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: types.UID(name + "-uid")},

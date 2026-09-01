@@ -38,8 +38,6 @@ const infraBaoCAMountPath = "/etc/bao/infra-ca"
 // EnsureInfraBao creates (or reuses) a production-mode OpenBao pod + service with TLS.
 // The service is reachable at https://<name>.<namespace>.svc:8200.
 // Infra-bao always runs in production mode with TLS (never dev mode).
-//
-//nolint:gocyclo // End-to-end provisioning must be explicit to simplify troubleshooting in CI.
 func EnsureInfraBao(ctx context.Context, restCfg *rest.Config, c client.Client, cfg InfraBaoConfig) error {
 	if c == nil {
 		return fmt.Errorf("kubernetes client is required")

@@ -53,7 +53,6 @@ func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 	return builder.Build()
 }
 
-//nolint:unparam // Keeping parameters makes tests easier to expand later.
 func newTestClusterWithBackup(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 	return &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{

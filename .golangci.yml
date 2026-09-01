@@ -15,13 +15,18 @@ linters:
     - lll
     - misspell
     - nakedret
+    - nolintlint
     - prealloc
     - revive
     - staticcheck
+    - thelper
     - unconvert
     - unparam
     - unused
   settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true
     revive:
       rules:
         - name: comment-spacings

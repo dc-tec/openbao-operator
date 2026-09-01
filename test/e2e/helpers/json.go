@@ -12,8 +12,6 @@ import (
 // It accepts an interface because json.Marshal's signature requires it for values
 // that are not known at compile time (e.g., structs, maps) and E2E tests often
 // build small request payloads inline.
-//
-//nolint:revive // json.Marshal requires an interface for generic encoding.
 func JSONFrom(v interface{}) (*apiextensionsv1.JSON, error) {
 	raw, err := json.Marshal(v)
 	if err != nil {
