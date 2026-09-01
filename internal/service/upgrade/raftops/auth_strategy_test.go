@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -39,6 +40,7 @@ func TestNewAuthenticatedClient_DefaultInlineUsesInlineAuthHeaders(t *testing.T)
 
 	var loginRequests int32
 	var demoteRequests int32
+	handlerErrors := make(chan error, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -50,7 +52,12 @@ func TestNewAuthenticatedClient_DefaultInlineUsesInlineAuthHeaders(t *testing.T)
 			if r.Method != http.MethodPost {
 				t.Errorf("demote method=%s, want POST", r.Method)
 			}
-			requireUpgradeInlineAuthHeaders(t, r, testUpgradeJWTAuthRole, testUpgradeJWTToken)
+			if err := validateUpgradeInlineAuthHeaders(r, testUpgradeJWTAuthRole, testUpgradeJWTToken); err != nil {
+				select {
+				case handlerErrors <- err:
+				default:
+				}
+			}
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			http.NotFound(w, r)
@@ -70,6 +77,11 @@ func TestNewAuthenticatedClient_DefaultInlineUsesInlineAuthHeaders(t *testing.T)
 	}
 	if err := client.DemoteRaftPeer(context.Background(), "node-1"); err != nil {
 		t.Fatalf("DemoteRaftPeer() error: %v", err)
+	}
+	select {
+	case handlerErr := <-handlerErrors:
+		t.Fatal(handlerErr)
+	default:
 	}
 
 	if got := atomic.LoadInt32(&loginRequests); got != 0 {
@@ -143,35 +155,42 @@ func newJWTUpgradeConfig(strategy string) *ExecutorConfig {
 	}
 }
 
-func requireUpgradeInlineAuthHeaders(t *testing.T, r *http.Request, role, jwtToken string) {
-	t.Helper()
-
+func validateUpgradeInlineAuthHeaders(r *http.Request, role, jwtToken string) error {
 	if got := r.Header.Get(testUpgradeVaultTokenHeader); got != "" {
-		t.Fatalf("%s=%q, want empty", testUpgradeVaultTokenHeader, got)
+		return fmt.Errorf("%s=%q, want empty", testUpgradeVaultTokenHeader, got)
 	}
 	if got := r.Header.Get(testUpgradeInlineAuthPathHeader); got != testUpgradeInlineAuthJWTPath {
-		t.Fatalf("%s=%q, want %q", testUpgradeInlineAuthPathHeader, got, testUpgradeInlineAuthJWTPath)
+		return fmt.Errorf("%s=%q, want %q", testUpgradeInlineAuthPathHeader, got, testUpgradeInlineAuthJWTPath)
 	}
 	if got := r.Header.Get(testUpgradeInlineAuthOperationHeader); got != testUpgradeInlineAuthOperation {
-		t.Fatalf("%s=%q, want %q", testUpgradeInlineAuthOperationHeader, got, testUpgradeInlineAuthOperation)
+		return fmt.Errorf("%s=%q, want %q", testUpgradeInlineAuthOperationHeader, got, testUpgradeInlineAuthOperation)
 	}
 
-	requireUpgradeInlineAuthParameter(t, r.Header.Get(testUpgradeInlineAuthRoleParameterHeader), "role", role)
-	requireUpgradeInlineAuthParameter(t, r.Header.Get(testUpgradeInlineAuthJWTParameterHeader), "jwt", jwtToken)
+	if err := validateUpgradeInlineAuthParameter(
+		r.Header.Get(testUpgradeInlineAuthRoleParameterHeader),
+		"role",
+		role,
+	); err != nil {
+		return err
+	}
+	return validateUpgradeInlineAuthParameter(
+		r.Header.Get(testUpgradeInlineAuthJWTParameterHeader),
+		"jwt",
+		jwtToken,
+	)
 }
 
-func requireUpgradeInlineAuthParameter(t *testing.T, encoded, key, value string) {
-	t.Helper()
-
+func validateUpgradeInlineAuthParameter(encoded, key, value string) error {
 	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		t.Fatalf("failed to decode inline auth parameter %q: %v", key, err)
+		return fmt.Errorf("decode inline auth parameter %q: %w", key, err)
 	}
 	var param testUpgradeInlineAuthParameter
 	if err := json.Unmarshal(decoded, &param); err != nil {
-		t.Fatalf("failed to unmarshal inline auth parameter %q: %v", key, err)
+		return fmt.Errorf("unmarshal inline auth parameter %q: %w", key, err)
 	}
 	if param.Key != key || param.Value != value {
-		t.Fatalf("inline auth parameter=%#v, want key=%q value=%q", param, key, value)
+		return fmt.Errorf("inline auth parameter=%#v, want key=%q value=%q", param, key, value)
 	}
+	return nil
 }

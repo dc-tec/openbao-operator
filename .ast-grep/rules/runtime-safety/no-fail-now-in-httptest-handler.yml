@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-fail-now-in-httptest-handler
+message: Return handler failures to the test goroutine; terminating test assertions are unsafe in httptest server handlers.
+severity: warning
+language: Go
+files:
+  - '**/*_test.go'
+ignores:
+  - vendor/**/*.go
+rule:
+  all:
+    - kind: call_expression
+    - regex: '^httptest\.New(TLS|Unstarted)?Server\('
+    - has:
+        all:
+          - pattern: func($W http.ResponseWriter, $R *http.Request) { $$$BODY }
+          - has:
+              all:
+                - kind: call_expression
+                - regex: '(\.(Fatal|Fatalf|FailNow|Skip|Skipf|SkipNow)\(|\brequire\.[A-Za-z0-9_]+\(|\bassert\.FailNow\()'
+              stopBy: end
+        stopBy: end
+note: >-
+  httptest servers run handlers in separate goroutines. Fatal, FailNow, Skip, and require assertions terminate only
+  the handler goroutine and can leave the test in an invalid state. This rule checks direct calls in inline handlers
+  that use the standard httptest and assertion package names. It does not resolve assigned or named handlers, aliased
+  imports, or transitive helpers. Code review must reject helpers that receive a test handle and terminate the handler
+  transitively.

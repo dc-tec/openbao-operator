@@ -34,6 +34,7 @@ func TestAuthenticate_Token(t *testing.T) {
 
 func TestAuthenticate_JWT(t *testing.T) {
 	// Mock OpenBao server
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request
 		assert.Equal(t, "/v1/auth/jwt-operator/login", r.URL.Path)
@@ -41,7 +42,11 @@ func TestAuthenticate_JWT(t *testing.T) {
 
 		var body map[string]string
 		err := json.NewDecoder(r.Body).Decode(&body)
-		require.NoError(t, err)
+		if err != nil {
+			handlerErrors.Errorf("decode request body: %v", err)
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
 		assert.Equal(t, "test-jwt", body["jwt"])
 		assert.Equal(t, "test-role", body["role"])
 
@@ -51,7 +56,9 @@ func TestAuthenticate_JWT(t *testing.T) {
 				"client_token": "login-token",
 			},
 		}
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			handlerErrors.Errorf("encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -70,8 +77,10 @@ func TestAuthenticate_JWT(t *testing.T) {
 func TestAuthenticate_JWTInlineDoesNotLogin(t *testing.T) {
 	t.Parallel()
 
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected request for inline auth: %s %s", r.Method, r.URL.Path)
+		handlerErrors.Errorf("unexpected request for inline auth: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected request", http.StatusInternalServerError)
 	}))
 	defer server.Close()
 

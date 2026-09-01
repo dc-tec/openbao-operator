@@ -1,0 +1,260 @@
+id: no-fail-now-in-httptest-handler
+snapshots:
+  ? |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+      "github.com/stretchr/testify/assert"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        assert.FailNow(t, "unexpected request")
+      }))
+      defer server.Close()
+    }
+  : labels:
+    - source: |-
+        httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            assert.FailNow(t, "unexpected request")
+          }))
+      style: primary
+      start: 152
+      end: 284
+    - source: assert.FailNow(t, "unexpected request")
+      style: secondary
+      start: 239
+      end: 278
+    - source: |-
+        func(w http.ResponseWriter, r *http.Request) {
+            assert.FailNow(t, "unexpected request")
+          }
+      style: secondary
+      start: 188
+      end: 282
+  ? |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+      "github.com/stretchr/testify/require"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        require.NoError(t, r.Body.Close())
+      }))
+      defer server.Close()
+    }
+  : labels:
+    - source: |-
+        httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            require.NoError(t, r.Body.Close())
+          }))
+      style: primary
+      start: 153
+      end: 283
+    - source: require.NoError(t, r.Body.Close())
+      style: secondary
+      start: 243
+      end: 277
+    - source: |-
+        func(w http.ResponseWriter, r *http.Request) {
+            require.NoError(t, r.Body.Close())
+          }
+      style: secondary
+      start: 192
+      end: 281
+  ? |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.FailNow()
+      }))
+      defer server.Close()
+    }
+  : labels:
+    - source: |-
+        httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            t.FailNow()
+          }))
+      style: primary
+      start: 113
+      end: 217
+    - source: t.FailNow()
+      style: secondary
+      start: 200
+      end: 211
+    - source: |-
+        func(w http.ResponseWriter, r *http.Request) {
+            t.FailNow()
+          }
+      style: secondary
+      start: 149
+      end: 215
+  ? |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Fatal("unexpected request")
+      }))
+      defer server.Close()
+    }
+  : labels:
+    - source: |-
+        httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            t.Fatal("unexpected request")
+          }))
+      style: primary
+      start: 113
+      end: 235
+    - source: t.Fatal("unexpected request")
+      style: secondary
+      start: 200
+      end: 229
+    - source: |-
+        func(w http.ResponseWriter, r *http.Request) {
+            t.Fatal("unexpected request")
+          }
+      style: secondary
+      start: 149
+      end: 233
+  ? |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Fatalf("unexpected path: %s", r.URL.Path)
+      }))
+      defer server.Close()
+    }
+  : labels:
+    - source: |-
+        httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            t.Fatalf("unexpected path: %s", r.URL.Path)
+          }))
+      style: primary
+      start: 113
+      end: 249
+    - source: 't.Fatalf("unexpected path: %s", r.URL.Path)'
+      style: secondary
+      start: 200
+      end: 243
+    - source: |-
+        func(w http.ResponseWriter, r *http.Request) {
+            t.Fatalf("unexpected path: %s", r.URL.Path)
+          }
+      style: secondary
+      start: 149
+      end: 247
+  ? |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Skip("unsupported environment")
+      }))
+      defer server.Close()
+    }
+  : labels:
+    - source: |-
+        httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            t.Skip("unsupported environment")
+          }))
+      style: primary
+      start: 113
+      end: 239
+    - source: t.Skip("unsupported environment")
+      style: secondary
+      start: 200
+      end: 233
+    - source: |-
+        func(w http.ResponseWriter, r *http.Request) {
+            t.Skip("unsupported environment")
+          }
+      style: secondary
+      start: 149
+      end: 237
+  ? |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Skipf("unsupported path: %s", r.URL.Path)
+      }))
+      defer server.Close()
+    }
+  : labels:
+    - source: |-
+        httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            t.Skipf("unsupported path: %s", r.URL.Path)
+          }))
+      style: primary
+      start: 113
+      end: 249
+    - source: 't.Skipf("unsupported path: %s", r.URL.Path)'
+      style: secondary
+      start: 200
+      end: 243
+    - source: |-
+        func(w http.ResponseWriter, r *http.Request) {
+            t.Skipf("unsupported path: %s", r.URL.Path)
+          }
+      style: secondary
+      start: 149
+      end: 247
+  ? |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.SkipNow()
+      }))
+      defer server.Close()
+    }
+  : labels:
+    - source: |-
+        httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            t.SkipNow()
+          }))
+      style: primary
+      start: 113
+      end: 226
+    - source: t.SkipNow()
+      style: secondary
+      start: 209
+      end: 220
+    - source: |-
+        func(w http.ResponseWriter, r *http.Request) {
+            t.SkipNow()
+          }
+      style: secondary
+      start: 158
+      end: 224
