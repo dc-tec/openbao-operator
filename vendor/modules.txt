@@ -47,7 +47,7 @@ cloud.google.com/go/iam/internal
 cloud.google.com/go/monitoring/apiv3/v2
 cloud.google.com/go/monitoring/apiv3/v2/monitoringpb
 cloud.google.com/go/monitoring/internal
-# cloud.google.com/go/storage v1.64.0
+# cloud.google.com/go/storage v1.65.0
 ## explicit; go 1.25.0
 cloud.google.com/go/storage
 cloud.google.com/go/storage/experimental
@@ -165,7 +165,7 @@ github.com/apparentlymart/go-textseg/v17/textseg/internal/machine
 # github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 ## explicit; go 1.13
 github.com/asaskevich/govalidator
-# github.com/aws/aws-sdk-go-v2 v1.43.6
+# github.com/aws/aws-sdk-go-v2 v1.43.7
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/aws
 github.com/aws/aws-sdk-go-v2/aws/arn
@@ -195,11 +195,11 @@ github.com/aws/aws-sdk-go-v2/internal/timeconv
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream/eventstreamapi
-# github.com/aws/aws-sdk-go-v2/config v1.32.37
+# github.com/aws/aws-sdk-go-v2/config v1.32.38
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/config
 github.com/aws/aws-sdk-go-v2/config/internal/ini
-# github.com/aws/aws-sdk-go-v2/credentials v1.19.36
+# github.com/aws/aws-sdk-go-v2/credentials v1.19.37
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/credentials
 github.com/aws/aws-sdk-go-v2/credentials/ec2rolecreds
@@ -209,7 +209,7 @@ github.com/aws/aws-sdk-go-v2/credentials/logincreds
 github.com/aws/aws-sdk-go-v2/credentials/processcreds
 github.com/aws/aws-sdk-go-v2/credentials/ssocreds
 github.com/aws/aws-sdk-go-v2/credentials/stscreds
-# github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.37
+# github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.38
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/feature/ec2/imds
 github.com/aws/aws-sdk-go-v2/feature/ec2/imds/internal/config
@@ -217,13 +217,13 @@ github.com/aws/aws-sdk-go-v2/feature/ec2/imds/internal/config
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager
 github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types
-# github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.37
+# github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.38
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/internal/configsources
-# github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.37
+# github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.38
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/internal/endpoints/v2
-# github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.38
+# github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.39
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/internal/v4a
 github.com/aws/aws-sdk-go-v2/internal/v4a/internal/crypto
@@ -231,45 +231,45 @@ github.com/aws/aws-sdk-go-v2/internal/v4a/internal/v4
 # github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.17
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding
-# github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.30
+# github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.31
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/internal/checksum
-# github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.37
+# github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.38
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
-# github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.38
+# github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.39
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared/arn
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared/config
-# github.com/aws/aws-sdk-go-v2/service/s3 v1.107.2
+# github.com/aws/aws-sdk-go-v2/service/s3 v1.107.3
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/s3
 github.com/aws/aws-sdk-go-v2/service/s3/internal/arn
 github.com/aws/aws-sdk-go-v2/service/s3/internal/customizations
 github.com/aws/aws-sdk-go-v2/service/s3/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/s3/types
-# github.com/aws/aws-sdk-go-v2/service/signin v1.5.6
+# github.com/aws/aws-sdk-go-v2/service/signin v1.5.7
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/signin
 github.com/aws/aws-sdk-go-v2/service/signin/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/signin/types
-# github.com/aws/aws-sdk-go-v2/service/sso v1.33.6
+# github.com/aws/aws-sdk-go-v2/service/sso v1.33.7
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/sso
 github.com/aws/aws-sdk-go-v2/service/sso/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/sso/types
-# github.com/aws/aws-sdk-go-v2/service/ssooidc v1.38.6
+# github.com/aws/aws-sdk-go-v2/service/ssooidc v1.38.7
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/ssooidc
 github.com/aws/aws-sdk-go-v2/service/ssooidc/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/ssooidc/types
-# github.com/aws/aws-sdk-go-v2/service/sts v1.45.6
+# github.com/aws/aws-sdk-go-v2/service/sts v1.45.7
 ## explicit; go 1.24
 github.com/aws/aws-sdk-go-v2/service/sts
 github.com/aws/aws-sdk-go-v2/service/sts/internal/endpoints
 github.com/aws/aws-sdk-go-v2/service/sts/types
-# github.com/aws/smithy-go v1.27.8
+# github.com/aws/smithy-go v1.27.9
 ## explicit; go 1.24
 github.com/aws/smithy-go
 github.com/aws/smithy-go/auth
@@ -341,7 +341,7 @@ github.com/digitorus/pkcs7
 # github.com/digitorus/timestamp v0.0.0-20231217203849-220c5c2851b7
 ## explicit; go 1.16
 github.com/digitorus/timestamp
-# github.com/docker/cli v29.6.2+incompatible
+# github.com/docker/cli v29.7.2+incompatible
 ## explicit
 github.com/docker/cli/cli/config
 github.com/docker/cli/cli/config/configfile
@@ -599,7 +599,7 @@ github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
 github.com/google/go-cmp/cmp/internal/function
 github.com/google/go-cmp/cmp/internal/value
-# github.com/google/go-containerregistry v0.21.9
+# github.com/google/go-containerregistry v0.22.0
 ## explicit; go 1.25.0
 github.com/google/go-containerregistry/internal/and
 github.com/google/go-containerregistry/internal/compression
@@ -726,7 +726,7 @@ github.com/jedisct1/go-minisign
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
-# github.com/klauspost/compress v1.19.1
+# github.com/klauspost/compress v1.19.2
 ## explicit; go 1.24
 github.com/klauspost/compress
 github.com/klauspost/compress/fse
@@ -1610,7 +1610,7 @@ gopkg.in/inf.v0
 gopkg.in/yaml.v3
 # gotest.tools/v3 v3.1.0
 ## explicit; go 1.11
-# k8s.io/api v0.36.3
+# k8s.io/api v0.36.4
 ## explicit; go 1.26.0
 k8s.io/api/admission/v1
 k8s.io/api/admission/v1beta1
@@ -1670,7 +1670,7 @@ k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
 k8s.io/api/storagemigration/v1beta1
-# k8s.io/apiextensions-apiserver v0.36.3
+# k8s.io/apiextensions-apiserver v0.36.4
 ## explicit; go 1.26.0
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
@@ -1681,7 +1681,7 @@ k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1
-# k8s.io/apimachinery v0.36.3
+# k8s.io/apimachinery v0.36.4
 ## explicit; go 1.26.0
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -1744,7 +1744,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/apiserver v0.36.3
+# k8s.io/apiserver v0.36.4
 ## explicit; go 1.26.0
 k8s.io/apiserver/pkg/apis/apiserver
 k8s.io/apiserver/pkg/apis/apiserver/install
@@ -1789,7 +1789,7 @@ k8s.io/apiserver/pkg/warning
 k8s.io/apiserver/plugin/pkg/authenticator/token/webhook
 k8s.io/apiserver/plugin/pkg/authorizer/webhook
 k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics
-# k8s.io/client-go v0.36.3
+# k8s.io/client-go v0.36.4
 ## explicit; go 1.26.0
 k8s.io/client-go/applyconfigurations
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
@@ -2120,7 +2120,7 @@ k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/watchlist
 k8s.io/client-go/util/workqueue
-# k8s.io/component-base v0.36.3
+# k8s.io/component-base v0.36.4
 ## explicit; go 1.26.0
 k8s.io/component-base/cli/flag
 k8s.io/component-base/compatibility
@@ -2163,7 +2163,7 @@ k8s.io/kube-openapi/pkg/validation/errors
 k8s.io/kube-openapi/pkg/validation/spec
 k8s.io/kube-openapi/pkg/validation/strfmt
 k8s.io/kube-openapi/pkg/validation/strfmt/bson
-# k8s.io/streaming v0.36.3
+# k8s.io/streaming v0.36.4
 ## explicit; go 1.26.0
 k8s.io/streaming/pkg/httpstream
 k8s.io/streaming/pkg/httpstream/wsstream
