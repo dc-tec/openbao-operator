@@ -35,7 +35,7 @@ make test               # Unit tests (fast, no envtest)
 make test-sum           # Unit tests with gotestsum output + JUnit/coverage artifacts in dist/test/
 make test-integration   # Envtest-based integration tests (-tags=integration)
 make test-integration-sum # Envtest tests with gotestsum output + JUnit/coverage artifacts in dist/test/
-make test-ci            # Unit + integration tests (CI-equivalent)
+make test-ci            # Unit, integration, and cluster-independent E2E support tests (CI-equivalent)
 make ci-core            # Main pre-PR local gate (everything except E2E)
 make test-update-golden # Update HCL golden files
 make test-e2e           # E2E tests (requires Kind)
