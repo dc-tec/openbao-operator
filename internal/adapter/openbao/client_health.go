@@ -30,13 +30,13 @@ func (c *Client) Health(ctx context.Context) (*portopenbao.HealthStatus, error) 
 		}
 	}
 
-	resp, body, err := c.doAndReadAll(req, nil, "failed to query health endpoint")
+	statusCode, body, err := c.doAndReadAll(req, nil, "failed to query health endpoint")
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode == http.StatusForbidden {
+	if statusCode == http.StatusForbidden {
 		return nil, fmt.Errorf("health check forbidden: check operator permissions: %w",
-			portopenbao.NewAPIError("health check request failed", resp.StatusCode, body),
+			portopenbao.NewAPIError("health check request failed", statusCode, body),
 		)
 	}
 
@@ -71,12 +71,12 @@ func (c *Client) StepDown(ctx context.Context) error {
 		return fmt.Errorf("failed to authorize step-down request: %w", err)
 	}
 
-	resp, body, err := c.doAndReadAll(req, nil, "failed to execute step-down request")
+	statusCode, body, err := c.doAndReadAll(req, nil, "failed to execute step-down request")
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		return portopenbao.NewAPIError("step-down request failed", resp.StatusCode, body)
+	if statusCode != http.StatusNoContent && statusCode != http.StatusOK {
+		return portopenbao.NewAPIError("step-down request failed", statusCode, body)
 	}
 
 	return nil

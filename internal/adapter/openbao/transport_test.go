@@ -2,8 +2,11 @@ package openbao
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -11,6 +14,45 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type trackingResponseBody struct {
+	reader     io.Reader
+	closed     bool
+	reachedEOF bool
+}
+
+func (b *trackingResponseBody) Read(p []byte) (int, error) {
+	n, err := b.reader.Read(p)
+	if errors.Is(err, io.EOF) {
+		b.reachedEOF = true
+	}
+	return n, err
+}
+
+func (b *trackingResponseBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+type errorThenReader struct {
+	err           error
+	reader        io.Reader
+	returnedError bool
+}
+
+func (r *errorThenReader) Read(p []byte) (int, error) {
+	if !r.returnedError {
+		r.returnedError = true
+		return 0, r.err
+	}
+	return r.reader.Read(p)
+}
 
 func TestSmartClient_CircuitBreaker_SharedAcrossClients(t *testing.T) {
 	var requests int32
@@ -96,6 +138,99 @@ func TestClient_DoRequestRecordsRequestMetric(t *testing.T) {
 	after := testutil.ToFloat64(counter)
 	if after != before+1 {
 		t.Fatalf("request counter delta = %v, want 1", after-before)
+	}
+}
+
+func TestClient_DoAndReadAllOwnsResponseBody(t *testing.T) {
+	readErr := errors.New("response body read failed")
+	tests := []struct {
+		name           string
+		path           string
+		statusCode     int
+		reader         io.Reader
+		wantStatusCode int
+		wantBody       string
+		wantErr        bool
+		wantReadErr    bool
+		wantOverloaded bool
+		wantDrained    bool
+	}{
+		{
+			name:           "successful response",
+			path:           apiPathSysLeader,
+			statusCode:     http.StatusOK,
+			reader:         strings.NewReader("leader"),
+			wantStatusCode: http.StatusOK,
+			wantBody:       "leader",
+		},
+		{
+			name:           "overload response",
+			path:           apiPathSysLeader,
+			statusCode:     http.StatusServiceUnavailable,
+			reader:         strings.NewReader("unavailable"),
+			wantErr:        true,
+			wantOverloaded: true,
+		},
+		{
+			name:       "response body read failure",
+			path:       apiPathSysLeader,
+			statusCode: http.StatusOK,
+			reader: &errorThenReader{
+				err:    readErr,
+				reader: strings.NewReader("remaining"),
+			},
+			wantErr:     true,
+			wantReadErr: true,
+			wantDrained: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			responseBody := &trackingResponseBody{reader: tt.reader}
+			client := &Client{
+				httpClient: &http.Client{
+					Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: tt.statusCode,
+							Header:     make(http.Header),
+							Body:       responseBody,
+							Request:    req,
+						}, nil
+					}),
+				},
+			}
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://openbao.example"+tt.path, nil)
+			if err != nil {
+				t.Fatalf("NewRequestWithContext() error: %v", err)
+			}
+
+			gotStatusCode, gotBody, err := client.doAndReadAll(req, nil, "test request")
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("doAndReadAll() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantReadErr && !errors.Is(err, readErr) {
+				t.Errorf("doAndReadAll() error = %v, want wrapped read error", err)
+			}
+			if tt.wantOverloaded && !operatorerrors.IsTransientRemoteOverloaded(err) {
+				t.Errorf("doAndReadAll() error = %v, want transient remote overload", err)
+			}
+			if gotStatusCode != tt.wantStatusCode {
+				t.Errorf("doAndReadAll() status code = %d, want %d", gotStatusCode, tt.wantStatusCode)
+			}
+			if string(gotBody) != tt.wantBody {
+				t.Errorf("doAndReadAll() body = %q, want %q", gotBody, tt.wantBody)
+			}
+			if tt.wantErr && gotBody != nil {
+				t.Errorf("doAndReadAll() body = %q, want nil on error", gotBody)
+			}
+			if tt.wantDrained && !responseBody.reachedEOF {
+				t.Error("doAndReadAll() did not drain response body")
+			}
+			if !responseBody.closed {
+				t.Error("doAndReadAll() did not close response body")
+			}
+		})
 	}
 }
 

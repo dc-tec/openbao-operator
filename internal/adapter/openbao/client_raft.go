@@ -61,15 +61,15 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft join request")
+	statusCode, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft join request")
 	if err != nil {
 		if translatedErr := translateRaftAPIErrorFromChain(err, portopenbao.ErrAlreadyJoined, "already joined"); translatedErr != nil {
 			return translatedErr
 		}
 		return err
 	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		apiErr := portopenbao.NewAPIError("raft join request failed", resp.StatusCode, body)
+	if statusCode != http.StatusOK && statusCode != http.StatusNoContent {
+		apiErr := portopenbao.NewAPIError("raft join request failed", statusCode, body)
 		if translatedErr := translateRaftAPIErrorFromChain(apiErr, portopenbao.ErrAlreadyJoined, "already joined"); translatedErr != nil {
 			return translatedErr
 		}
@@ -101,12 +101,12 @@ func (c *Client) ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftCo
 		return nil, fmt.Errorf("failed to authorize raft configuration request: %w", err)
 	}
 
-	resp, body, err := c.doAndReadAll(req, nil, "failed to execute raft configuration request")
+	statusCode, body, err := c.doAndReadAll(req, nil, "failed to execute raft configuration request")
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, portopenbao.NewAPIError("raft configuration request failed", resp.StatusCode, body)
+	if statusCode != http.StatusOK {
+		return nil, portopenbao.NewAPIError("raft configuration request failed", statusCode, body)
 	}
 
 	type raftConfigEnvelope struct {
@@ -138,15 +138,15 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftA
 		return nil, fmt.Errorf("failed to authorize raft autopilot state request: %w", err)
 	}
 
-	resp, body, err := c.doAndReadAll(req, nil, "failed to execute raft autopilot state request")
+	statusCode, body, err := c.doAndReadAll(req, nil, "failed to execute raft autopilot state request")
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("%w: %w", ErrAutopilotNotAvailable, portopenbao.NewAPIError("raft autopilot state request failed", resp.StatusCode, body))
+	if statusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("%w: %w", ErrAutopilotNotAvailable, portopenbao.NewAPIError("raft autopilot state request failed", statusCode, body))
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, portopenbao.NewAPIError("raft autopilot state request failed", resp.StatusCode, body)
+	if statusCode != http.StatusOK {
+		return nil, portopenbao.NewAPIError("raft autopilot state request failed", statusCode, body)
 	}
 
 	type raftAutopilotEnvelope struct {
@@ -184,12 +184,12 @@ func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute autopilot config request")
+	statusCode, body, err := c.doAndReadAll(httpReq, nil, "failed to execute autopilot config request")
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return portopenbao.NewAPIError("autopilot config request failed", resp.StatusCode, body)
+	if statusCode != http.StatusOK && statusCode != http.StatusNoContent {
+		return portopenbao.NewAPIError("autopilot config request failed", statusCode, body)
 	}
 
 	return nil
@@ -217,15 +217,15 @@ func (c *Client) executeRaftPeerAction(ctx context.Context, serverID string, pat
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, body, err := c.doAndReadAll(httpReq, nil, fmt.Sprintf("failed to execute raft %s request", action))
+	statusCode, body, err := c.doAndReadAll(httpReq, nil, fmt.Sprintf("failed to execute raft %s request", action))
 	if err != nil {
 		if translatedErr := translateRaftPeerActionAPIError(err, action); translatedErr != nil {
 			return translatedErr
 		}
 		return err
 	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		apiErr := portopenbao.NewAPIError(fmt.Sprintf("raft %s request failed", action), resp.StatusCode, body)
+	if statusCode != http.StatusOK && statusCode != http.StatusNoContent {
+		apiErr := portopenbao.NewAPIError(fmt.Sprintf("raft %s request failed", action), statusCode, body)
 		if translatedErr := translateRaftPeerActionAPIError(apiErr, action); translatedErr != nil {
 			return translatedErr
 		}
@@ -274,12 +274,12 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []portopen
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft configuration update request")
+	statusCode, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft configuration update request")
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return portopenbao.NewAPIError("raft configuration update request failed", resp.StatusCode, body)
+	if statusCode != http.StatusOK && statusCode != http.StatusNoContent {
+		return portopenbao.NewAPIError("raft configuration update request failed", statusCode, body)
 	}
 
 	return nil
