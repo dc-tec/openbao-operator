@@ -532,8 +532,10 @@ func TestWrapTransientRemoteOverloaded(t *testing.T) {
 				t.Errorf("expected transient=%v, got %v", tt.wantIsTransient, IsTransientRemoteOverloaded(got))
 			}
 
-			isWrapped := errors.Is(got, ErrTransientRemoteOverloaded) && got != ErrTransientRemoteOverloaded
-			if isWrapped != tt.wantWrapped && tt.err != ErrTransientRemoteOverloaded {
+			isSentinel := got == ErrTransientRemoteOverloaded //nolint:errorlint // Exact identity distinguishes the unwrapped sentinel.
+			isWrapped := errors.Is(got, ErrTransientRemoteOverloaded) && !isSentinel
+			isSentinelInput := tt.err == ErrTransientRemoteOverloaded //nolint:errorlint // Exact identity selects the sentinel input case.
+			if isWrapped != tt.wantWrapped && !isSentinelInput {
 				t.Errorf("expected wrapped=%v, got %v (err=%v)", tt.wantWrapped, isWrapped, got)
 			}
 		})

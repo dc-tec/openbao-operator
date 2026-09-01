@@ -8,6 +8,7 @@ linters:
     - copyloopvar
     - dupl
     - errcheck
+    - errorlint
     - ginkgolinter
     - goconst
     - gocyclo
@@ -25,6 +26,11 @@ linters:
     - unparam
     - unused
   settings:
+    errorlint:
+      asserts: true
+      comparison: true
+      # Audit error-chain composition and multi-error precedence separately.
+      errorf: false
     nolintlint:
       require-explanation: true
       require-specific: true

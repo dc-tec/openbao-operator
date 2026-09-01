@@ -893,7 +893,7 @@ func TestInfraReconciler_MapManagerReconcileError(t *testing.T) {
 
 	t.Run("unmapped error passes through", func(t *testing.T) {
 		original := errors.New("boom")
-		if got := r.mapManagerReconcileError(original); got != original {
+		if got := r.mapManagerReconcileError(original); got != original { //nolint:errorlint // Exact identity is the behavior under test.
 			t.Fatalf("got %v, want original %v", got, original)
 		}
 	})
