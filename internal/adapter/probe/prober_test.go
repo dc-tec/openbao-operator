@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -135,9 +136,13 @@ func TestHTTPProber_CheckStartup_StatusCodes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			handlerErrors := make(chan error, 1)
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/v1/sys/health" {
-					t.Fatalf("startup path=%q, want /v1/sys/health", r.URL.Path)
+					select {
+					case handlerErrors <- fmt.Errorf("startup path=%q, want /v1/sys/health", r.URL.Path):
+					default:
+					}
 				}
 				w.WriteHeader(tt.statusCode)
 			}))
@@ -164,6 +169,11 @@ func TestHTTPProber_CheckStartup_StatusCodes(t *testing.T) {
 			}
 
 			err = prober.CheckStartup(context.Background())
+			select {
+			case handlerErr := <-handlerErrors:
+				t.Fatal(handlerErr)
+			default:
+			}
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("CheckStartup() error = %v, wantErr %v", err, tt.wantErr)
 			}

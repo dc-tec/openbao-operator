@@ -15,22 +15,29 @@ func TestContainerRegistryClientListsManifestReferencesAndCachesToken(t *testing
 
 	tokenRequests := 0
 	manifestRequests := 0
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/token":
 			tokenRequests++
 			username, password, ok := r.BasicAuth()
 			if !ok || username != "github-actions[bot]" || password != "github-token" {
-				t.Fatalf("unexpected registry token credentials: username=%q ok=%t", username, ok)
+				handlerErrors.Errorf("unexpected registry token credentials: username=%q ok=%t", username, ok)
+				http.Error(w, "invalid credentials", http.StatusUnauthorized)
+				return
 			}
 			if got := r.URL.Query().Get("scope"); got != "repository:dc-tec/openbao-operator:pull" {
-				t.Fatalf("scope = %q", got)
+				handlerErrors.Errorf("scope = %q", got)
+				http.Error(w, "invalid scope", http.StatusBadRequest)
+				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]string{"token": "registry-token"})
 		case strings.HasPrefix(r.URL.Path, "/v2/dc-tec/openbao-operator/manifests/"):
 			manifestRequests++
 			if got := r.Header.Get("Authorization"); got != "Bearer registry-token" {
-				t.Fatalf("authorization = %q", got)
+				handlerErrors.Errorf("authorization = %q", got)
+				http.Error(w, "invalid authorization", http.StatusUnauthorized)
+				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"schemaVersion": 2,

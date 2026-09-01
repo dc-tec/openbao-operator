@@ -124,10 +124,11 @@ func TestClientManager_CircuitBreakerIsolation(t *testing.T) {
 	defer mgr2.Close()
 
 	var requests int32
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&requests, 1)
 		if r.URL.Path != apiPathSysStepDown {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			handlerErrors.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte("boom"))

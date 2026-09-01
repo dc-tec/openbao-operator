@@ -435,9 +435,12 @@ func TestGitHubClientPaginatesVersions(t *testing.T) {
 		},
 	}
 
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if auth := r.Header.Get("Authorization"); !strings.HasPrefix(auth, "Bearer ") {
-			t.Fatalf("missing bearer auth header")
+			handlerErrors.Errorf("missing bearer auth header")
+			http.Error(w, "missing bearer auth header", http.StatusUnauthorized)
+			return
 		}
 		page := r.URL.Query().Get("page")
 		if page == "" {
@@ -448,15 +451,15 @@ func TestGitHubClientPaginatesVersions(t *testing.T) {
 		switch page {
 		case "1":
 			if err := json.NewEncoder(w).Encode(pageOne); err != nil {
-				t.Fatalf("encode page1: %v", err)
+				handlerErrors.Errorf("encode page1: %v", err)
 			}
 		case "2":
 			if err := json.NewEncoder(w).Encode(pageTwo); err != nil {
-				t.Fatalf("encode page2: %v", err)
+				handlerErrors.Errorf("encode page2: %v", err)
 			}
 		default:
 			if err := json.NewEncoder(w).Encode([]apiPackageVersion{}); err != nil {
-				t.Fatalf("encode empty page: %v", err)
+				handlerErrors.Errorf("encode empty page: %v", err)
 			}
 		}
 	}))
@@ -677,14 +680,19 @@ func TestExtractAPIErrorMessageFallback(t *testing.T) {
 }
 
 func TestGitHubClientDeleteHandlesNotFoundAsSuccess(t *testing.T) {
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
-			t.Fatalf("method = %s, want DELETE", r.Method)
+			handlerErrors.Errorf("method = %s, want DELETE", r.Method)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
 		}
 		idText := filepath.Base(r.URL.Path)
 		id, err := strconv.Atoi(idText)
 		if err != nil {
-			t.Fatalf("parse id: %v", err)
+			handlerErrors.Errorf("parse id: %v", err)
+			http.Error(w, "invalid package version", http.StatusBadRequest)
+			return
 		}
 		if id == 404 {
 			w.WriteHeader(http.StatusNotFound)

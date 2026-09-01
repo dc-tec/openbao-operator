@@ -1,0 +1,155 @@
+id: no-fail-now-in-httptest-handler
+valid:
+  - |
+    package p
+    import (
+      "errors"
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      handlerErrs := make(chan error, 1)
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        handlerErrs <- errors.New("unexpected request")
+        http.Error(w, "unexpected request", http.StatusBadRequest)
+      }))
+      defer server.Close()
+      _, _ = server.Client().Get(server.URL)
+      if err := <-handlerErrs; err != nil {
+        t.Fatal(err)
+      }
+    }
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Fatal("safe because ServeHTTP is called synchronously")
+      })
+      handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+    }
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Errorf("nonfatal assertion: %s", r.URL.Path)
+      }))
+      defer server.Close()
+    }
+invalid:
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Fatal("unexpected request")
+      }))
+      defer server.Close()
+    }
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Fatalf("unexpected path: %s", r.URL.Path)
+      }))
+      defer server.Close()
+    }
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.FailNow()
+      }))
+      defer server.Close()
+    }
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+      "github.com/stretchr/testify/require"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        require.NoError(t, r.Body.Close())
+      }))
+      defer server.Close()
+    }
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Skip("unsupported environment")
+      }))
+      defer server.Close()
+    }
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Skipf("unsupported path: %s", r.URL.Path)
+      }))
+      defer server.Close()
+    }
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.SkipNow()
+      }))
+      defer server.Close()
+    }
+  - |
+    package p
+    import (
+      "net/http"
+      "net/http/httptest"
+      "testing"
+      "github.com/stretchr/testify/assert"
+    )
+    func TestHandler(t *testing.T) {
+      server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        assert.FailNow(t, "unexpected request")
+      }))
+      defer server.Close()
+    }

@@ -68,23 +68,24 @@ func TestClientFactory_LoginJWT(t *testing.T) {
 		JWT  string `json:"jwt"`
 	}
 
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
+			handlerErrors.Errorf("unexpected method: %s", r.Method)
 		}
 		if r.URL.Path != apiPathAuthJWTLogin {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			handlerErrors.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if got := r.Header.Get("Content-Type"); got != "application/json" {
-			t.Fatalf("Content-Type=%q, expected application/json", got)
+			handlerErrors.Errorf("Content-Type=%q, expected application/json", got)
 		}
 
 		var body requestBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("failed to decode request body: %v", err)
+			handlerErrors.Errorf("failed to decode request body: %v", err)
 		}
 		if body.Role != "role" || body.JWT != "jwt" {
-			t.Fatalf("unexpected body: %#v", body)
+			handlerErrors.Errorf("unexpected body: %#v", body)
 		}
 
 		w.Header().Set("Content-Type", "application/json")

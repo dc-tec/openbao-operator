@@ -39,9 +39,10 @@ type healthBoolTestCase struct {
 func newHealthResponseClient(t *testing.T, response HealthResponse) *Client {
 	t.Helper()
 
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatal(err)
+			handlerErrors.Errorf("encode health response: %v", err)
 		}
 	}))
 	t.Cleanup(server.Close)
@@ -229,6 +230,7 @@ func TestClient_Health(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			handlerErrors := newHTTPHandlerErrors(t)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != apiPathSysHealth {
 					t.Errorf("unexpected path: %s", r.URL.Path)
@@ -239,7 +241,7 @@ func TestClient_Health(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				if err := json.NewEncoder(w).Encode(tt.response); err != nil {
-					t.Fatal(err)
+					handlerErrors.Errorf("encode health response: %v", err)
 				}
 			}))
 			defer server.Close()
@@ -415,6 +417,7 @@ func TestClient_StepDown(t *testing.T) {
 func TestClient_StepDownWithInlineJWTUsesStandardJWTFallback(t *testing.T) {
 	var loginRequests int
 	var stepDownRequests int
+	handlerErrors := newHTTPHandlerErrors(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -431,10 +434,10 @@ func TestClient_StepDownWithInlineJWTUsesStandardJWTFallback(t *testing.T) {
 				t.Errorf("step-down method=%s, want PUT", r.Method)
 			}
 			if got := r.Header.Get(headerVaultToken); got != "s.stepdown" {
-				t.Fatalf("%s=%q, want %q", headerVaultToken, got, "s.stepdown")
+				handlerErrors.Errorf("%s=%q, want %q", headerVaultToken, got, "s.stepdown")
 			}
 			if got := r.Header.Get(headerInlineAuthPath); got != "" {
-				t.Fatalf("%s=%q, want empty", headerInlineAuthPath, got)
+				handlerErrors.Errorf("%s=%q, want empty", headerInlineAuthPath, got)
 			}
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -461,12 +464,13 @@ func TestClient_StepDownWithInlineJWTUsesStandardJWTFallback(t *testing.T) {
 }
 
 func TestClient_JoinRaftCluster_AlreadyJoinedStatus(t *testing.T) {
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != apiPathRaftJoin {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			handlerErrors.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPut {
-			t.Fatalf("unexpected method: %s", r.Method)
+			handlerErrors.Errorf("unexpected method: %s", r.Method)
 		}
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"errors":["node already joined to cluster"]}`))
@@ -492,9 +496,10 @@ func TestClient_JoinRaftCluster_AlreadyJoinedStatus(t *testing.T) {
 }
 
 func TestClient_JoinRaftCluster_NotJoinedResponse(t *testing.T) {
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != apiPathRaftJoin {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			handlerErrors.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"joined":false}`))
@@ -519,12 +524,13 @@ func TestClient_JoinRaftCluster_NotJoinedResponse(t *testing.T) {
 }
 
 func TestClient_JoinRaftCluster_StandaloneStatusIsNotAlreadyJoined(t *testing.T) {
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != apiPathRaftJoin {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			handlerErrors.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPut {
-			t.Fatalf("unexpected method: %s", r.Method)
+			handlerErrors.Errorf("unexpected method: %s", r.Method)
 		}
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"errors":["node already initialized as standalone"]}`))
@@ -550,12 +556,13 @@ func TestClient_JoinRaftCluster_StandaloneStatusIsNotAlreadyJoined(t *testing.T)
 }
 
 func TestClient_DemoteRaftPeer_AlreadyNonVoterStatus(t *testing.T) {
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != apiPathRaftDemotePeer {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			handlerErrors.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
+			handlerErrors.Errorf("unexpected method: %s", r.Method)
 		}
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"errors":["peer is already a non-voter"]}`))
@@ -612,12 +619,13 @@ type raftPeerActionTranslationTest struct {
 func assertTranslatedRaftPeerActionError(t *testing.T, tc raftPeerActionTranslationTest) {
 	t.Helper()
 
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != tc.path {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			handlerErrors.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
+			handlerErrors.Errorf("unexpected method: %s", r.Method)
 		}
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(tc.responseBody))
@@ -646,12 +654,13 @@ func assertTranslatedRaftPeerActionError(t *testing.T, tc raftPeerActionTranslat
 }
 
 func TestClient_JoinRaftCluster_AlreadyJoinedWrappedOverload(t *testing.T) {
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != apiPathRaftJoin {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			handlerErrors.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPut {
-			t.Fatalf("unexpected method: %s", r.Method)
+			handlerErrors.Errorf("unexpected method: %s", r.Method)
 		}
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"errors":["node already joined to cluster"]}`))
@@ -896,6 +905,7 @@ func TestClient_Init(t *testing.T) {
 }
 
 func TestClient_Init_UsesContextDeadlineBeyondDefaultRequestTimeout(t *testing.T) {
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != apiPathSysInit {
 			t.Errorf("unexpected path: %s", r.URL.Path)
@@ -911,7 +921,7 @@ func TestClient_Init_UsesContextDeadlineBeyondDefaultRequestTimeout(t *testing.T
 			UnsealKeysB64: []string{"key1"},
 			RootToken:     "s.root-token",
 		}); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+			handlerErrors.Errorf("failed to encode response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -1057,6 +1067,7 @@ func TestClient_LoginJWT(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			handlerErrors := newHTTPHandlerErrors(t)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != apiPathAuthJWTLogin {
 					t.Errorf("unexpected path: %s, want %s", r.URL.Path, apiPathAuthJWTLogin)
@@ -1088,7 +1099,7 @@ func TestClient_LoginJWT(t *testing.T) {
 
 				if tt.responseBody != nil {
 					if err := json.NewEncoder(w).Encode(tt.responseBody); err != nil {
-						t.Fatal(err)
+						handlerErrors.Errorf("encode login response: %v", err)
 					}
 				}
 			}))
@@ -1123,9 +1134,10 @@ func TestClient_LoginJWT(t *testing.T) {
 }
 
 func TestClient_ReadRaftAutopilotState_NotFoundPreservesStatus(t *testing.T) {
+	handlerErrors := newHTTPHandlerErrors(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != apiPathRaftAutopilotState {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			handlerErrors.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"errors":["autopilot not enabled"]}`))

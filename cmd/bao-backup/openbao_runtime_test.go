@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -45,6 +46,7 @@ func TestOpenClusterClient_JWTInlineSnapshotUsesInlineAuthHeaders(t *testing.T) 
 
 	var loginRequests int32
 	var snapshotRequests int32
+	handlerErrors := newHTTPHandlerErrors(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -56,7 +58,11 @@ func TestOpenClusterClient_JWTInlineSnapshotUsesInlineAuthHeaders(t *testing.T) 
 			if r.Method != http.MethodGet {
 				t.Errorf("snapshot method=%s, want GET", r.Method)
 			}
-			requireInlineAuthHeaders(t, r, testBackupJWTAuthRole, testBackupJWTToken)
+			if err := validateInlineAuthHeaders(r, testBackupJWTAuthRole, testBackupJWTToken); err != nil {
+				handlerErrors.Errorf("%v", err)
+				http.Error(w, "invalid inline authentication headers", http.StatusBadRequest)
+				return
+			}
 			_, _ = w.Write([]byte(testBackupSnapshotData))
 		default:
 			http.NotFound(w, r)
@@ -113,6 +119,7 @@ func TestOpenClusterClient_JWTInlineRestoreUsesInlineAuthHeaders(t *testing.T) {
 
 			var loginRequests int32
 			var restoreRequests int32
+			handlerErrors := newHTTPHandlerErrors(t)
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
@@ -131,7 +138,11 @@ func TestOpenClusterClient_JWTInlineRestoreUsesInlineAuthHeaders(t *testing.T) {
 					if string(body) != testBackupRestoreData {
 						t.Errorf("restore body=%q, want %q", string(body), testBackupRestoreData)
 					}
-					requireInlineAuthHeaders(t, r, testBackupJWTAuthRole, testBackupJWTToken)
+					if err := validateInlineAuthHeaders(r, testBackupJWTAuthRole, testBackupJWTToken); err != nil {
+						handlerErrors.Errorf("%v", err)
+						http.Error(w, "invalid inline authentication headers", http.StatusBadRequest)
+						return
+					}
 					w.WriteHeader(http.StatusNoContent)
 				default:
 					http.NotFound(w, r)
@@ -234,35 +245,34 @@ func newInlineJWTBackupConfig() *backupconfig.ExecutorConfig {
 	}
 }
 
-func requireInlineAuthHeaders(t *testing.T, r *http.Request, role, jwtToken string) {
-	t.Helper()
-
+func validateInlineAuthHeaders(r *http.Request, role, jwtToken string) error {
 	if got := r.Header.Get(testVaultTokenHeader); got != "" {
-		t.Fatalf("%s=%q, want empty", testVaultTokenHeader, got)
+		return fmt.Errorf("%s=%q, want empty", testVaultTokenHeader, got)
 	}
 	if got := r.Header.Get(testInlineAuthPathHeader); got != testInlineAuthJWTPath {
-		t.Fatalf("%s=%q, want %q", testInlineAuthPathHeader, got, testInlineAuthJWTPath)
+		return fmt.Errorf("%s=%q, want %q", testInlineAuthPathHeader, got, testInlineAuthJWTPath)
 	}
 	if got := r.Header.Get(testInlineAuthOperationHeader); got != testInlineAuthOperation {
-		t.Fatalf("%s=%q, want %q", testInlineAuthOperationHeader, got, testInlineAuthOperation)
+		return fmt.Errorf("%s=%q, want %q", testInlineAuthOperationHeader, got, testInlineAuthOperation)
 	}
 
-	requireInlineAuthParameter(t, r.Header.Get(testInlineAuthRoleParameterHeader), "role", role)
-	requireInlineAuthParameter(t, r.Header.Get(testInlineAuthJWTParameterHeader), "jwt", jwtToken)
+	if err := validateInlineAuthParameter(r.Header.Get(testInlineAuthRoleParameterHeader), "role", role); err != nil {
+		return err
+	}
+	return validateInlineAuthParameter(r.Header.Get(testInlineAuthJWTParameterHeader), "jwt", jwtToken)
 }
 
-func requireInlineAuthParameter(t *testing.T, encoded, key, value string) {
-	t.Helper()
-
+func validateInlineAuthParameter(encoded, key, value string) error {
 	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		t.Fatalf("failed to decode inline auth parameter %q: %v", key, err)
+		return fmt.Errorf("decode inline auth parameter %q: %w", key, err)
 	}
 	var param testInlineAuthParameter
 	if err := json.Unmarshal(decoded, &param); err != nil {
-		t.Fatalf("failed to unmarshal inline auth parameter %q: %v", key, err)
+		return fmt.Errorf("unmarshal inline auth parameter %q: %w", key, err)
 	}
 	if param.Key != key || param.Value != value {
-		t.Fatalf("inline auth parameter=%#v, want key=%q value=%q", param, key, value)
+		return fmt.Errorf("inline auth parameter=%#v, want key=%q value=%q", param, key, value)
 	}
+	return nil
 }
