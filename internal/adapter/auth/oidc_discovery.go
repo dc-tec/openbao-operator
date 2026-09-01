@@ -31,9 +31,6 @@ func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*por
 	httpClient := &http.Client{Transport: transport, Timeout: defaultOIDCHTTPTimeout}
 	oidcConfig, err := fetchOIDCWellKnown(ctx, httpClient, wellKnownURL)
 	if err != nil {
-		if statusErr, ok := err.(*HTTPStatusError); ok {
-			return nil, statusErr
-		}
 		return nil, err
 	}
 	if oidcConfig.Issuer == "" {

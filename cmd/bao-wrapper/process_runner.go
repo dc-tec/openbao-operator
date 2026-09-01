@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -48,7 +49,8 @@ func run(ctx context.Context) error {
 	startFileWatcher(ctx, cmd, watchFile, interval)
 
 	if err := cmd.Wait(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return fmt.Errorf("child process exited with code %d: %w", exitErr.ExitCode(), err)
 		}
 		return fmt.Errorf("child process exited with error: %w", err)

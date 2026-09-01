@@ -98,7 +98,7 @@ func (b *Bucket) List(ctx context.Context, prefix string) ([]blobstore.ObjectInf
 	iter := b.bucket.List(&blob.ListOptions{Prefix: prefix})
 	for {
 		obj, err := iter.Next(ctx)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
