@@ -76,6 +76,8 @@ func Test_getFileHash(t *testing.T) {
 		{
 			name: "valid file with content",
 			setupFile: func(t *testing.T) string {
+				t.Helper()
+
 				tmpFile, err := os.CreateTemp("", "test-*.txt")
 				if err != nil {
 					t.Fatalf("failed to create temp file: %v", err)
@@ -91,6 +93,8 @@ func Test_getFileHash(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T, hash []byte, filePath string) {
+				t.Helper()
+
 				// Verify hash matches expected SHA256
 				f, err := os.Open(filePath)
 				if err != nil {
@@ -117,6 +121,8 @@ func Test_getFileHash(t *testing.T) {
 		{
 			name: "non-existent file",
 			setupFile: func(t *testing.T) string {
+				t.Helper()
+
 				return "/nonexistent/file/path"
 			},
 			wantErr: true,
@@ -124,6 +130,8 @@ func Test_getFileHash(t *testing.T) {
 		{
 			name: "empty file",
 			setupFile: func(t *testing.T) string {
+				t.Helper()
+
 				tmpFile, err := os.CreateTemp("", "test-empty-*.txt")
 				if err != nil {
 					t.Fatalf("failed to create temp file: %v", err)
@@ -135,6 +143,8 @@ func Test_getFileHash(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T, hash []byte, filePath string) {
+				t.Helper()
+
 				// Empty file should have a known SHA256 hash
 				expected := sha256.Sum256([]byte{})
 				if !bytes.Equal(hash, expected[:]) {
@@ -145,6 +155,8 @@ func Test_getFileHash(t *testing.T) {
 		{
 			name: "file with binary content",
 			setupFile: func(t *testing.T) string {
+				t.Helper()
+
 				tmpFile, err := os.CreateTemp("", "test-binary-*.bin")
 				if err != nil {
 					t.Fatalf("failed to create temp file: %v", err)
@@ -160,6 +172,8 @@ func Test_getFileHash(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T, hash []byte, filePath string) {
+				t.Helper()
+
 				// Verify hash is correct
 				f, err := os.Open(filePath)
 				if err != nil {

@@ -381,7 +381,6 @@ func RunCommandViaJWT(
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
-//nolint:unparam
 func randString(n int) string {
 	b := make([]rune, n)
 	for i := range b {

@@ -25,8 +25,6 @@ func (m *Manager) patchStatus(ctx context.Context, restore *openbaov1alpha1.Open
 }
 
 // failRestore transitions the restore to Failed phase.
-//
-//nolint:unparam // ctrl.Result is always zero value but required by controller-runtime interface
 func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
 	original := restore.DeepCopy()
 	now := metav1.Now()

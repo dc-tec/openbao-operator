@@ -226,9 +226,7 @@ func renderSelfInitStanzas(body *hclwrite.Body, requests []openbaov1alpha1.SelfI
 		}
 
 		if dataVal != cty.NilVal {
-			if err := setSelfInitRequestData(requestBody, dataVal); err != nil {
-				return fmt.Errorf("failed to render self-init request data for request %q: %w", req.Name, err)
-			}
+			setSelfInitRequestData(requestBody, dataVal)
 		}
 
 		initBody.AppendBlock(requestBlock)
@@ -269,10 +267,9 @@ func selfInitHeadersToCty(headers map[string][]string) (cty.Value, error) {
 	return cty.ObjectVal(rendered), nil
 }
 
-//nolint:unparam // Error return maintained for API consistency and future extensibility
-func setSelfInitRequestData(requestBody *hclwrite.Body, dataVal cty.Value) error {
+func setSelfInitRequestData(requestBody *hclwrite.Body, dataVal cty.Value) {
 	if dataVal == cty.NilVal {
-		return nil
+		return
 	}
 
 	// Prefer "data { ... }" blocks which match OpenBao self-init docs and the
@@ -290,9 +287,8 @@ func setSelfInitRequestData(requestBody *hclwrite.Body, dataVal cty.Value) error
 		for _, k := range keys {
 			dataBody.SetAttributeValue(k, dataMap[k])
 		}
-		return nil
+		return
 	}
 
 	requestBody.SetAttributeValue("data", dataVal)
-	return nil
 }
