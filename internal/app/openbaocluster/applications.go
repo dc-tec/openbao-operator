@@ -102,6 +102,22 @@ func (a *Applications) EvaluateTLSReadiness(
 	return statusops.EvaluateTLSReadiness(ctx, a.config.StatusDependencies.Reader, cluster)
 }
 
+// EvaluateACMECacheReadiness evaluates the shared ACME cache readiness contract.
+func (a *Applications) EvaluateACMECacheReadiness(
+	ctx context.Context,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (StatusConditionResult, bool) {
+	return statusops.EvaluateACMECacheReadiness(ctx, a.config.StatusDependencies.Reader, cluster)
+}
+
+// EvaluateAuditFileStorageReadiness evaluates the audit file storage readiness contract.
+func (a *Applications) EvaluateAuditFileStorageReadiness(
+	ctx context.Context,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (StatusConditionResult, bool) {
+	return statusops.EvaluateAuditFileStorageReadiness(ctx, a.config.StatusDependencies.Reader, cluster)
+}
+
 // HandleDeletion executes the application-owned deletion workflow.
 func (a *Applications) HandleDeletion(
 	ctx context.Context,
