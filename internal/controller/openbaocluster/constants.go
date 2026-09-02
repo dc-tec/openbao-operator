@@ -8,48 +8,21 @@ import (
 
 // Reason constants for OpenBaoCluster conditions.
 const (
-	ReasonGatewayAPIMissing                      = constants.ReasonGatewayAPIMissing
-	ReasonOIDCBootstrapConfigurationInvalid      = constants.ReasonOIDCBootstrapConfigurationInvalid
-	ReasonAPIServerNetworkConfigurationInvalid   = constants.ReasonAPIServerNetworkConfigurationInvalid
-	ReasonPrerequisitesMissing                   = constants.ReasonPrerequisitesMissing
-	ReasonUnsafeAdmissionDisabled                = "UnsafeAdmissionDisabled"
-	ReasonDevelopmentProfile                     = "DevelopmentProfile"
-	ReasonAmbientUnsealIdentity                  = "AmbientUnsealIdentity"
-	ReasonProfileNotSet                          = "ProfileNotSet"
-	ReasonRootTokenStored                        = "RootTokenStored"
-	ReasonStaticUnsealInUse                      = "StaticUnsealInUse"
-	ReasonTLSSecretMissing                       = "TLSSecretMissing"
-	ReasonTLSSecretInvalid                       = "TLSSecretInvalid"
-	ReasonACMEIntegrationReady                   = constants.ReasonACMEIntegrationReady
-	ReasonACMECacheReady                         = "ACMECacheReady"
-	ReasonGatewayIntegrationReady                = constants.ReasonGatewayIntegrationReady
-	ReasonIngressIntegrationReady                = constants.ReasonIngressIntegrationReady
-	ReasonAPIServerNetworkReady                  = constants.ReasonAPIServerNetworkReady
-	ReasonAPIServerEndpointIPsRecommended        = constants.ReasonAPIServerEndpointIPsRecommended
-	ReasonGatewayReferenceMissing                = constants.ReasonGatewayReferenceMissing
-	ReasonGatewayClassMissing                    = constants.ReasonGatewayClassMissing
-	ReasonGatewayClassPending                    = constants.ReasonGatewayClassPending
-	ReasonGatewayClassNotAccepted                = constants.ReasonGatewayClassNotAccepted
-	ReasonGatewayVersionUnsupported              = constants.ReasonGatewayVersionUnsupported
-	ReasonGatewayFeatureUnsupported              = constants.ReasonGatewayFeatureUnsupported
-	ReasonGatewayCapabilitiesUnknown             = constants.ReasonGatewayCapabilitiesUnknown
-	ReasonGatewayNotProgrammed                   = constants.ReasonGatewayNotProgrammed
-	ReasonGatewayProgrammingPending              = constants.ReasonGatewayProgrammingPending
-	ReasonGatewayListenerIncompatible            = constants.ReasonGatewayListenerIncompatible
-	ReasonGatewayRoutePending                    = constants.ReasonGatewayRoutePending
-	ReasonGatewayRouteNotAccepted                = constants.ReasonGatewayRouteNotAccepted
-	ReasonGatewayRouteReferencesUnresolved       = constants.ReasonGatewayRouteReferencesUnresolved
-	ReasonIngressClassMissing                    = constants.ReasonIngressClassMissing
-	ReasonIngressCapabilitiesUnknown             = constants.ReasonIngressCapabilitiesUnknown
-	ReasonIngressObjectPending                   = constants.ReasonIngressObjectPending
-	ReasonIngressLoadBalancerPending             = constants.ReasonIngressLoadBalancerPending
-	ReasonACMECacheNotConfigured                 = "ACMECacheNotConfigured"
-	ReasonACMECacheMissing                       = "ACMECacheMissing"
-	ReasonACMECachePending                       = "ACMECachePending"
-	ReasonACMECacheInvalidAccessMode             = "ACMECacheInvalidAccessMode"
-	ReasonACMEDomainNotResolvable                = constants.ReasonACMEDomainNotResolvable
-	ReasonACMEGatewayNotConfiguredForPassthrough = constants.ReasonACMEGatewayNotConfiguredForPassthrough
-	ReasonDisabled                               = "Disabled"
+	ReasonOIDCBootstrapConfigurationInvalid = constants.ReasonOIDCBootstrapConfigurationInvalid
+	ReasonUnsafeAdmissionDisabled           = "UnsafeAdmissionDisabled"
+	ReasonDevelopmentProfile                = "DevelopmentProfile"
+	ReasonAmbientUnsealIdentity             = "AmbientUnsealIdentity"
+	ReasonProfileNotSet                     = "ProfileNotSet"
+	ReasonRootTokenStored                   = "RootTokenStored"
+	ReasonStaticUnsealInUse                 = "StaticUnsealInUse"
+	ReasonTLSSecretMissing                  = "TLSSecretMissing"
+	ReasonTLSSecretInvalid                  = "TLSSecretInvalid"
+	ReasonACMECacheReady                    = "ACMECacheReady"
+	ReasonACMECacheNotConfigured            = "ACMECacheNotConfigured"
+	ReasonACMECacheMissing                  = "ACMECacheMissing"
+	ReasonACMECachePending                  = "ACMECachePending"
+	ReasonACMECacheInvalidAccessMode        = "ACMECacheInvalidAccessMode"
+	ReasonDisabled                          = "Disabled"
 
 	ReasonImageVersionMismatch = constants.ReasonImageVersionMismatch
 
