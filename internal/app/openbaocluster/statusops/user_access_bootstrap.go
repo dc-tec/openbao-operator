@@ -1,10 +1,11 @@
-package openbaocluster
+package statusops
 
 import (
 	"fmt"
 	"sort"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -46,6 +47,15 @@ func buildUserAccessBootstrapCondition(cluster *openbaov1alpha1.OpenBaoCluster) 
 			strings.Join(mounts, ", "),
 		),
 	}
+}
+
+// ApplyUserAccessBootstrapCondition evaluates and applies the best-effort
+// user-access bootstrap condition with the supplied reconciliation timestamp.
+func ApplyUserAccessBootstrapCondition(cluster *openbaov1alpha1.OpenBaoCluster, now metav1.Time) {
+	condition := buildUserAccessBootstrapCondition(cluster)
+	condition.ObservedGeneration = cluster.Generation
+	condition.LastTransitionTime = now
+	meta.SetStatusCondition(&cluster.Status.Conditions, condition)
 }
 
 func recognizedUserAccessBootstrapMounts(requests []openbaov1alpha1.SelfInitRequest) []string {

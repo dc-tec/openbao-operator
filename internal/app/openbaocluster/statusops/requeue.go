@@ -1,16 +1,20 @@
-package openbaocluster
+package statusops
 
 import (
 	"github.com/go-logr/logr"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
-func (r *OpenBaoClusterReconciler) determineStatusRequeue(logger logr.Logger, state *clusterState, original, cluster *openbaov1alpha1.OpenBaoCluster) ctrl.Result {
+func determineStatusRequeue(
+	logger logr.Logger,
+	state *StatusState,
+	original, cluster *openbaov1alpha1.OpenBaoCluster,
+) recon.Result {
 	if state == nil || original == nil || cluster == nil {
-		return ctrl.Result{}
+		return recon.Result{}
 	}
 
 	previousReadyReplicas := original.Status.ReadyReplicas
@@ -30,28 +34,28 @@ func (r *OpenBaoClusterReconciler) determineStatusRequeue(logger logr.Logger, st
 
 	if state.StatusStale {
 		logger.V(1).Info("StatefulSet status may be stale; requeuing to check status")
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}
+		return recon.Result{RequeueAfter: constants.RequeueShort}
 	}
 
 	if !state.Available && state.ReadyReplicas > 0 {
 		logger.V(1).Info("Not all replicas are ready; requeuing to check status",
 			"readyReplicas", state.ReadyReplicas,
 			"desiredReplicas", cluster.Spec.Replicas)
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}
+		return recon.Result{RequeueAfter: constants.RequeueShort}
 	}
 
 	if state.Available && readyReplicasChanged {
 		logger.V(1).Info("All replicas became ready; requeuing once to ensure status is persisted",
 			"readyReplicas", state.ReadyReplicas,
 			"previousReadyReplicas", previousReadyReplicas)
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}
+		return recon.Result{RequeueAfter: constants.RequeueShort}
 	}
 
 	if desiredReadReplicas > 0 && state.ReadReplicaReadyReplicas != desiredReadReplicas {
 		logger.V(1).Info("Read replica pool is still converging; requeuing to refresh status",
 			"readReplicaReadyReplicas", state.ReadReplicaReadyReplicas,
 			"desiredReadReplicas", desiredReadReplicas)
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}
+		return recon.Result{RequeueAfter: constants.RequeueShort}
 	}
 
 	if desiredReadReplicas > 0 && state.ReadReplicaReadyReplicas == desiredReadReplicas {
@@ -60,19 +64,19 @@ func (r *OpenBaoClusterReconciler) determineStatusRequeue(logger logr.Logger, st
 				"readServingKnown", state.ReadServingKnown,
 				"readServingAvailable", state.ReadServingAvailable,
 				"desiredReadReplicas", desiredReadReplicas)
-			return ctrl.Result{RequeueAfter: constants.RequeueShort}
+			return recon.Result{RequeueAfter: constants.RequeueShort}
 		}
 		if !state.ReadReplicaMembershipKnown || state.ReadReplicaRegisteredReplicas != desiredReadReplicas {
 			logger.V(1).Info("Read replica raft membership has not fully converged; requeuing to refresh status",
 				"readReplicaMembershipKnown", state.ReadReplicaMembershipKnown,
 				"readReplicaRegisteredReplicas", state.ReadReplicaRegisteredReplicas,
 				"desiredReadReplicas", desiredReadReplicas)
-			return ctrl.Result{RequeueAfter: constants.RequeueShort}
+			return recon.Result{RequeueAfter: constants.RequeueShort}
 		}
 		if !state.ReadReplicaAutopilotKnown {
 			logger.V(1).Info("Read replica Autopilot health has not been observed yet; requeuing to refresh status",
 				"desiredReadReplicas", desiredReadReplicas)
-			return ctrl.Result{RequeueAfter: constants.RequeueShort}
+			return recon.Result{RequeueAfter: constants.RequeueShort}
 		}
 	}
 
@@ -84,8 +88,8 @@ func (r *OpenBaoClusterReconciler) determineStatusRequeue(logger logr.Logger, st
 			"previousReadReplicaRegisteredReplicas", previousReadRegisteredReplicas,
 			"readReplicaHealthyReplicas", state.ReadReplicaHealthyReplicas,
 			"previousReadReplicaHealthyReplicas", previousReadHealthyReplicas)
-		return ctrl.Result{RequeueAfter: constants.RequeueShort}
+		return recon.Result{RequeueAfter: constants.RequeueShort}
 	}
 
-	return ctrl.Result{}
+	return recon.Result{}
 }

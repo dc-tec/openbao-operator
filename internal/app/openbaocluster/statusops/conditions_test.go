@@ -1,7 +1,8 @@
-package openbaocluster
+package statusops
 
 import (
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -180,4 +181,67 @@ func TestBuildSealedConditionAndApplyHelpers(t *testing.T) {
 			t.Fatalf("expected node mismatch condition to be removed, got %#v", cond)
 		}
 	})
+}
+
+func TestApplyAllConditionsPreservesTransitionTimeForUnchangedStatus(t *testing.T) {
+	t.Parallel()
+
+	cluster := newOpenBaoClusterStatusTestObject()
+	state := &StatusState{}
+	firstNow := metav1.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	secondNow := metav1.Date(2026, 9, 2, 10, 5, 0, 0, time.UTC)
+
+	applyAllConditions(cluster, state, nil, firstNow)
+	firstAvailable := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
+	if firstAvailable == nil {
+		t.Fatal("expected Available condition after first policy pass")
+	}
+	if !firstAvailable.LastTransitionTime.Equal(&firstNow) {
+		t.Fatalf("first transition time = %v, want %v", firstAvailable.LastTransitionTime, firstNow)
+	}
+
+	applyAllConditions(cluster, state, nil, secondNow)
+	secondAvailable := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
+	if secondAvailable == nil {
+		t.Fatal("expected Available condition after second policy pass")
+	}
+	if !secondAvailable.LastTransitionTime.Equal(&firstNow) {
+		t.Fatalf("unchanged condition transition time = %v, want preserved %v", secondAvailable.LastTransitionTime, firstNow)
+	}
+}
+
+func TestApplyAllConditionsOrder(t *testing.T) {
+	t.Parallel()
+
+	cluster := newOpenBaoClusterStatusTestObject()
+	cluster.Spec.Profile = openbaov1alpha1.ProfileDevelopment
+	applyAllConditions(cluster, &StatusState{}, nil, metav1.Now())
+
+	want := []openbaov1alpha1.ConditionType{
+		openbaov1alpha1.ConditionOpenBaoInitialized,
+		openbaov1alpha1.ConditionOpenBaoSealed,
+		openbaov1alpha1.ConditionOpenBaoLeader,
+		openbaov1alpha1.ConditionAvailable,
+		openbaov1alpha1.ConditionDegraded,
+		openbaov1alpha1.ConditionUpgrading,
+		openbaov1alpha1.ConditionBackingUp,
+		openbaov1alpha1.ConditionUserAccessBootstrap,
+		openbaov1alpha1.ConditionStorageConfigured,
+		openbaov1alpha1.ConditionReadReplicasReady,
+		openbaov1alpha1.ConditionReadServingAvailable,
+		openbaov1alpha1.ConditionRaftMembershipReady,
+		openbaov1alpha1.ConditionReadReplicasAutopilotHealthy,
+		openbaov1alpha1.ConditionReadReplicaStorageConfigured,
+		openbaov1alpha1.ConditionEtcdEncryptionWarning,
+		openbaov1alpha1.ConditionSecurityRisk,
+		openbaov1alpha1.ConditionProductionReady,
+	}
+	if len(cluster.Status.Conditions) != len(want) {
+		t.Fatalf("condition count = %d, want %d: %#v", len(cluster.Status.Conditions), len(want), cluster.Status.Conditions)
+	}
+	for index, conditionType := range want {
+		if got := cluster.Status.Conditions[index].Type; got != string(conditionType) {
+			t.Fatalf("condition[%d] = %q, want %q", index, got, conditionType)
+		}
+	}
 }

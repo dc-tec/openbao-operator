@@ -5,10 +5,12 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/statusops"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -34,8 +36,22 @@ type StatusDependencies struct {
 	MembershipRuntime  StatusMembershipRuntime
 }
 
-// StatusState is the app-layer status observation model used by controller status helpers.
+// StatusState is the app-layer observation model used by status reconciliation.
 type StatusState = statusops.StatusState
+
+// StatusPolicyInput contains the inputs for normal status reconciliation policy.
+type StatusPolicyInput = statusops.PolicyInput
+
+// ApplyStatusPolicy computes status-owned fields and a requeue decision from observed cluster state.
+func ApplyStatusPolicy(logger logr.Logger, input StatusPolicyInput) recon.Result {
+	return statusops.ApplyPolicy(logger, input)
+}
+
+// ApplyUserAccessBootstrapCondition updates the user-access condition for the
+// current cluster generation.
+func ApplyUserAccessBootstrapCondition(cluster *openbaov1alpha1.OpenBaoCluster, now metav1.Time) {
+	statusops.ApplyUserAccessBootstrapCondition(cluster, now)
+}
 
 // GatherStatusState reads current cluster state needed for status reconciliation.
 func GatherStatusState(
@@ -76,22 +92,12 @@ func GatherStatusState(
 	)
 }
 
-// ObservedVersionFromPods derives the observed workload version from pod labels.
-func ObservedVersionFromPods(state *StatusState) string {
-	return statusops.ObservedVersionFromPods(state)
-}
-
-// ReconcileCurrentVersion aligns status.currentVersion with observed workload version.
-func ReconcileCurrentVersion(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, state *StatusState, observedVersion string) {
-	statusops.ReconcileCurrentVersion(logger, cluster, state, observedVersion)
-}
-
-// MaybeAdvanceCurrentVersionForBlueGreen advances currentVersion on completed blue/green upgrades.
-func MaybeAdvanceCurrentVersionForBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, observedVersion string) {
-	statusops.MaybeAdvanceCurrentVersionForBlueGreen(logger, cluster, observedVersion)
-}
-
 // ShouldWarnSelfInitDisabled returns whether reconciliation should emit the root-token warning.
 func ShouldWarnSelfInitDisabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	return statusops.ShouldWarnSelfInitDisabled(cluster)
+}
+
+// IsStaticUnseal reports whether the cluster uses static unseal configuration.
+func IsStaticUnseal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return statusops.IsStaticUnseal(cluster)
 }

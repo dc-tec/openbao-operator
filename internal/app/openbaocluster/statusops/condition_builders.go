@@ -1,4 +1,4 @@
-package openbaocluster
+package statusops
 
 import (
 	"fmt"
@@ -142,7 +142,7 @@ func desiredReadReplicaStorageClassName(cluster *openbaov1alpha1.OpenBaoCluster)
 
 // buildReadReplicasReadyCondition reports whether the read-replica pool has the
 // desired number of Ready Pods.
-func buildReadReplicasReadyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+func buildReadReplicasReadyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *StatusState) metav1.Condition {
 	desired := desiredReadReplicaCount(cluster)
 	if desired == 0 {
 		return metav1.Condition{
@@ -190,7 +190,7 @@ func buildReadReplicasReadyCondition(cluster *openbaov1alpha1.OpenBaoCluster, st
 
 // buildReadServingAvailableCondition reports whether at least one read-replica
 // Pod is observed in a read-serving state.
-func buildReadServingAvailableCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+func buildReadServingAvailableCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *StatusState) metav1.Condition {
 	desired := desiredReadReplicaCount(cluster)
 	if desired == 0 {
 		return metav1.Condition{
@@ -253,7 +253,7 @@ func buildReadServingAvailableCondition(cluster *openbaov1alpha1.OpenBaoCluster,
 
 // buildRaftMembershipReadyCondition reports whether observed non-voter
 // membership matches the declared read-replica pool size.
-func buildRaftMembershipReadyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+func buildRaftMembershipReadyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *StatusState) metav1.Condition {
 	desired := desiredReadReplicaCount(cluster)
 	if desired == 0 {
 		return metav1.Condition{
@@ -301,7 +301,7 @@ func buildRaftMembershipReadyCondition(cluster *openbaov1alpha1.OpenBaoCluster, 
 
 // buildReadReplicasAutopilotHealthyCondition reports whether the observed
 // read-replica peers are healthy according to the Raft Autopilot state endpoint.
-func buildReadReplicasAutopilotHealthyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+func buildReadReplicasAutopilotHealthyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *StatusState) metav1.Condition {
 	desired := desiredReadReplicaCount(cluster)
 	if desired == 0 {
 		return metav1.Condition{
@@ -358,7 +358,7 @@ func buildReadReplicasAutopilotHealthyCondition(cluster *openbaov1alpha1.OpenBao
 
 // buildStorageConfiguredCondition reports whether the workload is using an explicit
 // or consistently resolved storage class, so users can see the effective one-shot choice.
-func buildStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+func buildStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *StatusState) metav1.Condition {
 	desiredStorageClassName := ""
 	if cluster.Spec.Storage.StorageClassName != nil {
 		desiredStorageClassName = strings.TrimSpace(*cluster.Spec.Storage.StorageClassName)
@@ -449,7 +449,7 @@ func buildStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, st
 
 // buildReadReplicaStorageConfiguredCondition reports whether the read-replica
 // pool is using an explicit or consistently resolved storage class.
-func buildReadReplicaStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+func buildReadReplicaStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *StatusState) metav1.Condition {
 	desiredReplicas := desiredReadReplicaCount(cluster)
 	if desiredReplicas == 0 {
 		return metav1.Condition{
@@ -630,7 +630,7 @@ func buildLeaderCondition(leaderCount int, leaderName string) metav1.Condition {
 	}
 }
 
-func applyNodeSecurityCapabilityMismatchCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState, gen int64, now metav1.Time) {
+func applyNodeSecurityCapabilityMismatchCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *StatusState, gen int64, now metav1.Time) {
 	appArmorEnabled := cluster.Spec.WorkloadHardening != nil && cluster.Spec.WorkloadHardening.AppArmorEnabled
 	if !appArmorEnabled {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionNodeSecurityCapabilityMismatch))

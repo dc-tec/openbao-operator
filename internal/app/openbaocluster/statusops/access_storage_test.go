@@ -1,9 +1,11 @@
-package openbaocluster
+package statusops
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -105,6 +107,23 @@ func TestBuildUserAccessBootstrapCondition(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestApplyUserAccessBootstrapCondition(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Generation: 7},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true},
+		},
+	}
+	now := metav1.Date(2026, 9, 2, 10, 30, 0, 0, time.UTC)
+
+	ApplyUserAccessBootstrapCondition(cluster, now)
+
+	condition := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionUserAccessBootstrap))
+	assert.NotNil(t, condition)
+	assert.Equal(t, int64(7), condition.ObservedGeneration)
+	assert.Equal(t, now, condition.LastTransitionTime)
 }
 
 func TestBuildStorageConfiguredCondition(t *testing.T) {

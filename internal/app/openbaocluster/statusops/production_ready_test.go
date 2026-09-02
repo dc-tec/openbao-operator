@@ -1,4 +1,4 @@
-package openbaocluster
+package statusops
 
 import (
 	"testing"
@@ -79,12 +79,12 @@ func TestEvaluateProductionReady(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:   string(openbaov1alpha1.ConditionAPIServerNetworkReady),
 						Status: metav1.ConditionFalse,
-						Reason: ReasonAPIServerNetworkConfigurationInvalid,
+						Reason: constants.ReasonAPIServerNetworkConfigurationInvalid,
 					}},
 				},
 			},
 			wantStatus: metav1.ConditionFalse,
-			wantReason: ReasonAPIServerNetworkConfigurationInvalid,
+			wantReason: constants.ReasonAPIServerNetworkConfigurationInvalid,
 		},
 		{
 			name: "hardened with api server network unknown does not block",
@@ -109,7 +109,7 @@ func TestEvaluateProductionReady(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:   string(openbaov1alpha1.ConditionAPIServerNetworkReady),
 						Status: metav1.ConditionUnknown,
-						Reason: ReasonAPIServerEndpointIPsRecommended,
+						Reason: constants.ReasonAPIServerEndpointIPsRecommended,
 					}},
 				},
 			},
@@ -347,12 +347,12 @@ func TestEvaluateProductionReady(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:   string(openbaov1alpha1.ConditionACMEIntegrationReady),
 						Status: metav1.ConditionFalse,
-						Reason: ReasonACMEGatewayNotConfiguredForPassthrough,
+						Reason: constants.ReasonACMEGatewayNotConfiguredForPassthrough,
 					}},
 				},
 			},
 			wantStatus: metav1.ConditionFalse,
-			wantReason: ReasonACMEGatewayNotConfiguredForPassthrough,
+			wantReason: constants.ReasonACMEGatewayNotConfiguredForPassthrough,
 		},
 		{
 			name: "hardened acme without ready shared cache",
@@ -386,18 +386,18 @@ func TestEvaluateProductionReady(t *testing.T) {
 						{
 							Type:   string(openbaov1alpha1.ConditionACMEIntegrationReady),
 							Status: metav1.ConditionTrue,
-							Reason: ReasonACMEIntegrationReady,
+							Reason: constants.ReasonACMEIntegrationReady,
 						},
 						{
 							Type:   string(openbaov1alpha1.ConditionACMECacheReady),
 							Status: metav1.ConditionFalse,
-							Reason: ReasonACMECachePending,
+							Reason: reasonACMECachePending,
 						},
 					},
 				},
 			},
 			wantStatus: metav1.ConditionFalse,
-			wantReason: ReasonACMECachePending,
+			wantReason: reasonACMECachePending,
 		},
 		{
 			name: "hardened gateway without ready gateway integration",
@@ -429,12 +429,12 @@ func TestEvaluateProductionReady(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:   string(openbaov1alpha1.ConditionGatewayIntegrationReady),
 						Status: metav1.ConditionFalse,
-						Reason: ReasonGatewayNotProgrammed,
+						Reason: constants.ReasonGatewayNotProgrammed,
 					}},
 				},
 			},
 			wantStatus: metav1.ConditionFalse,
-			wantReason: ReasonGatewayNotProgrammed,
+			wantReason: constants.ReasonGatewayNotProgrammed,
 		},
 		{
 			name: "gateway integration unknown does not block hardened production ready",
@@ -466,7 +466,7 @@ func TestEvaluateProductionReady(t *testing.T) {
 					Conditions: []metav1.Condition{{
 						Type:   string(openbaov1alpha1.ConditionGatewayIntegrationReady),
 						Status: metav1.ConditionUnknown,
-						Reason: ReasonGatewayCapabilitiesUnknown,
+						Reason: constants.ReasonGatewayCapabilitiesUnknown,
 					}},
 				},
 			},
