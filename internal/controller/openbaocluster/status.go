@@ -24,6 +24,30 @@ func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *
 	return appopenbaocluster.PatchStatusOwnedFields(ctx, r.Client, cluster)
 }
 
+func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	now := metav1.Now()
+	appopenbaocluster.ApplyPausedStatusPolicy(cluster, now)
+
+	if err := r.patchStatusSSA(ctx, cluster); err != nil {
+		return fmt.Errorf("failed to update status for paused OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+
+	logger.Info("Updated status for paused OpenBaoCluster")
+	return nil
+}
+
+func (r *OpenBaoClusterReconciler) updateStatusForProfileNotSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	now := metav1.Now()
+	appopenbaocluster.ApplyProfileNotSetStatusPolicy(cluster, now)
+
+	if err := r.patchStatusSSA(ctx, cluster); err != nil {
+		return fmt.Errorf("failed to update status for missing profile on OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+
+	logger.Info("Updated status for OpenBaoCluster missing profile")
+	return nil
+}
+
 func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
 	if r.Applications == nil {
 		return ctrl.Result{}, fmt.Errorf("OpenBaoCluster applications are not configured")
@@ -33,15 +57,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	original := cluster.DeepCopy()
 
 	// Set prerequisite conditions before observed-state policy runs.
-	r.setAPIServerNetworkReadyCondition(ctx, cluster)
-	r.setTLSReadyCondition(ctx, cluster)
-	r.setACMEIntegrationReadyCondition(ctx, cluster)
-	r.setACMECacheReadyCondition(ctx, cluster)
-	r.setAuditFileStorageReadyCondition(ctx, cluster)
-	r.setGatewayIntegrationReadyCondition(ctx, cluster)
-	r.setIngressIntegrationReadyCondition(ctx, cluster)
-	r.setBackupConfigurationReadyCondition(ctx, cluster)
-	r.setCloudUnsealIdentityReadyCondition(ctx, cluster)
+	r.Applications.ReconcilePrerequisiteConditions(ctx, cluster)
 
 	// 1. Gather all observed state (API calls).
 	state, err := r.Applications.GatherStatusState(ctx, logger, cluster)

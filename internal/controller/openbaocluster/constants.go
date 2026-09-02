@@ -18,8 +18,6 @@ const (
 
 	ReasonImageVersionMismatch = constants.ReasonImageVersionMismatch
 
-	reasonUnknown = constants.ReasonUnknown
-
 	controllerNameWorkload = "openbaocluster-workload"
 	controllerNameAdminOps = "openbaocluster-adminops"
 	controllerNameStatus   = "openbaocluster-status"

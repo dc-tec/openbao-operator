@@ -9,7 +9,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	adminopsapp "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminops"
-	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/statusops"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
@@ -94,30 +93,6 @@ func (a *Applications) GatherStatusState(
 	return GatherStatusState(ctx, logger, a.config.StatusDependencies, cluster)
 }
 
-// EvaluateTLSReadiness evaluates the cluster TLS readiness contract.
-func (a *Applications) EvaluateTLSReadiness(
-	ctx context.Context,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) StatusConditionResult {
-	return statusops.EvaluateTLSReadiness(ctx, a.config.StatusDependencies.Reader, cluster)
-}
-
-// EvaluateACMECacheReadiness evaluates the shared ACME cache readiness contract.
-func (a *Applications) EvaluateACMECacheReadiness(
-	ctx context.Context,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) (StatusConditionResult, bool) {
-	return statusops.EvaluateACMECacheReadiness(ctx, a.config.StatusDependencies.Reader, cluster)
-}
-
-// EvaluateAuditFileStorageReadiness evaluates the audit file storage readiness contract.
-func (a *Applications) EvaluateAuditFileStorageReadiness(
-	ctx context.Context,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) (StatusConditionResult, bool) {
-	return statusops.EvaluateAuditFileStorageReadiness(ctx, a.config.StatusDependencies.Reader, cluster)
-}
-
 // HandleDeletion executes the application-owned deletion workflow.
 func (a *Applications) HandleDeletion(
 	ctx context.Context,
@@ -133,36 +108,4 @@ func (a *Applications) HandleDeletion(
 // InitializationConfigured reports whether initialization orchestration is available.
 func (a *Applications) InitializationConfigured() bool {
 	return a != nil && a.config.InitializationConfigured
-}
-
-// EvaluateACMEIntegration evaluates the configured ACME integration contract.
-func (a *Applications) EvaluateACMEIntegration(
-	ctx context.Context,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) ACMEIntegrationResult {
-	return EvaluateACMEIntegration(ctx, a.config.StatusIntegration, cluster)
-}
-
-// EvaluateGatewayIntegration evaluates the configured Gateway integration contract.
-func (a *Applications) EvaluateGatewayIntegration(
-	ctx context.Context,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) GatewayIntegrationResult {
-	return EvaluateGatewayIntegration(ctx, a.config.StatusIntegration, cluster)
-}
-
-// EvaluateIngressIntegration evaluates the configured Ingress integration contract.
-func (a *Applications) EvaluateIngressIntegration(
-	ctx context.Context,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) IngressIntegrationResult {
-	return EvaluateIngressIntegration(ctx, a.config.StatusIntegration, cluster)
-}
-
-// EvaluateAPIServerNetwork evaluates the configured API-server network contract.
-func (a *Applications) EvaluateAPIServerNetwork(
-	ctx context.Context,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) APIServerNetworkResult {
-	return EvaluateAPIServerNetwork(ctx, a.config.StatusIntegration, cluster)
 }
