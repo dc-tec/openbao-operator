@@ -9,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	adminopsapp "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminops"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/statusops"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
@@ -91,6 +92,14 @@ func (a *Applications) GatherStatusState(
 		return nil, fmt.Errorf("status application is required")
 	}
 	return GatherStatusState(ctx, logger, a.config.StatusDependencies, cluster)
+}
+
+// EvaluateTLSReadiness evaluates the cluster TLS readiness contract.
+func (a *Applications) EvaluateTLSReadiness(
+	ctx context.Context,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) StatusConditionResult {
+	return statusops.EvaluateTLSReadiness(ctx, a.config.StatusDependencies.Reader, cluster)
 }
 
 // HandleDeletion executes the application-owned deletion workflow.
