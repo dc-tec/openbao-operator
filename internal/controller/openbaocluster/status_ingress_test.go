@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 const testIngressStatusClassName = "nginx"
@@ -51,7 +52,7 @@ func TestSetIngressIntegrationReadyCondition_FastContract(t *testing.T) {
 				cluster.Status.Conditions = []metav1.Condition{{
 					Type:   string(openbaov1alpha1.ConditionIngressIntegrationReady),
 					Status: metav1.ConditionTrue,
-					Reason: ReasonIngressIntegrationReady,
+					Reason: constants.ReasonIngressIntegrationReady,
 				}}
 				return cluster
 			}(),
@@ -73,7 +74,7 @@ func TestSetIngressIntegrationReadyCondition_FastContract(t *testing.T) {
 			objects:       []client.Object{newIngressClass(), newIngress("lb.example.test")},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionTrue,
-			wantReason:    ReasonIngressIntegrationReady,
+			wantReason:    constants.ReasonIngressIntegrationReady,
 			wantMessageIn: "prerequisites are satisfied",
 		},
 		{
@@ -91,7 +92,7 @@ func TestSetIngressIntegrationReadyCondition_FastContract(t *testing.T) {
 			objects:       []client.Object{newIngress()},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionFalse,
-			wantReason:    ReasonIngressClassMissing,
+			wantReason:    constants.ReasonIngressClassMissing,
 			wantMessageIn: "IngressClass",
 		},
 		{
@@ -110,7 +111,7 @@ func TestSetIngressIntegrationReadyCondition_FastContract(t *testing.T) {
 			objects:       []client.Object{newIngressClass(), newIngress()},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionUnknown,
-			wantReason:    ReasonIngressLoadBalancerPending,
+			wantReason:    constants.ReasonIngressLoadBalancerPending,
 			wantMessageIn: "load balancer address",
 		},
 	}

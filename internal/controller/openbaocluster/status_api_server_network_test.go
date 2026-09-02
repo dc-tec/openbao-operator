@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func TestSetAPIServerNetworkReadyCondition(t *testing.T) {
@@ -26,7 +27,7 @@ func TestSetAPIServerNetworkReadyCondition(t *testing.T) {
 			envHost:       "10.43.0.1",
 			cluster:       newOpenBaoClusterStatusTestObject(),
 			wantStatus:    metav1.ConditionUnknown,
-			wantReason:    ReasonAPIServerEndpointIPsRecommended,
+			wantReason:    constants.ReasonAPIServerEndpointIPsRecommended,
 			wantMessageIn: "apiServerEndpointIPs",
 		},
 		{
@@ -40,7 +41,7 @@ func TestSetAPIServerNetworkReadyCondition(t *testing.T) {
 				return cluster
 			}(),
 			wantStatus:    metav1.ConditionTrue,
-			wantReason:    ReasonAPIServerNetworkReady,
+			wantReason:    constants.ReasonAPIServerNetworkReady,
 			wantMessageIn: "192.168.166.2",
 		},
 		{
@@ -53,7 +54,7 @@ func TestSetAPIServerNetworkReadyCondition(t *testing.T) {
 				return cluster
 			}(),
 			wantStatus:    metav1.ConditionFalse,
-			wantReason:    ReasonAPIServerNetworkConfigurationInvalid,
+			wantReason:    constants.ReasonAPIServerNetworkConfigurationInvalid,
 			wantMessageIn: "spec.network.apiServerCIDR",
 		},
 	}

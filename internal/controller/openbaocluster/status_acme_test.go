@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func TestSetACMEIntegrationReadyCondition_FastContract(t *testing.T) {
@@ -50,7 +51,7 @@ func TestSetACMEIntegrationReadyCondition_FastContract(t *testing.T) {
 				cluster.Status.Conditions = []metav1.Condition{{
 					Type:   string(openbaov1alpha1.ConditionACMEIntegrationReady),
 					Status: metav1.ConditionTrue,
-					Reason: ReasonACMEIntegrationReady,
+					Reason: constants.ReasonACMEIntegrationReady,
 				}}
 				return cluster
 			}(),
@@ -63,7 +64,7 @@ func TestSetACMEIntegrationReadyCondition_FastContract(t *testing.T) {
 			}(),
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionTrue,
-			wantReason:    ReasonACMEIntegrationReady,
+			wantReason:    constants.ReasonACMEIntegrationReady,
 			wantMessageIn: "prerequisites are satisfied",
 		},
 		{
@@ -82,7 +83,7 @@ func TestSetACMEIntegrationReadyCondition_FastContract(t *testing.T) {
 			}(),
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionFalse,
-			wantReason:    ReasonACMEGatewayNotConfiguredForPassthrough,
+			wantReason:    constants.ReasonACMEGatewayNotConfiguredForPassthrough,
 			wantMessageIn: "tlsPassthrough=true",
 		},
 		{
@@ -99,7 +100,7 @@ func TestSetACMEIntegrationReadyCondition_FastContract(t *testing.T) {
 			}(),
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionFalse,
-			wantReason:    ReasonACMEDomainNotResolvable,
+			wantReason:    constants.ReasonACMEDomainNotResolvable,
 			wantMessageIn: "does-not-resolve.invalid",
 		},
 		{
@@ -116,7 +117,7 @@ func TestSetACMEIntegrationReadyCondition_FastContract(t *testing.T) {
 			}(),
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionFalse,
-			wantReason:    ReasonPrerequisitesMissing,
+			wantReason:    constants.ReasonPrerequisitesMissing,
 			wantMessageIn: "trust bundle is unavailable",
 		},
 	}

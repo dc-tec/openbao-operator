@@ -10,6 +10,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
@@ -110,7 +111,7 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 				cluster.Status.Conditions = []metav1.Condition{{
 					Type:   string(openbaov1alpha1.ConditionGatewayIntegrationReady),
 					Status: metav1.ConditionTrue,
-					Reason: ReasonGatewayIntegrationReady,
+					Reason: constants.ReasonGatewayIntegrationReady,
 				}}
 				return cluster
 			}(),
@@ -143,7 +144,7 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 			},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionTrue,
-			wantReason:    ReasonGatewayIntegrationReady,
+			wantReason:    constants.ReasonGatewayIntegrationReady,
 			wantMessageIn: "Route attachment are ready",
 		},
 		{
@@ -173,7 +174,7 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 			},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionTrue,
-			wantReason:    ReasonGatewayIntegrationReady,
+			wantReason:    constants.ReasonGatewayIntegrationReady,
 			wantMessageIn: "Route attachment are ready",
 		},
 		{
@@ -198,7 +199,7 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 			},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionUnknown,
-			wantReason:    ReasonGatewayRoutePending,
+			wantReason:    constants.ReasonGatewayRoutePending,
 			wantMessageIn: "does not exist yet",
 		},
 		{
@@ -229,7 +230,7 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 			},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionFalse,
-			wantReason:    ReasonGatewayRouteNotAccepted,
+			wantReason:    constants.ReasonGatewayRouteNotAccepted,
 			wantMessageIn: "was rejected",
 		},
 		{
@@ -260,7 +261,7 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 			},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionFalse,
-			wantReason:    ReasonGatewayRouteReferencesUnresolved,
+			wantReason:    constants.ReasonGatewayRouteReferencesUnresolved,
 			wantMessageIn: "unresolved references",
 		},
 		{
@@ -289,7 +290,7 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 			},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionUnknown,
-			wantReason:    ReasonGatewayCapabilitiesUnknown,
+			wantReason:    constants.ReasonGatewayCapabilitiesUnknown,
 			wantMessageIn: "does not publish status.supportedFeatures",
 		},
 		{
@@ -322,7 +323,7 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 			},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionFalse,
-			wantReason:    ReasonGatewayNotProgrammed,
+			wantReason:    constants.ReasonGatewayNotProgrammed,
 			wantMessageIn: "not programmed",
 		},
 	}
