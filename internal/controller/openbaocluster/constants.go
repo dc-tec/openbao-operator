@@ -15,18 +15,14 @@ const (
 	ReasonProfileNotSet                     = "ProfileNotSet"
 	ReasonRootTokenStored                   = "RootTokenStored"
 	ReasonStaticUnsealInUse                 = "StaticUnsealInUse"
-	ReasonTLSSecretMissing                  = "TLSSecretMissing"
-	ReasonTLSSecretInvalid                  = "TLSSecretInvalid"
 	ReasonACMECacheReady                    = "ACMECacheReady"
 	ReasonACMECacheNotConfigured            = "ACMECacheNotConfigured"
 	ReasonACMECacheMissing                  = "ACMECacheMissing"
 	ReasonACMECachePending                  = "ACMECachePending"
 	ReasonACMECacheInvalidAccessMode        = "ACMECacheInvalidAccessMode"
-	ReasonDisabled                          = "Disabled"
 
 	ReasonImageVersionMismatch = constants.ReasonImageVersionMismatch
 
-	reasonReady   = "Ready"
 	reasonUnknown = constants.ReasonUnknown
 
 	controllerNameWorkload = "openbaocluster-workload"
