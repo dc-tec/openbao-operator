@@ -72,7 +72,7 @@ func TestUpdateStatusForPaused(t *testing.T) {
 			t.Fatalf("observedGeneration = %d, want %d", cluster.Status.ObservedGeneration, cluster.Generation)
 		}
 		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionACMEIntegrationReady))
-		if cond == nil || cond.Reason != reasonPaused {
+		if cond == nil || cond.Reason != "Paused" {
 			t.Fatalf("acme integration condition = %#v, want paused reason", cond)
 		}
 	})
@@ -101,7 +101,7 @@ func TestUpdateStatusForPaused(t *testing.T) {
 			t.Fatalf("observedGeneration = %d, want %d", cluster.Status.ObservedGeneration, cluster.Generation)
 		}
 		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionGatewayIntegrationReady))
-		if cond == nil || cond.Reason != reasonPaused {
+		if cond == nil || cond.Reason != "Paused" {
 			t.Fatalf("gateway integration condition = %#v, want paused reason", cond)
 		}
 	})

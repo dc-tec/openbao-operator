@@ -115,10 +115,24 @@ func ApplyCloudUnsealIdentityReadyCondition(cluster *openbaov1alpha1.OpenBaoClus
 	statusops.ApplyCloudUnsealIdentityReadyCondition(cluster, result)
 }
 
-// ApplyUserAccessBootstrapCondition updates the user-access condition for the
-// current cluster generation.
-func ApplyUserAccessBootstrapCondition(cluster *openbaov1alpha1.OpenBaoCluster, now metav1.Time) {
-	statusops.ApplyUserAccessBootstrapCondition(cluster, now)
+// ApplyPausedStatusPolicy updates status for a cluster whose reconciliation is paused.
+func ApplyPausedStatusPolicy(cluster *openbaov1alpha1.OpenBaoCluster, now metav1.Time) {
+	_, cloudUnsealIdentityApplicable := DescribeCloudUnsealIdentity(cluster)
+	statusops.ApplyPausedPolicy(statusops.BlockedPolicyInput{
+		Cluster:                       cluster,
+		CloudUnsealIdentityApplicable: cloudUnsealIdentityApplicable,
+		Now:                           now,
+	})
+}
+
+// ApplyProfileNotSetStatusPolicy updates status for a cluster whose profile is not set.
+func ApplyProfileNotSetStatusPolicy(cluster *openbaov1alpha1.OpenBaoCluster, now metav1.Time) {
+	_, cloudUnsealIdentityApplicable := DescribeCloudUnsealIdentity(cluster)
+	statusops.ApplyProfileNotSetPolicy(statusops.BlockedPolicyInput{
+		Cluster:                       cluster,
+		CloudUnsealIdentityApplicable: cloudUnsealIdentityApplicable,
+		Now:                           now,
+	})
 }
 
 // GatherStatusState reads current cluster state needed for status reconciliation.
