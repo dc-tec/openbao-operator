@@ -1,0 +1,151 @@
+id: no-adminops-runtime-construction-in-reconcile
+snapshots:
+  ? |
+    package adminops
+    func Reconcile() error {
+      _ = backupmanager.NewManager(client, scheme)
+      return nil
+    }
+  : labels:
+    - source: backupmanager.NewManager(client, scheme)
+      style: primary
+      start: 48
+      end: 88
+    - source: |-
+        func Reconcile() error {
+          _ = backupmanager.NewManager(client, scheme)
+          return nil
+        }
+      style: secondary
+      start: 17
+      end: 103
+  ? |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = backupmanager.NewUpgradeStrategyRuntime(client, scheme)
+      return nil
+    }
+  : labels:
+    - source: backupmanager.NewUpgradeStrategyRuntime(client, scheme)
+      style: primary
+      start: 91
+      end: 146
+    - source: |-
+        func (a *Application) Reconcile() error {
+          _ = backupmanager.NewUpgradeStrategyRuntime(client, scheme)
+          return nil
+        }
+      style: secondary
+      start: 43
+      end: 161
+  ? |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = bluegreen.NewManager(client, scheme)
+      return nil
+    }
+  : labels:
+    - source: bluegreen.NewManager(client, scheme)
+      style: primary
+      start: 91
+      end: 127
+    - source: |-
+        func (a *Application) Reconcile() error {
+          _ = bluegreen.NewManager(client, scheme)
+          return nil
+        }
+      style: secondary
+      start: 43
+      end: 142
+  ? |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = rollingupgrade.NewManager(client, scheme)
+      return nil
+    }
+  : labels:
+    - source: rollingupgrade.NewManager(client, scheme)
+      style: primary
+      start: 91
+      end: 132
+    - source: |-
+        func (a *Application) Reconcile() error {
+          _ = rollingupgrade.NewManager(client, scheme)
+          return nil
+        }
+      style: secondary
+      start: 43
+      end: 147
+  ? |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = upgrademanager.NewStrategyTransitionManager(reader)
+      return nil
+    }
+  : labels:
+    - source: upgrademanager.NewStrategyTransitionManager(reader)
+      style: primary
+      start: 91
+      end: 142
+    - source: |-
+        func (a *Application) Reconcile() error {
+          _ = upgrademanager.NewStrategyTransitionManager(reader)
+          return nil
+        }
+      style: secondary
+      start: 43
+      end: 157
+  ? |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = workloadmanager.NewManager(client, scheme, platform)
+      _ = backupmanager.NewUpgradeStrategyRuntime(client, scheme)
+      _ = upgrademanager.NewStrategyTransitionManager(reader)
+      _ = bluegreen.NewManager(client, scheme)
+      _ = rollingupgrade.NewManager(client, scheme)
+      _ = backupmanager.NewManager(client, scheme)
+      return nil
+    }
+  : labels:
+    - source: workloadmanager.NewManager(client, scheme, platform)
+      style: primary
+      start: 91
+      end: 143
+    - source: |-
+        func (a *Application) Reconcile() error {
+          _ = workloadmanager.NewManager(client, scheme, platform)
+          _ = backupmanager.NewUpgradeStrategyRuntime(client, scheme)
+          _ = upgrademanager.NewStrategyTransitionManager(reader)
+          _ = bluegreen.NewManager(client, scheme)
+          _ = rollingupgrade.NewManager(client, scheme)
+          _ = backupmanager.NewManager(client, scheme)
+          return nil
+        }
+      style: secondary
+      start: 43
+      end: 416
+  ? |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = workloadmanager.NewManager(client, scheme, platform)
+      return nil
+    }
+  : labels:
+    - source: workloadmanager.NewManager(client, scheme, platform)
+      style: primary
+      start: 91
+      end: 143
+    - source: |-
+        func (a *Application) Reconcile() error {
+          _ = workloadmanager.NewManager(client, scheme, platform)
+          return nil
+        }
+      style: secondary
+      start: 43
+      end: 158

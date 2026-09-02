@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -57,15 +56,20 @@ func (f recordingSubReconciler) Reconcile(_ context.Context, _ logr.Logger, _ *o
 	return f.result, nil
 }
 
-func withAdminOpsReconcilers(t *testing.T, recs ...subReconciler) {
-	t.Helper()
-	orig := adminOpsReconcilersBuilder
-	adminOpsReconcilersBuilder = func(_ Dependencies) reconcilerPlan {
-		return reconcilerPlan{upgradeReconcilers: recs}
+func applicationForTest(
+	plan reconcilerPlan,
+	patchStatus StatusPatcher,
+	errorStatus ErrorStatusBuilder,
+) *Application {
+	if errorStatus == nil {
+		errorStatus = defaultErrorStatus
 	}
-	t.Cleanup(func() {
-		adminOpsReconcilersBuilder = orig
-	})
+	return &Application{
+		plan:         plan,
+		requeueShort: 5 * time.Second,
+		patchStatus:  patchStatus,
+		errorStatus:  errorStatus,
+	}
 }
 
 func TestReconcile_RunsCurrentOperationOwnerFirst(t *testing.T) {
@@ -99,30 +103,23 @@ func TestReconcile_RunsCurrentOperationOwnerFirst(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []string
-			orig := adminOpsReconcilersBuilder
-			adminOpsReconcilersBuilder = func(_ Dependencies) reconcilerPlan {
-				return reconcilerPlan{
-					upgradeReconcilers: []subReconciler{recordingSubReconciler{
-						name:   "upgrade",
-						calls:  &calls,
-						result: recon.Result{RequeueAfter: time.Minute},
-					}},
-					backupReconciler: recordingSubReconciler{name: "backup", calls: &calls},
-				}
-			}
-			t.Cleanup(func() { adminOpsReconcilersBuilder = orig })
+			application := applicationForTest(reconcilerPlan{
+				upgradeReconcilers: []subReconciler{recordingSubReconciler{
+					name:   "upgrade",
+					calls:  &calls,
+					result: recon.Result{RequeueAfter: time.Minute},
+				}},
+				backupReconciler: recordingSubReconciler{name: "backup", calls: &calls},
+			}, nil, nil)
 
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				Status: openbaov1alpha1.OpenBaoClusterStatus{OperationLock: tt.operationLock},
 			}
-			result, err := Reconcile(
+			result, err := application.Reconcile(
 				context.Background(),
 				logr.Discard(),
-				Dependencies{},
 				cluster.DeepCopy(),
 				cluster,
-				nil,
-				nil,
 				nil,
 			)
 			if err != nil {
@@ -135,6 +132,55 @@ func TestReconcile_RunsCurrentOperationOwnerFirst(t *testing.T) {
 				t.Fatalf("calls = %v, want %v", calls, tt.wantCalls)
 			}
 		})
+	}
+}
+
+func TestApplicationReconcile_UsesCurrentOperationLockOnEveryPass(t *testing.T) {
+	var calls []string
+	application := applicationForTest(reconcilerPlan{
+		upgradeReconcilers: []subReconciler{recordingSubReconciler{name: "upgrade", calls: &calls}},
+		backupReconciler:   recordingSubReconciler{name: "backup", calls: &calls},
+	}, nil, nil)
+
+	backupLocked := &openbaov1alpha1.OpenBaoCluster{
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationBackup,
+				Holder:    "openbao-cluster/backup",
+			},
+		},
+	}
+	if _, err := application.Reconcile(
+		context.Background(),
+		logr.Discard(),
+		backupLocked.DeepCopy(),
+		backupLocked,
+		nil,
+	); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+
+	upgradeLocked := &openbaov1alpha1.OpenBaoCluster{
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationUpgrade,
+				Holder:    "openbao-cluster/upgrade",
+			},
+		},
+	}
+	if _, err := application.Reconcile(
+		context.Background(),
+		logr.Discard(),
+		upgradeLocked.DeepCopy(),
+		upgradeLocked,
+		nil,
+	); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+
+	wantCalls := []string{"backup", "upgrade", "upgrade", "backup"}
+	if !reflect.DeepEqual(calls, wantCalls) {
+		t.Fatalf("calls = %v, want %v", calls, wantCalls)
 	}
 }
 
@@ -183,14 +229,19 @@ func TestReconcile_AdminOpsErrorPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			withAdminOpsReconcilers(t, fakeSubReconciler{err: tt.reconcilerErr})
-
 			var recorded []error
 			var patchReasons []string
-			patchStatus := func(_ context.Context, _ client.Client, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
+			patchStatus := func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
 				patchReasons = append(patchReasons, reason)
 				return tt.patchErr
 			}
+			application := applicationForTest(
+				reconcilerPlan{upgradeReconcilers: []subReconciler{fakeSubReconciler{err: tt.reconcilerErr}}},
+				patchStatus,
+				func(err error) *openbaov1alpha1.ControllerErrorStatus {
+					return &openbaov1alpha1.ControllerErrorStatus{Reason: "MappedError", Message: err.Error(), At: &now}
+				},
+			)
 
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
@@ -199,17 +250,12 @@ func TestReconcile_AdminOpsErrorPaths(t *testing.T) {
 			}
 			original := cluster.DeepCopy()
 
-			result, err := Reconcile(
+			result, err := application.Reconcile(
 				context.Background(),
 				logr.Discard(),
-				Dependencies{},
 				original,
 				cluster,
 				func(err error) { recorded = append(recorded, err) },
-				patchStatus,
-				func(err error) *openbaov1alpha1.ControllerErrorStatus {
-					return &openbaov1alpha1.ControllerErrorStatus{Reason: "MappedError", Message: err.Error(), At: &now}
-				},
 			)
 
 			if tt.wantErrContains != "" {
@@ -244,26 +290,26 @@ func TestReconcile_AdminOpsErrorPaths(t *testing.T) {
 
 func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 	t.Run("successful subreconciler requeue clears last error and is propagated", func(t *testing.T) {
-		withAdminOpsReconcilers(t, fakeSubReconciler{result: recon.Result{RequeueAfter: 7 * time.Second}})
-
 		var patchReasons []string
+		application := applicationForTest(
+			reconcilerPlan{upgradeReconcilers: []subReconciler{fakeSubReconciler{result: recon.Result{RequeueAfter: 7 * time.Second}}}},
+			func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
+				patchReasons = append(patchReasons, reason)
+				return nil
+			},
+			nil,
+		)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			Status: openbaov1alpha1.OpenBaoClusterStatus{
 				AdminOps: &openbaov1alpha1.AdminOpsControllerStatus{LastError: &openbaov1alpha1.ControllerErrorStatus{Reason: "old"}},
 			},
 		}
 
-		result, err := Reconcile(
+		result, err := application.Reconcile(
 			context.Background(),
 			logr.Discard(),
-			Dependencies{},
 			cluster.DeepCopy(),
 			cluster,
-			nil,
-			func(_ context.Context, _ client.Client, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
-				patchReasons = append(patchReasons, reason)
-				return nil
-			},
 			nil,
 		)
 		if err != nil {
@@ -281,26 +327,26 @@ func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 	})
 
 	t.Run("success clears last error and patches complete", func(t *testing.T) {
-		withAdminOpsReconcilers(t, fakeSubReconciler{})
-
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			Status: openbaov1alpha1.OpenBaoClusterStatus{
 				AdminOps: &openbaov1alpha1.AdminOpsControllerStatus{LastError: &openbaov1alpha1.ControllerErrorStatus{Reason: "old"}},
 			},
 		}
 		var patchReasons []string
-
-		result, err := Reconcile(
-			context.Background(),
-			logr.Discard(),
-			Dependencies{},
-			cluster.DeepCopy(),
-			cluster,
-			nil,
-			func(_ context.Context, _ client.Client, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
+		application := applicationForTest(
+			reconcilerPlan{upgradeReconcilers: []subReconciler{fakeSubReconciler{}}},
+			func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
 				patchReasons = append(patchReasons, reason)
 				return nil
 			},
+			nil,
+		)
+
+		result, err := application.Reconcile(
+			context.Background(),
+			logr.Discard(),
+			cluster.DeepCopy(),
+			cluster,
 			nil,
 		)
 		if err != nil {
@@ -318,30 +364,30 @@ func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 	})
 
 	t.Run("success recreates adminops status if a subreconciler refresh clears it", func(t *testing.T) {
-		withAdminOpsReconcilers(t, fakeMutatingSubReconciler{
-			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) {
-				cluster.Status.AdminOps = nil
-			},
-		})
-
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			Status: openbaov1alpha1.OpenBaoClusterStatus{
 				AdminOps: &openbaov1alpha1.AdminOpsControllerStatus{LastError: &openbaov1alpha1.ControllerErrorStatus{Reason: "old"}},
 			},
 		}
 		var patchReasons []string
-
-		result, err := Reconcile(
-			context.Background(),
-			logr.Discard(),
-			Dependencies{},
-			cluster.DeepCopy(),
-			cluster,
-			nil,
-			func(_ context.Context, _ client.Client, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
+		application := applicationForTest(
+			reconcilerPlan{upgradeReconcilers: []subReconciler{fakeMutatingSubReconciler{
+				mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+					cluster.Status.AdminOps = nil
+				},
+			}}},
+			func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
 				patchReasons = append(patchReasons, reason)
 				return nil
 			},
+			nil,
+		)
+
+		result, err := application.Reconcile(
+			context.Background(),
+			logr.Discard(),
+			cluster.DeepCopy(),
+			cluster,
 			nil,
 		)
 		if err != nil {
@@ -363,17 +409,18 @@ func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 }
 
 func TestReconcile_InitializesAdminOpsStatus(t *testing.T) {
-	withAdminOpsReconcilers(t, fakeSubReconciler{})
+	application := applicationForTest(
+		reconcilerPlan{upgradeReconcilers: []subReconciler{fakeSubReconciler{}}},
+		nil,
+		nil,
+	)
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
-	_, err := Reconcile(
+	_, err := application.Reconcile(
 		context.Background(),
 		logr.Discard(),
-		Dependencies{},
 		cluster.DeepCopy(),
 		cluster,
-		nil,
-		nil,
 		nil,
 	)
 	if err != nil {
@@ -396,20 +443,27 @@ func assertRecorderInjected(t *testing.T, value any) {
 	}
 }
 
-func TestBuildReconcilers_InjectsRecorderIntoManagers(t *testing.T) {
+func TestNewApplication_BuildsReconcilersAndInjectsRecorder(t *testing.T) {
 	t.Parallel()
 
 	scheme := runtime.NewScheme()
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	recorder := events.NewFakeRecorder(10)
 
-	reconcilers := buildReconcilers(Dependencies{
-		Client:    k8sClient,
-		APIReader: k8sClient,
-		Scheme:    scheme,
-		Recorder:  recorder,
-	})
-	orderedReconcilers := reconcilers.orderedFor(&openbaov1alpha1.OpenBaoCluster{})
+	application := NewApplication(Dependencies{
+		Client:       k8sClient,
+		APIReader:    k8sClient,
+		Scheme:       scheme,
+		Recorder:     recorder,
+		RequeueShort: 9 * time.Second,
+	}, nil, nil)
+	if application.requeueShort != 9*time.Second {
+		t.Fatalf("requeueShort = %v, want 9s", application.requeueShort)
+	}
+	if application.errorStatus == nil {
+		t.Fatal("errorStatus is nil")
+	}
+	orderedReconcilers := application.plan.orderedFor(&openbaov1alpha1.OpenBaoCluster{})
 
 	if len(orderedReconcilers) != 4 {
 		t.Fatalf("len(reconcilers) = %d, want 4", len(orderedReconcilers))
