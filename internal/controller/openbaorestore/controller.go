@@ -23,8 +23,6 @@ import (
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -35,18 +33,13 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 )
 
 // OpenBaoRestoreReconciler reconciles a OpenBaoRestore object.
 type OpenBaoRestoreReconciler struct {
 	client.Client
-	Scheme                *runtime.Scheme
-	AdmissionTracker      *admission.Tracker
-	RestoreReconciler     appopenbaorestore.RestoreReconciler
-	Recorder              events.EventRecorder
-	OperatorImageVerifier imageverify.Verifier
-	Platform              string
+	AdmissionTracker  *admission.Tracker
+	RestoreReconciler appopenbaorestore.RestoreReconciler
 }
 
 const controllerNameOpenBaoRestore = "openbaorestore"
@@ -104,8 +97,7 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	appResult, appErr := appopenbaorestore.ReconcileOpenBaoRestore(
 		ctx,
-		r.Client,
-		req.NamespacedName,
+		restoreResource,
 		logger,
 		r.RestoreReconciler,
 	)
@@ -143,19 +135,8 @@ func (r *OpenBaoRestoreReconciler) pauseForAdmissionDependencyLoss(ctx context.C
 // list/watch permissions on Jobs, which we don't have. Instead, the restore manager
 // uses direct API calls (GET) and RequeueAfter polling to monitor job status.
 func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Initialize the restore manager
-	if r.Recorder == nil {
-		r.Recorder = mgr.GetEventRecorder("openbaorestore")
-	}
 	if r.RestoreReconciler == nil {
-		r.RestoreReconciler = appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{
-			Client:                r.Client,
-			APIReader:             mgr.GetAPIReader(),
-			Scheme:                r.Scheme,
-			Recorder:              r.Recorder,
-			OperatorImageVerifier: r.OperatorImageVerifier,
-			Platform:              r.Platform,
-		})
+		return fmt.Errorf("restore reconciler is not configured")
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).

@@ -24,6 +24,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
 	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 )
@@ -115,7 +116,12 @@ func startOpenBaoRestoreManager(t *testing.T) client.Client {
 
 	reconciler := &openbaorestorecontroller.OpenBaoRestoreReconciler{
 		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		RestoreReconciler: appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{
+			Client:    mgr.GetClient(),
+			APIReader: mgr.GetAPIReader(),
+			Scheme:    mgr.GetScheme(),
+			Recorder:  mgr.GetEventRecorder("openbaorestore"),
+		}),
 	}
 	require.NoError(t, reconciler.SetupWithManager(mgr))
 

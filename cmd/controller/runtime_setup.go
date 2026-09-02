@@ -123,9 +123,7 @@ func setupControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) error 
 
 	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
 		Client:           mgr.GetClient(),
-		Scheme:           mgr.GetScheme(),
 		AdmissionTracker: runtime.admissionTracker,
-		Recorder:         mgr.GetEventRecorder(controllerNameOpenBaoRestore),
 		RestoreReconciler: appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{
 			Client:                mgr.GetClient(),
 			APIReader:             mgr.GetAPIReader(),
@@ -135,8 +133,6 @@ func setupControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) error 
 			Platform:              runtime.platform,
 			ClientConfig:          runtime.openBaoRuntime.SmartClientConfig,
 		}),
-		OperatorImageVerifier: runtime.imageVerificationRuntime.OperatorImageVerifier,
-		Platform:              runtime.platform,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller %s: %w", controllerNameOpenBaoRestore, err)
 	}

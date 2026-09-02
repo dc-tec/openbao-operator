@@ -5,39 +5,28 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
-// ReconcileOpenBaoRestore loads the restore resource and delegates lifecycle
-// orchestration to the restore manager.
+// ReconcileOpenBaoRestore delegates lifecycle orchestration to the restore manager.
 func ReconcileOpenBaoRestore(
 	ctx context.Context,
-	c client.Client,
-	key types.NamespacedName,
+	restoreResource *openbaov1alpha1.OpenBaoRestore,
 	logger logr.Logger,
 	restoreManager RestoreReconciler,
 ) (recon.Result, error) {
 	if restoreManager == nil {
 		return recon.Result{}, fmt.Errorf("restore manager is required")
 	}
-
-	restoreResource := &openbaov1alpha1.OpenBaoRestore{}
-	if err := c.Get(ctx, key, restoreResource); err != nil {
-		if apierrors.IsNotFound(err) {
-			// Resource deleted - nothing to do.
-			return recon.Result{}, nil
-		}
-		return recon.Result{}, fmt.Errorf("failed to get OpenBaoRestore: %w", err)
+	if restoreResource == nil {
+		return recon.Result{}, fmt.Errorf("restore resource is required")
 	}
 
 	logger = logger.WithValues(
-		"restore", key.Name,
-		"namespace", key.Namespace,
+		"restore", restoreResource.Name,
+		"namespace", restoreResource.Namespace,
 		"cluster", restoreResource.Spec.Cluster,
 		"phase", restoreResource.Status.Phase,
 	)

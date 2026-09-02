@@ -59,7 +59,6 @@ func startNamespaceProvisionerController(t *testing.T) client.Client {
 		reconciler := &provisionercontroller.NamespaceProvisionerReconciler{
 			Client:            mgr.GetClient(),
 			APIReader:         mgr.GetAPIReader(),
-			Scheme:            mgr.GetScheme(),
 			Recorder:          mgr.GetEventRecorder("namespace-provisioner-test"),
 			Provisioner:       provisionerManager,
 			OperatorNamespace: operatorNamespace,
@@ -83,7 +82,6 @@ func startProvisionerControllers(t *testing.T) client.Client {
 		namespaceReconciler := &provisionercontroller.NamespaceProvisionerReconciler{
 			Client:            mgr.GetClient(),
 			APIReader:         mgr.GetAPIReader(),
-			Scheme:            mgr.GetScheme(),
 			Recorder:          mgr.GetEventRecorder("namespace-provisioner-test"),
 			Provisioner:       provisionerManager,
 			OperatorNamespace: operatorNamespace,
@@ -95,7 +93,6 @@ func startProvisionerControllers(t *testing.T) client.Client {
 		tenantSecretsReconciler := &provisionercontroller.TenantSecretsRBACReconciler{
 			Client:      mgr.GetClient(),
 			APIReader:   mgr.GetAPIReader(),
-			Scheme:      mgr.GetScheme(),
 			Recorder:    mgr.GetEventRecorder("tenant-secrets-rbac-test"),
 			Provisioner: provisionerManager,
 		}

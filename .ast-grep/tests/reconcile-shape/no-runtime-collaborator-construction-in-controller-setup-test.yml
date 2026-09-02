@@ -1,0 +1,59 @@
+id: no-runtime-collaborator-construction-in-controller-setup
+valid:
+  - |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      return ctrl.NewControllerManagedBy(mgr).Complete(r)
+    }
+  - |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      _ = workqueue.NewTypedItemExponentialFailureRateLimiter[Request](1, 60)
+      _ = metav1.NewTime(now())
+      return nil
+    }
+invalid:
+  - |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      provisioner, err := appprovisioner.NewProvisioner(dependencies)
+      return err
+    }
+  - |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      r.restore = apprestore.NewRestoreReconciler(dependencies)
+      return nil
+    }
+  - |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      r.manager = service.NewManager(client, logger)
+      return nil
+    }
+  - |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      r.manager = service.NewManagerWithReader(client, reader, logger)
+      return nil
+    }
+  - |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      r.applications = app.NewRuntimeApplications(dependencies)
+      return nil
+    }

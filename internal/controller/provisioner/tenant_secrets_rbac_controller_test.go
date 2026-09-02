@@ -78,7 +78,6 @@ func TestTenantSecretsRBACReconcile_AdmissionDependenciesNotReady(t *testing.T) 
 	reconciler := &TenantSecretsRBACReconciler{
 		Client:      k8sClient,
 		APIReader:   k8sClient,
-		Scheme:      testScheme,
 		Provisioner: newProvisionerManager(t, k8sClient),
 	}
 
@@ -104,7 +103,6 @@ func TestTenantSecretsRBACReconcile_UnprovisionedNamespace(t *testing.T) {
 	reconciler := &TenantSecretsRBACReconciler{
 		Client:      k8sClient,
 		APIReader:   k8sClient,
-		Scheme:      testScheme,
 		Provisioner: newProvisionerManager(t, k8sClient),
 	}
 
@@ -191,7 +189,6 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 	reconciler := &TenantSecretsRBACReconciler{
 		Client:      k8sClient,
 		APIReader:   k8sClient,
-		Scheme:      testScheme,
 		Recorder:    recorder,
 		Provisioner: newProvisionerManager(t, k8sClient),
 	}
@@ -277,7 +274,6 @@ func TestTenantSecretsRBACReconcile_RemovesStaleSecretRBAC(t *testing.T) {
 	reconciler := &TenantSecretsRBACReconciler{
 		Client:      k8sClient,
 		APIReader:   k8sClient,
-		Scheme:      testScheme,
 		Provisioner: newProvisionerManager(t, k8sClient),
 	}
 
@@ -332,7 +328,6 @@ func TestTenantSecretsRBACReconcile_UnsafeAdmissionDisabledBypassesDependencyChe
 	reconciler := &TenantSecretsRBACReconciler{
 		Client:      k8sClient,
 		APIReader:   k8sClient,
-		Scheme:      testScheme,
 		Provisioner: newProvisionerManager(t, k8sClient),
 	}
 

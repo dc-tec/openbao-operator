@@ -18,9 +18,9 @@ package provisioner
 
 import (
 	"context"
+	"errors"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,7 +52,6 @@ import (
 type NamespaceProvisionerReconciler struct {
 	client.Client
 	APIReader         client.Reader
-	Scheme            *runtime.Scheme
 	Recorder          events.EventRecorder
 	Provisioner       appprovisioner.Provisioner
 	OperatorNamespace string
@@ -106,14 +105,7 @@ func controllerResult(result recon.Result) ctrl.Result {
 // SetupWithManager sets up the controller with the Manager.
 func (r *NamespaceProvisionerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Provisioner == nil {
-		provisionerRuntime, err := appprovisioner.NewProvisioner(appprovisioner.ProvisionerDependencies{
-			Client: r.Client,
-			Logger: log.Log.WithName(controllerNameNamespaceProvisioner),
-		})
-		if err != nil {
-			return err
-		}
-		r.Provisioner = provisionerRuntime
+		return errors.New("provisioner application is not configured")
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
