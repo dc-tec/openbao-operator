@@ -27,7 +27,6 @@ const (
 	ReasonImageVersionMismatch = constants.ReasonImageVersionMismatch
 
 	reasonReady   = "Ready"
-	reasonPaused  = "Paused"
 	reasonUnknown = constants.ReasonUnknown
 
 	controllerNameWorkload = "openbaocluster-workload"
