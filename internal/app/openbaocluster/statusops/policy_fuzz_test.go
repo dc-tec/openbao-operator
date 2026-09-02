@@ -1,4 +1,4 @@
-package openbaocluster
+package statusops
 
 import (
 	"fmt"

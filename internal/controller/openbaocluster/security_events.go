@@ -49,7 +49,7 @@ func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context
 		maybeWarn(annotationLastUnsafeAdmissionWarning, ReasonUnsafeAdmissionDisabled, "Unsafe admission mode is active; required admission guardrails are not enforced and Hardened clusters are not production-ready")
 	}
 
-	if isStaticUnseal(cluster) {
+	if appopenbaocluster.IsStaticUnseal(cluster) {
 		maybeWarn(annotationLastStaticUnsealWarning, ReasonStaticUnsealInUse, "Cluster is using static auto-unseal; the unseal key is stored in a Kubernetes Secret and is not suitable for production without etcd encryption at rest and strict RBAC")
 	}
 

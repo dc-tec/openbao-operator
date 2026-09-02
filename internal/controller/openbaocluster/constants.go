@@ -8,40 +8,16 @@ import (
 
 // Reason constants for OpenBaoCluster conditions.
 const (
-	ReasonGatewayAPIMissing                    = constants.ReasonGatewayAPIMissing
-	ReasonOIDCBootstrapConfigurationInvalid    = constants.ReasonOIDCBootstrapConfigurationInvalid
-	ReasonAPIServerNetworkConfigurationInvalid = constants.ReasonAPIServerNetworkConfigurationInvalid
-	ReasonPrerequisitesMissing                 = constants.ReasonPrerequisitesMissing
-	ReasonPrerequisitesReady                   = "PrerequisitesReady"
-	ReasonAdmissionPoliciesNotReady            = "AdmissionPoliciesNotReady"
-	ReasonAdmissionPoliciesReady               = "AdmissionPoliciesReady"
-	ReasonUnsafeAdmissionDisabled              = "UnsafeAdmissionDisabled"
-
-	ReasonInProgress = "InProgress"
-
-	ReasonLeaderFound                            = "LeaderFound"
-	ReasonLeaderUnknown                          = constants.ReasonLeaderUnknown
-	ReasonMultipleLeaders                        = "MultipleLeaders"
-	ReasonInitialized                            = "Initialized"
-	ReasonNotInitialized                         = "NotInitialized"
-	ReasonSealed                                 = "Sealed"
-	ReasonUnsealed                               = "Unsealed"
-	ReasonAppArmorUnsupported                    = "AppArmorUnsupported"
-	ReasonEtcdEncryptionUnknown                  = "EtcdEncryptionUnknown"
+	ReasonGatewayAPIMissing                      = constants.ReasonGatewayAPIMissing
+	ReasonOIDCBootstrapConfigurationInvalid      = constants.ReasonOIDCBootstrapConfigurationInvalid
+	ReasonAPIServerNetworkConfigurationInvalid   = constants.ReasonAPIServerNetworkConfigurationInvalid
+	ReasonPrerequisitesMissing                   = constants.ReasonPrerequisitesMissing
+	ReasonUnsafeAdmissionDisabled                = "UnsafeAdmissionDisabled"
 	ReasonDevelopmentProfile                     = "DevelopmentProfile"
 	ReasonAmbientUnsealIdentity                  = "AmbientUnsealIdentity"
 	ReasonProfileNotSet                          = "ProfileNotSet"
-	ReasonProductionReady                        = "ProductionReady"
-	ReasonProductionNotReady                     = "ProductionNotReady"
-	ReasonTransitAddressNotHTTPS                 = "TransitAddressNotHTTPS"
-	ReasonTransitInlineToken                     = "TransitInlineToken"
-	ReasonUnsealTLSSkipVerify                    = "UnsealTLSSkipVerify"
-	ReasonSecurityContextWeakening               = "SecurityContextWeakening"
-	ReasonUserAccessConfigured                   = "UserAccessConfigured"
-	ReasonUserAccessUnverified                   = "UserAccessUnverified"
 	ReasonRootTokenStored                        = "RootTokenStored"
 	ReasonStaticUnsealInUse                      = "StaticUnsealInUse"
-	ReasonOperatorManagedTLS                     = "OperatorManagedTLS"
 	ReasonTLSSecretMissing                       = "TLSSecretMissing"
 	ReasonTLSSecretInvalid                       = "TLSSecretInvalid"
 	ReasonACMEIntegrationReady                   = constants.ReasonACMEIntegrationReady
@@ -74,41 +50,12 @@ const (
 	ReasonACMEDomainNotResolvable                = constants.ReasonACMEDomainNotResolvable
 	ReasonACMEGatewayNotConfiguredForPassthrough = constants.ReasonACMEGatewayNotConfiguredForPassthrough
 	ReasonDisabled                               = "Disabled"
-	ReasonNotReady                               = "NotReady"
-	ReasonAllReplicasReady                       = "AllReplicasReady"
-	ReasonNoReplicasReady                        = "NoReplicasReady"
-	ReasonNoReadReplicasConfigured               = "NoReadReplicasConfigured"
-	ReasonAllReadReplicasReady                   = "AllReadReplicasReady"
-	ReasonReadReplicasNotReady                   = "ReadReplicasNotReady"
-	ReasonNoReadyReadReplicas                    = "NoReadyReadReplicas"
-	ReasonReadServingAvailable                   = "ReadServingAvailable"
-	ReasonReadServingWithoutQuorum               = "ReadServingWithoutQuorum"
-	ReasonPodsNotServingReads                    = "PodsNotServingReads"
-	ReasonRaftMembershipReady                    = "RaftMembershipReady"
-	ReasonReadReplicasAutopilotHealthy           = "ReadReplicasAutopilotHealthy"
-	ReasonReadReplicasAutopilotUnhealthy         = "ReadReplicasAutopilotUnhealthy"
 
-	ReasonStorageInvalidSize             = constants.ReasonStorageInvalidSize
-	ReasonStorageShrinkNotSupported      = constants.ReasonStorageShrinkNotSupported
-	ReasonStorageResizeNotSupported      = constants.ReasonStorageResizeNotSupported
-	ReasonStorageClassChangeNotSupported = constants.ReasonStorageClassChangeNotSupported
-	ReasonStorageRestartRequired         = constants.ReasonStorageRestartRequired
-	ReasonInvalidVersion                 = constants.ReasonInvalidVersion
-	ReasonDowngradeBlocked               = constants.ReasonDowngradeBlocked
-	ReasonImageVersionMismatch           = constants.ReasonImageVersionMismatch
-	ReasonStorageClassConfigured         = "StorageClassConfigured"
-	ReasonStorageClassPending            = "StorageClassPending"
-	ReasonStorageClassDefaulted          = "StorageClassDefaulted"
-	ReasonStorageClassUnset              = "StorageClassUnset"
-	ReasonStorageClassMismatch           = "StorageClassMismatch"
-	ReasonStorageClassInconsistent       = "StorageClassInconsistent"
+	ReasonImageVersionMismatch = constants.ReasonImageVersionMismatch
 
-	reasonReady              = "Ready"
-	reasonPaused             = "Paused"
-	reasonReconciling        = "Reconciling"
-	reasonIdle               = "Idle"
-	reasonUnknown            = constants.ReasonUnknown
-	reasonBreakGlassRequired = "BreakGlassRequired"
+	reasonReady   = "Ready"
+	reasonPaused  = "Paused"
+	reasonUnknown = constants.ReasonUnknown
 
 	controllerNameWorkload = "openbaocluster-workload"
 	controllerNameAdminOps = "openbaocluster-adminops"

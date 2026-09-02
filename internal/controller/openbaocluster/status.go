@@ -18,7 +18,7 @@ import (
 // rather than requiring the client to refresh and merge manually.
 // This function patches only the fields owned by the Status controller:
 // observedGeneration, phase, activeLeader, readyReplicas, readReplicas,
-// currentVersion, conditions, lastBackupTime.
+// currentVersion, and conditions.
 func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	cluster.Status.ObservedGeneration = cluster.Generation
 	return appopenbaocluster.PatchStatusOwnedFields(ctx, r.Client, cluster)
@@ -32,7 +32,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	// Capture original state to check for changes (e.g. ReadyReplicas), but NOT for patching merge.
 	original := cluster.DeepCopy()
 
-	// Set TLSReady early (evaluated separately from clusterState).
+	// Set prerequisite conditions before observed-state policy runs.
 	r.setAPIServerNetworkReadyCondition(ctx, cluster)
 	r.setTLSReadyCondition(ctx, cluster)
 	r.setACMEIntegrationReadyCondition(ctx, cluster)
@@ -49,9 +49,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		return ctrl.Result{}, err
 	}
 
-	observedVersion := appopenbaocluster.ObservedVersionFromPods(state)
-
-	// 2. Compute and set all conditions (pure logic).
+	// 2. Refresh admission state and apply normal status policy.
 	now := metav1.Now()
 	admissionStatus, refreshErr := r.ensureAdmissionStatusFresh(ctx)
 	if refreshErr != nil {
@@ -60,21 +58,18 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	if admissionStatus == nil {
 		admissionStatus = r.currentAdmissionStatus()
 	}
-	applyAllConditions(cluster, state, admissionStatus, now)
-
-	// 3. Update status fields (computed locally).
-	cluster.Status.ReadyReplicas = state.ReadyReplicas
-	cluster.Status.ReadReplicas = buildReadReplicaStatus(cluster, state)
-	cluster.Status.ActiveLeader = state.LeaderName
-	cluster.Status.Phase = computePhase(state)
-
-	appopenbaocluster.ReconcileCurrentVersion(logger, cluster, state, observedVersion)
-	appopenbaocluster.MaybeAdvanceCurrentVersionForBlueGreen(logger, cluster, observedVersion)
+	policyResult := appopenbaocluster.ApplyStatusPolicy(logger, appopenbaocluster.StatusPolicyInput{
+		Original:       original,
+		Cluster:        cluster,
+		State:          state,
+		AdmissionState: admissionStatus,
+		Now:            now,
+	})
 	// Rolling manager finalization only clears status.upgrade. The status
 	// controller is the sole writer of CurrentVersion and advances it after
 	// rollout convergence is observed from workload state.
 
-	// Update per-cluster metrics.
+	// 3. Update per-cluster metrics.
 	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(state.ReadyReplicas)
 	if cluster.Status.ReadReplicas != nil {
@@ -107,37 +102,6 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 		"phase", cluster.Status.Phase,
 		"currentVersion", cluster.Status.CurrentVersion)
 
-	// 5. Determine requeue.
-	return r.determineStatusRequeue(logger, state, original, cluster), nil
-}
-
-func buildReadReplicaStatus(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) *openbaov1alpha1.ReadReplicaStatus {
-	if cluster.Spec.ReadReplicas == nil {
-		return nil
-	}
-
-	status := &openbaov1alpha1.ReadReplicaStatus{
-		DesiredReplicas: cluster.Spec.ReadReplicas.Replicas,
-	}
-
-	if state != nil {
-		status.ReadyReplicas = state.ReadReplicaReadyReplicas
-		status.RegisteredReplicas = state.ReadReplicaRegisteredReplicas
-		status.HealthyReplicas = state.ReadReplicaHealthyReplicas
-		status.Storage.DesiredPVCs = cluster.Spec.ReadReplicas.Replicas
-		status.Storage.BoundPVCs = int32(state.ReadReplicaDataPVCCount)
-		switch {
-		case len(state.ReadReplicaDataPVCStorageClassNames) == 1:
-			status.Storage.StorageClassName = state.ReadReplicaDataPVCStorageClassNames[0]
-		case cluster.Spec.ReadReplicas.Storage != nil && cluster.Spec.ReadReplicas.Storage.StorageClassName != nil:
-			status.Storage.StorageClassName = *cluster.Spec.ReadReplicas.Storage.StorageClassName
-		}
-		return status
-	}
-
-	status.Storage.DesiredPVCs = cluster.Spec.ReadReplicas.Replicas
-	if cluster.Spec.ReadReplicas.Storage != nil && cluster.Spec.ReadReplicas.Storage.StorageClassName != nil {
-		status.Storage.StorageClassName = *cluster.Spec.ReadReplicas.Storage.StorageClassName
-	}
-	return status
+	// 5. Return the policy requeue decision.
+	return ctrl.Result{RequeueAfter: policyResult.RequeueAfter}, nil
 }

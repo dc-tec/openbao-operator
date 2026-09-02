@@ -1,4 +1,4 @@
-package openbaocluster
+package statusops
 
 import (
 	"net/url"
@@ -49,7 +49,7 @@ func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionR
 		return metav1.ConditionFalse, ReasonOperatorManagedTLS, "Hardened profile requires TLS mode External or ACME; OperatorManaged TLS is not considered production-ready"
 	}
 
-	if isStaticUnseal(cluster) {
+	if IsStaticUnseal(cluster) {
 		return metav1.ConditionFalse, ReasonStaticUnsealInUse, "Hardened profile requires a non-static unseal configuration (external KMS/Transit); static unseal is not considered production-ready"
 	}
 
@@ -192,7 +192,9 @@ func requireConditionFalseOnly(
 	return metav1.ConditionFalse, ReasonProductionNotReady, notReadyMessage, true
 }
 
-func isStaticUnseal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+// IsStaticUnseal reports whether the cluster uses static unseal, including the
+// default configuration when no unseal type is set.
+func IsStaticUnseal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	if cluster.Spec.Unseal == nil {
 		return true
 	}

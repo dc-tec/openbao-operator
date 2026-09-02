@@ -1,0 +1,62 @@
+package statusops
+
+import "github.com/dc-tec/openbao-operator/internal/platform/constants"
+
+// Reason constants for conditions owned by status policy.
+const (
+	ReasonCredentialsSecretMissing = constants.ReasonCredentialsSecretMissing
+
+	ReasonAdmissionPoliciesNotReady      = "AdmissionPoliciesNotReady"
+	ReasonUnsafeAdmissionDisabled        = "UnsafeAdmissionDisabled"
+	ReasonInProgress                     = "InProgress"
+	ReasonLeaderFound                    = "LeaderFound"
+	ReasonLeaderUnknown                  = constants.ReasonLeaderUnknown
+	ReasonMultipleLeaders                = "MultipleLeaders"
+	ReasonInitialized                    = "Initialized"
+	ReasonNotInitialized                 = "NotInitialized"
+	ReasonSealed                         = "Sealed"
+	ReasonUnsealed                       = "Unsealed"
+	ReasonAppArmorUnsupported            = "AppArmorUnsupported"
+	ReasonEtcdEncryptionUnknown          = "EtcdEncryptionUnknown"
+	ReasonDevelopmentProfile             = "DevelopmentProfile"
+	ReasonProfileNotSet                  = "ProfileNotSet"
+	ReasonProductionReady                = "ProductionReady"
+	ReasonProductionNotReady             = "ProductionNotReady"
+	ReasonTransitAddressNotHTTPS         = "TransitAddressNotHTTPS"
+	ReasonTransitInlineToken             = "TransitInlineToken"
+	ReasonUnsealTLSSkipVerify            = "UnsealTLSSkipVerify"
+	ReasonSecurityContextWeakening       = "SecurityContextWeakening"
+	ReasonUserAccessConfigured           = "UserAccessConfigured"
+	ReasonUserAccessUnverified           = "UserAccessUnverified"
+	ReasonRootTokenStored                = "RootTokenStored"
+	ReasonStaticUnsealInUse              = "StaticUnsealInUse"
+	ReasonOperatorManagedTLS             = "OperatorManagedTLS"
+	ReasonDisabled                       = "Disabled"
+	ReasonNotReady                       = "NotReady"
+	ReasonAllReplicasReady               = "AllReplicasReady"
+	ReasonNoReplicasReady                = "NoReplicasReady"
+	ReasonNoReadReplicasConfigured       = "NoReadReplicasConfigured"
+	ReasonAllReadReplicasReady           = "AllReadReplicasReady"
+	ReasonReadReplicasNotReady           = "ReadReplicasNotReady"
+	ReasonNoReadyReadReplicas            = "NoReadyReadReplicas"
+	ReasonReadServingAvailable           = "ReadServingAvailable"
+	ReasonReadServingWithoutQuorum       = "ReadServingWithoutQuorum"
+	ReasonPodsNotServingReads            = "PodsNotServingReads"
+	ReasonRaftMembershipReady            = "RaftMembershipReady"
+	ReasonReadReplicasAutopilotHealthy   = "ReadReplicasAutopilotHealthy"
+	ReasonReadReplicasAutopilotUnhealthy = "ReadReplicasAutopilotUnhealthy"
+	ReasonStorageClassConfigured         = "StorageClassConfigured"
+	ReasonStorageClassPending            = "StorageClassPending"
+	ReasonStorageClassDefaulted          = "StorageClassDefaulted"
+	ReasonStorageClassUnset              = "StorageClassUnset"
+	ReasonStorageClassMismatch           = "StorageClassMismatch"
+	ReasonStorageClassInconsistent       = "StorageClassInconsistent"
+
+	reasonReady              = "Ready"
+	reasonReconciling        = "Reconciling"
+	reasonIdle               = "Idle"
+	reasonUnknown            = constants.ReasonUnknown
+	reasonBreakGlassRequired = "BreakGlassRequired"
+	reasonACMECachePending   = "ACMECachePending"
+	unsealTypeStatic         = "static"
+)

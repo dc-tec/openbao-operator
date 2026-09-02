@@ -1,4 +1,4 @@
-package openbaocluster
+package statusops
 
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -13,7 +13,7 @@ import (
 // This consolidates condition logic to eliminate duplicate code paths.
 func applyAllConditions(
 	cluster *openbaov1alpha1.OpenBaoCluster,
-	state *clusterState,
+	state *StatusState,
 	admissionStatus *admission.Status,
 	now metav1.Time,
 ) {
@@ -149,7 +149,7 @@ func applyAllConditions(
 }
 
 // computePhase determines the cluster phase from state.
-func computePhase(state *clusterState) openbaov1alpha1.ClusterPhase {
+func computePhase(state *StatusState) openbaov1alpha1.ClusterPhase {
 	if state.UpgradeFailed {
 		return openbaov1alpha1.ClusterPhaseFailed
 	}

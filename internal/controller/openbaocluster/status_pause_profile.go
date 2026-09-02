@@ -93,10 +93,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionCloudUnsealIdentityReady))
 	}
 
-	userAccessCond := buildUserAccessBootstrapCondition(cluster)
-	userAccessCond.ObservedGeneration = cluster.Generation
-	userAccessCond.LastTransitionTime = now
-	meta.SetStatusCondition(&cluster.Status.Conditions, userAccessCond)
+	appopenbaocluster.ApplyUserAccessBootstrapCondition(cluster, now)
 
 	if err := r.patchStatusSSA(ctx, cluster); err != nil {
 		return fmt.Errorf("failed to update status for paused OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
@@ -187,10 +184,7 @@ func (r *OpenBaoClusterReconciler) updateStatusForProfileNotSet(ctx context.Cont
 
 	setProfileNotSetCondition(cluster, openbaov1alpha1.ConditionProductionReady, metav1.ConditionFalse, "Cluster cannot be considered production-ready until spec.profile is explicitly set")
 
-	userAccessCond := buildUserAccessBootstrapCondition(cluster)
-	userAccessCond.ObservedGeneration = cluster.Generation
-	userAccessCond.LastTransitionTime = now
-	meta.SetStatusCondition(&cluster.Status.Conditions, userAccessCond)
+	appopenbaocluster.ApplyUserAccessBootstrapCondition(cluster, now)
 
 	if err := r.patchStatusSSA(ctx, cluster); err != nil {
 		return fmt.Errorf("failed to update status for missing profile on OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
