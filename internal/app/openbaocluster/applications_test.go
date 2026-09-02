@@ -29,6 +29,7 @@ func TestNewRuntimeApplicationsBuildsApplicationBoundary(t *testing.T) {
 	})
 
 	require.NotNil(t, applications)
+	require.NotNil(t, applications.config.AdminOpsApplication)
 	assert.False(t, applications.InitializationConfigured())
 }
 

@@ -1,0 +1,54 @@
+id: no-adminops-runtime-construction-in-reconcile
+valid:
+  - |
+    package adminops
+    type Application struct{}
+    func NewApplication() *Application {
+      _ = workloadmanager.NewManager(client, scheme, platform)
+      return &Application{}
+    }
+    func (a *Application) Reconcile() error {
+      return nil
+    }
+invalid:
+  - |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = workloadmanager.NewManager(client, scheme, platform)
+      return nil
+    }
+  - |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = backupmanager.NewUpgradeStrategyRuntime(client, scheme)
+      return nil
+    }
+  - |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = upgrademanager.NewStrategyTransitionManager(reader)
+      return nil
+    }
+  - |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = bluegreen.NewManager(client, scheme)
+      return nil
+    }
+  - |
+    package adminops
+    type Application struct{}
+    func (a *Application) Reconcile() error {
+      _ = rollingupgrade.NewManager(client, scheme)
+      return nil
+    }
+  - |
+    package adminops
+    func Reconcile() error {
+      _ = backupmanager.NewManager(client, scheme)
+      return nil
+    }

@@ -30,13 +30,6 @@ type Dependencies struct {
 	APIReader             client.Reader
 	Scheme                *runtime.Scheme
 	Recorder              events.EventRecorder
-	OperatorNamespace     string
-	OIDCIssuer            string
-	OIDCDiscoveryURL      string
-	OIDCDiscoveryCAPEM    string
-	OIDCJWKSURL           string
-	OIDCJWKSCAPEM         string
-	OIDCJWTKeys           []string
 	SmartClientConfig     portopenbao.ClientConfig
 	ImageVerifier         imageverify.Verifier
 	OperatorImageVerifier imageverify.Verifier
@@ -50,7 +43,6 @@ type ErrorRecorder func(error)
 // StatusPatcher persists adminops-owned status fields.
 type StatusPatcher func(
 	ctx context.Context,
-	c client.Client,
 	logger logr.Logger,
 	original *openbaov1alpha1.OpenBaoCluster,
 	cluster *openbaov1alpha1.OpenBaoCluster,
@@ -69,6 +61,33 @@ type reconcilerPlan struct {
 	backupReconciler   subReconciler
 }
 
+// Application executes the prebuilt admin-operations reconciliation plan.
+type Application struct {
+	plan         reconcilerPlan
+	requeueShort time.Duration
+	patchStatus  StatusPatcher
+	errorStatus  ErrorStatusBuilder
+}
+
+// NewApplication builds the admin-operations collaborators used by every
+// reconciliation pass.
+func NewApplication(
+	deps Dependencies,
+	patchStatus StatusPatcher,
+	errorStatus ErrorStatusBuilder,
+) *Application {
+	if errorStatus == nil {
+		errorStatus = defaultErrorStatus
+	}
+
+	return &Application{
+		plan:         buildReconcilers(deps),
+		requeueShort: resolveRequeueShort(deps.RequeueShort),
+		patchStatus:  patchStatus,
+		errorStatus:  errorStatus,
+	}
+}
+
 func (p reconcilerPlan) orderedFor(cluster *openbaov1alpha1.OpenBaoCluster) []subReconciler {
 	reconcilers := make([]subReconciler, 0, len(p.upgradeReconcilers)+1)
 	backupOwnsLock := cluster != nil &&
@@ -85,35 +104,26 @@ func (p reconcilerPlan) orderedFor(cluster *openbaov1alpha1.OpenBaoCluster) []su
 	return reconcilers
 }
 
-var adminOpsReconcilersBuilder = buildReconcilers
-
 // Reconcile executes admin-operations orchestration and status patching.
-func Reconcile(
+func (a *Application) Reconcile(
 	ctx context.Context,
 	logger logr.Logger,
-	deps Dependencies,
 	original *openbaov1alpha1.OpenBaoCluster,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	recordError ErrorRecorder,
-	patchStatus StatusPatcher,
-	errorStatus ErrorStatusBuilder,
 ) (recon.Result, error) {
 	ensureAdminOpsStatus(cluster)
 
-	if errorStatus == nil {
-		errorStatus = defaultErrorStatus
-	}
-
-	for _, rec := range adminOpsReconcilersBuilder(deps).orderedFor(cluster) {
+	for _, rec := range a.plan.orderedFor(cluster) {
 		result, err := rec.Reconcile(ctx, logger, cluster)
 		if err != nil {
 			if recordError != nil {
 				recordError(err)
 			}
-			cluster.Status.AdminOps.LastError = errorStatus(err)
+			cluster.Status.AdminOps.LastError = a.errorStatus(err)
 
-			if patchStatus != nil {
-				if statusErr := patchStatus(ctx, deps.Client, logger, original, cluster, "adminops-error"); statusErr != nil {
+			if a.patchStatus != nil {
+				if statusErr := a.patchStatus(ctx, logger, original, cluster, "adminops-error"); statusErr != nil {
 					return recon.Result{}, statusErr
 				}
 			}
@@ -124,7 +134,7 @@ func Reconcile(
 					if requeueAfter > 0 {
 						return recon.Result{RequeueAfter: requeueAfter}, nil
 					}
-					return recon.Result{RequeueAfter: resolveRequeueShort(deps.RequeueShort)}, nil
+					return recon.Result{RequeueAfter: a.requeueShort}, nil
 				}
 			}
 			if operatorerrors.IsPermanent(err) {
@@ -138,8 +148,8 @@ func Reconcile(
 			// error from an earlier pass before persisting the next poll time.
 			ensureAdminOpsStatus(cluster)
 			cluster.Status.AdminOps.LastError = nil
-			if patchStatus != nil {
-				if statusErr := patchStatus(ctx, deps.Client, logger, original, cluster, "adminops-requeue"); statusErr != nil {
+			if a.patchStatus != nil {
+				if statusErr := a.patchStatus(ctx, logger, original, cluster, "adminops-requeue"); statusErr != nil {
 					return recon.Result{}, statusErr
 				}
 			}
@@ -150,8 +160,8 @@ func Reconcile(
 	// Clear previous adminops error after a successful reconcile.
 	ensureAdminOpsStatus(cluster)
 	cluster.Status.AdminOps.LastError = nil
-	if patchStatus != nil {
-		if err := patchStatus(ctx, deps.Client, logger, original, cluster, "adminops-complete"); err != nil {
+	if a.patchStatus != nil {
+		if err := a.patchStatus(ctx, logger, original, cluster, "adminops-complete"); err != nil {
 			return recon.Result{}, fmt.Errorf("failed to patch adminops owned fields: %w", err)
 		}
 	}

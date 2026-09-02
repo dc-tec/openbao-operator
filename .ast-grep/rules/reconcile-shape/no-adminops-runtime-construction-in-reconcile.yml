@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-adminops-runtime-construction-in-reconcile
+message: Construct AdminOps runtime collaborators when the application starts, not during reconciliation.
+severity: warning
+language: Go
+files:
+  - internal/app/openbaocluster/adminops/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - kind: call_expression
+    - regex: '(workloadmanager\.NewManager|backupmanager\.(NewUpgradeStrategyRuntime|NewManager)|upgrademanager\.NewStrategyTransitionManager|bluegreen\.NewManager|rollingupgrade\.NewManager)\('
+    - inside:
+        any:
+          - all:
+              - kind: method_declaration
+              - regex: 'Reconcile\('
+          - all:
+              - kind: function_declaration
+              - regex: 'Reconcile\('
+        stopBy: end
+note: The AdminOps application owns immutable runtime collaborators. Reconcile methods must reuse its prebuilt plan.
