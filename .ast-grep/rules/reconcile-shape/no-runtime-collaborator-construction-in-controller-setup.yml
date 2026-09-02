@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-runtime-collaborator-construction-in-controller-setup
+message: Inject app and service runtime collaborators before controller setup.
+severity: warning
+language: Go
+files:
+  - internal/controller/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - kind: call_expression
+    - regex: '\.New[A-Za-z0-9]*(Applications?|Manager|Provisioner|Reconciler|Runtime)(With[A-Za-z0-9]+)?\('
+    - inside:
+        all:
+          - kind: method_declaration
+          - regex: 'SetupWithManager\('
+        stopBy: end
+note: Controller setup registers watches and options. Entrypoints must construct and inject app or service runtime collaborators.

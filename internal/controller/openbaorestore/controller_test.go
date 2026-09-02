@@ -17,6 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
@@ -26,16 +27,18 @@ import (
 )
 
 type recordingRestoreReconciler struct {
-	calls  int
-	result recon.Result
+	calls    int
+	result   recon.Result
+	observed *openbaov1alpha1.OpenBaoRestore
 }
 
 func (r *recordingRestoreReconciler) Reconcile(
 	_ context.Context,
 	_ logr.Logger,
-	_ *openbaov1alpha1.OpenBaoRestore,
+	restoreResource *openbaov1alpha1.OpenBaoRestore,
 ) (recon.Result, error) {
 	r.calls++
+	r.observed = restoreResource
 	return r.result, nil
 }
 
@@ -58,8 +61,7 @@ func TestOpenBaoRestoreReconciler_Reconcile_NotFound(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).Build()
 	r := &OpenBaoRestoreReconciler{
 		Client:            c,
-		Scheme:            scheme,
-		RestoreReconciler: appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{Client: c, Scheme: scheme}),
+		RestoreReconciler: &recordingRestoreReconciler{},
 	}
 
 	req := ctrl.Request{
@@ -98,7 +100,6 @@ func TestOpenBaoRestoreReconciler_AdmissionDependencyLoss(t *testing.T) {
 		tracker.Set(admission.Status{CheckedAt: time.Now(), OverallReady: false})
 		r := &OpenBaoRestoreReconciler{
 			Client:            c,
-			Scheme:            scheme,
 			AdmissionTracker:  tracker,
 			RestoreReconciler: appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{Client: c, APIReader: c, Scheme: scheme}),
 		}
@@ -131,7 +132,6 @@ func TestOpenBaoRestoreReconciler_AdmissionDependencyLoss(t *testing.T) {
 		tracker.Set(admission.Status{CheckedAt: time.Now(), OverallReady: false})
 		r := &OpenBaoRestoreReconciler{
 			Client:            c,
-			Scheme:            scheme,
 			AdmissionTracker:  tracker,
 			RestoreReconciler: appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{Client: c, APIReader: c, Scheme: scheme}),
 		}
@@ -167,13 +167,30 @@ func TestOpenBaoRestoreReconciler_AdmissionDependencyLoss(t *testing.T) {
 				},
 			},
 		}
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(restore).Build()
+		restoreGetCalls := 0
+		c := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(restore).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Get: func(
+					ctx context.Context,
+					c client.WithWatch,
+					key client.ObjectKey,
+					obj client.Object,
+					opts ...client.GetOption,
+				) error {
+					if _, ok := obj.(*openbaov1alpha1.OpenBaoRestore); ok {
+						restoreGetCalls++
+					}
+					return c.Get(ctx, key, obj, opts...)
+				},
+			}).
+			Build()
 		tracker := admission.NewTracker(c, admission.DefaultDependencies(), admission.DefaultNamePrefixes(), time.Hour)
 		tracker.Set(admission.Status{CheckedAt: time.Now(), OverallReady: false})
 		recorder := &recordingRestoreReconciler{result: recon.Result{RequeueAfter: 7 * time.Second}}
 		r := &OpenBaoRestoreReconciler{
 			Client:            c,
-			Scheme:            scheme,
 			AdmissionTracker:  tracker,
 			RestoreReconciler: recorder,
 		}
@@ -182,5 +199,15 @@ func TestOpenBaoRestoreReconciler_AdmissionDependencyLoss(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 7*time.Second, result.RequeueAfter)
 		assert.Equal(t, 1, recorder.calls)
+		assert.Equal(t, 1, restoreGetCalls)
+		require.NotNil(t, recorder.observed)
+		assert.Equal(t, restore.Name, recorder.observed.Name)
+		assert.Equal(t, restore.Status.Execution.OperationID, recorder.observed.Status.Execution.OperationID)
 	})
+}
+
+func TestOpenBaoRestoreReconciler_SetupWithManager_RequiresRestoreReconciler(t *testing.T) {
+	err := (&OpenBaoRestoreReconciler{}).SetupWithManager(nil)
+
+	require.EqualError(t, err, "restore reconciler is not configured")
 }

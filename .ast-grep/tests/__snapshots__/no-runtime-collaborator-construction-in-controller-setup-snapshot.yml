@@ -1,0 +1,107 @@
+id: no-runtime-collaborator-construction-in-controller-setup
+snapshots:
+  ? |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      provisioner, err := appprovisioner.NewProvisioner(dependencies)
+      return err
+    }
+  : labels:
+    - source: appprovisioner.NewProvisioner(dependencies)
+      style: primary
+      start: 141
+      end: 184
+    - source: |-
+        func (r *Reconciler) SetupWithManager(mgr Manager) error {
+          provisioner, err := appprovisioner.NewProvisioner(dependencies)
+          return err
+        }
+      style: secondary
+      start: 60
+      end: 199
+  ? |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      r.applications = app.NewRuntimeApplications(dependencies)
+      return nil
+    }
+  : labels:
+    - source: app.NewRuntimeApplications(dependencies)
+      style: primary
+      start: 138
+      end: 178
+    - source: |-
+        func (r *Reconciler) SetupWithManager(mgr Manager) error {
+          r.applications = app.NewRuntimeApplications(dependencies)
+          return nil
+        }
+      style: secondary
+      start: 60
+      end: 193
+  ? |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      r.manager = service.NewManager(client, logger)
+      return nil
+    }
+  : labels:
+    - source: service.NewManager(client, logger)
+      style: primary
+      start: 133
+      end: 167
+    - source: |-
+        func (r *Reconciler) SetupWithManager(mgr Manager) error {
+          r.manager = service.NewManager(client, logger)
+          return nil
+        }
+      style: secondary
+      start: 60
+      end: 182
+  ? |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      r.manager = service.NewManagerWithReader(client, reader, logger)
+      return nil
+    }
+  : labels:
+    - source: service.NewManagerWithReader(client, reader, logger)
+      style: primary
+      start: 133
+      end: 185
+    - source: |-
+        func (r *Reconciler) SetupWithManager(mgr Manager) error {
+          r.manager = service.NewManagerWithReader(client, reader, logger)
+          return nil
+        }
+      style: secondary
+      start: 60
+      end: 200
+  ? |
+    package p
+    type Reconciler struct{}
+    type Manager interface{}
+    func (r *Reconciler) SetupWithManager(mgr Manager) error {
+      r.restore = apprestore.NewRestoreReconciler(dependencies)
+      return nil
+    }
+  : labels:
+    - source: apprestore.NewRestoreReconciler(dependencies)
+      style: primary
+      start: 133
+      end: 178
+    - source: |-
+        func (r *Reconciler) SetupWithManager(mgr Manager) error {
+          r.restore = apprestore.NewRestoreReconciler(dependencies)
+          return nil
+        }
+      style: secondary
+      start: 60
+      end: 193

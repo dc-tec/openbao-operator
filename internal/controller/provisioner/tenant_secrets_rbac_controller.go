@@ -2,11 +2,11 @@ package provisioner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -32,7 +32,6 @@ type TenantSecretsRBACReconciler struct {
 	client.Client
 	AdmissionTracker *admission.Tracker
 	APIReader        client.Reader
-	Scheme           *runtime.Scheme
 	Recorder         events.EventRecorder
 	Provisioner      appprovisioner.Provisioner
 }
@@ -123,14 +122,7 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 func (r *TenantSecretsRBACReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Provisioner == nil {
-		provisionerRuntime, err := appprovisioner.NewProvisioner(appprovisioner.ProvisionerDependencies{
-			Client: r.Client,
-			Logger: log.Log.WithName(controllerNameTenantSecretsRBAC),
-		})
-		if err != nil {
-			return err
-		}
-		r.Provisioner = provisionerRuntime
+		return errors.New("provisioner application is not configured")
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).

@@ -37,7 +37,6 @@ func setupControllers(mgr ctrl.Manager, runtime provisionerProcessRuntime) error
 	if err := (&provisionercontroller.NamespaceProvisionerReconciler{
 		Client:            mgr.GetClient(),
 		APIReader:         mgr.GetAPIReader(),
-		Scheme:            mgr.GetScheme(),
 		Recorder:          mgr.GetEventRecorder("namespace-provisioner"),
 		Provisioner:       runtime.provisioner,
 		OperatorNamespace: runtime.operatorNamespace,
@@ -50,7 +49,6 @@ func setupControllers(mgr ctrl.Manager, runtime provisionerProcessRuntime) error
 		Client:           mgr.GetClient(),
 		AdmissionTracker: runtime.admissionTracker,
 		APIReader:        mgr.GetAPIReader(),
-		Scheme:           mgr.GetScheme(),
 		Recorder:         mgr.GetEventRecorder("namespace-provisioner-tenant-secrets"),
 		Provisioner:      runtime.provisioner,
 	}).SetupWithManager(mgr); err != nil {
