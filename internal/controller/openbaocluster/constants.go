@@ -15,11 +15,6 @@ const (
 	ReasonProfileNotSet                     = "ProfileNotSet"
 	ReasonRootTokenStored                   = "RootTokenStored"
 	ReasonStaticUnsealInUse                 = "StaticUnsealInUse"
-	ReasonACMECacheReady                    = "ACMECacheReady"
-	ReasonACMECacheNotConfigured            = "ACMECacheNotConfigured"
-	ReasonACMECacheMissing                  = "ACMECacheMissing"
-	ReasonACMECachePending                  = "ACMECachePending"
-	ReasonACMECacheInvalidAccessMode        = "ACMECacheInvalidAccessMode"
 
 	ReasonImageVersionMismatch = constants.ReasonImageVersionMismatch
 
@@ -36,13 +31,4 @@ const (
 	annotationLastStaticUnsealWarning    = "openbao.org/last-static-unseal-warning"
 	annotationLastUnsafeAdmissionWarning = "openbao.org/last-unsafe-admission-warning"
 )
-
-const (
-	ReasonAuditFileStorageReady                       = "AuditFileStorageReady"
-	ReasonAuditFileStorageMissing                     = "AuditFileStorageMissing"
-	ReasonAuditFileStoragePending                     = "AuditFileStoragePending"
-	ReasonAuditFileStorageInvalidAccessMode           = "AuditFileStorageInvalidAccessMode"
-	ReasonAuditFileStorageStatefulSetRecreateRequired = constants.ReasonAuditFileStorageStatefulSetRecreateRequired
-)
-
 const securityWarningInterval = time.Hour
