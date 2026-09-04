@@ -112,13 +112,15 @@ func (m *Manager) reconcileOwnedBackup(
 		return recon.Result{}, err
 	}
 	m.syncBackupStatusMetrics(cluster, metrics)
-	if err := m.clearManualTriggerAnnotation(ctx, logger, cluster); err != nil {
-		return recon.Result{}, fmt.Errorf("failed to clear manual backup trigger while finishing owned operation: %w", err)
-	}
 
 	observation, err := m.observeBackupJobs(ctx, cluster)
 	if err != nil {
 		return recon.Result{}, fmt.Errorf("failed to observe owned backup Jobs: %w", err)
+	}
+	if observation.hasActive || observation.mostRecentTerminal != nil {
+		if err := m.clearManualTriggerAnnotation(ctx, logger, cluster); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to clear manual backup trigger while finishing owned operation: %w", err)
+		}
 	}
 	if observation.hasActive {
 		m.applyBackupJobSnapshotToMetrics(cluster, metrics, backupJobMetricsSnapshot{inProgress: true})
