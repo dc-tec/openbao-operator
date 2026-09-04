@@ -7,10 +7,42 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/raft"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
+
+func TestSetupControllersRequiresRaftRuntime(t *testing.T) {
+	err := setupControllers(nil, controllerProcessRuntime{})
+
+	assert.EqualError(t, err, "OpenBaoCluster Raft runtime is required")
+}
+
+func TestSetupControllersRequiresInitializationManager(t *testing.T) {
+	err := setupControllers(nil, controllerProcessRuntime{
+		openBaoRuntime: appopenbaocluster.RuntimeOpenBaoConfig{
+			Raft: raft.NewManager(kubernetesfake.NewClientset(), nil),
+		},
+	})
+
+	assert.EqualError(t, err, "OpenBaoCluster initialization manager is required")
+}
+
+func TestRaftClientFactoryProviderBuildsAuthenticatedClient(t *testing.T) {
+	provider := raftClientFactoryProvider{
+		clientManager: openbao.NewClientManager(portopenbao.ClientConfig{}),
+	}
+
+	factory := provider.FactoryFor("tenant-a/example", nil, "openbao.example.internal")
+	require.NotNil(t, factory)
+	client, err := factory.NewWithToken("https://openbao.example.internal:8200", "test-token")
+	require.NoError(t, err)
+	require.NotNil(t, client)
+}
 
 func TestOpenBaoClusterPodClientFactoryConfiguresPodEndpoint(t *testing.T) {
 	baseConfig := portopenbao.ClientConfig{BaseURL: "https://unused.example"}

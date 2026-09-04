@@ -44,8 +44,18 @@ type RuntimeOIDCConfig struct {
 type RuntimeOpenBaoConfig struct {
 	TLSReload         TLSReloadSignaler
 	InitManager       initmanagerport.Manager
+	Raft              RuntimeRaft
 	SmartClientConfig portopenbao.ClientConfig
 	ClientForPod      func(context.Context, *openbaov1alpha1.OpenBaoCluster, string) (portopenbao.ClusterActions, error)
+}
+
+// RuntimeRaft groups the Raft capabilities used by workload and status
+// orchestration into one explicitly injected runtime.
+type RuntimeRaft interface {
+	initmanagerport.AutopilotRuntime
+	initmanagerport.ScaleDownRuntime
+	initmanagerport.ReadReplicaScaleDownRuntime
+	StatusMembershipRuntime
 }
 
 // RuntimeImageVerificationConfig groups image verification collaborators.
@@ -72,23 +82,6 @@ func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
 		clientForPod = func(context.Context, *openbaov1alpha1.OpenBaoCluster, string) (portopenbao.ClusterActions, error) {
 			return nil, fmt.Errorf("OpenBao pod client factory is not configured")
 		}
-	}
-
-	var scaleDownRuntime initmanagerport.ScaleDownRuntime
-	if provider, ok := config.OpenBao.InitManager.(initmanagerport.ScaleDownProvider); ok {
-		scaleDownRuntime = provider.ScaleDownRuntime()
-	}
-	var readReplicaScaleDownRuntime initmanagerport.ReadReplicaScaleDownRuntime
-	if provider, ok := config.OpenBao.InitManager.(initmanagerport.ReadReplicaScaleDownProvider); ok {
-		readReplicaScaleDownRuntime = provider.ReadReplicaScaleDownRuntime()
-	}
-	var autopilotRuntime initmanagerport.AutopilotRuntime
-	if provider, ok := config.OpenBao.InitManager.(initmanagerport.AutopilotProvider); ok {
-		autopilotRuntime = provider.AutopilotRuntime()
-	}
-	var membershipRuntime StatusMembershipRuntime
-	if provider, ok := config.OpenBao.InitManager.(initmanagerport.MembershipProvider); ok {
-		membershipRuntime = provider.MembershipRuntime()
 	}
 
 	workloadReconcilers := []SubReconciler{
@@ -124,8 +117,8 @@ func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
 				},
 			},
 			ScaleDown: InfraScaleDownRuntime{
-				Runtime:            scaleDownRuntime,
-				ReadReplicaRuntime: readReplicaScaleDownRuntime,
+				Runtime:            config.OpenBao.Raft,
+				ReadReplicaRuntime: config.OpenBao.Raft,
 			},
 		}),
 		NewStorageReconciler(StorageDependencies{
@@ -148,7 +141,7 @@ func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
 	workloadReconcilers = AppendInitAndAutopilotReconcilers(
 		workloadReconcilers,
 		config.OpenBao.InitManager,
-		autopilotRuntime,
+		config.OpenBao.Raft,
 		config.Kubernetes.APIReader,
 		config.Kubernetes.Recorder,
 		constants.RequeueShort,
@@ -171,7 +164,7 @@ func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
 		}),
 		StatusDependencies: StatusDependencies{
 			Reader:            config.Kubernetes.Client,
-			MembershipRuntime: membershipRuntime,
+			MembershipRuntime: config.OpenBao.Raft,
 			PodObserverFactory: func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (StatusPodObserver, error) {
 				actions, err := clientForPod(ctx, cluster, podName)
 				if err != nil {

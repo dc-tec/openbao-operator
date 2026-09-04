@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	"github.com/dc-tec/openbao-operator/internal/adapter/raft"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -34,25 +34,36 @@ type Manager struct {
 	config      *rest.Config
 	clientset   kubernetes.Interface
 	clientMgr   *openbao.ClientManager
-	raftManager *raft.Manager
+	raftRuntime RaftRuntime
 	recorder    events.EventRecorder
 }
 
-type raftClientFactoryProvider struct {
-	clientMgr *openbao.ClientManager
+// RaftRuntime exposes the Raft operations required during cluster
+// initialization.
+type RaftRuntime interface {
+	initmanagerport.AutopilotRuntime
+	ConfigureAutopilot(
+		ctx context.Context,
+		logger logr.Logger,
+		cluster *openbaov1alpha1.OpenBaoCluster,
+		rootToken string,
+	) error
 }
 
-type raftClientFactoryAdapter struct {
-	factory *openbao.ClientFactory
-}
+// NewManager creates an initialization Manager. The client manager provides
+// per-cluster OpenBao client state. The required Raft runtime configures
+// Autopilot during operator-managed and self-initialization.
+func NewManager(
+	config *rest.Config,
+	clientset kubernetes.Interface,
+	clientMgr *openbao.ClientManager,
+	raftOps RaftRuntime,
+	recorder ...events.EventRecorder,
+) (*Manager, error) {
+	if raftOps == nil {
+		return nil, fmt.Errorf("raft runtime is required")
+	}
 
-type raftClientAdapter struct {
-	client *openbao.Client
-}
-
-// NewManager creates a new initialization Manager.
-// The clientMgr is used to create OpenBao clients with proper state isolation.
-func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *openbao.ClientManager, recorder ...events.EventRecorder) *Manager {
 	var eventRecorder events.EventRecorder
 	if len(recorder) > 0 {
 		eventRecorder = recorder[0]
@@ -61,116 +72,7 @@ func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *
 		config:      config,
 		clientset:   clientset,
 		clientMgr:   clientMgr,
-		raftManager: raft.NewManager(clientset, raftClientFactoryProvider{clientMgr: clientMgr}),
+		raftRuntime: raftOps,
 		recorder:    eventRecorder,
-	}
-}
-
-func (p raftClientFactoryProvider) FactoryFor(clusterKey string, caCert []byte, tlsServerName string) raft.ClientFactory {
-	if p.clientMgr == nil {
-		return nil
-	}
-
-	factory := p.clientMgr.FactoryFor(clusterKey, caCert, tlsServerName)
-	if factory == nil {
-		return nil
-	}
-
-	return raftClientFactoryAdapter{factory: factory}
-}
-
-func (a raftClientFactoryAdapter) NewWithJWT(ctx context.Context, baseURL, role, jwtToken string) (raft.Client, error) {
-	if a.factory == nil {
-		return nil, fmt.Errorf("OpenBao client factory is required")
-	}
-
-	client, err := a.factory.NewWithJWT(ctx, baseURL, role, jwtToken)
-	if err != nil {
-		return nil, err
-	}
-
-	return raftClientAdapter{client: client}, nil
-}
-
-func (a raftClientFactoryAdapter) NewWithToken(baseURL, token string) (raft.Client, error) {
-	if a.factory == nil {
-		return nil, fmt.Errorf("OpenBao client factory is required")
-	}
-
-	client, err := a.factory.NewWithToken(baseURL, token)
-	if err != nil {
-		return nil, err
-	}
-
-	return raftClientAdapter{client: client}, nil
-}
-
-func (a raftClientAdapter) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.AutopilotConfig) error {
-	if a.client == nil {
-		return fmt.Errorf("OpenBao client is required")
-	}
-	return a.client.ConfigureRaftAutopilot(ctx, config)
-}
-
-func (a raftClientAdapter) ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftConfigurationResponse, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("OpenBao client is required")
-	}
-	return a.client.ReadRaftConfiguration(ctx)
-}
-
-func (a raftClientAdapter) ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftAutopilotStateResponse, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("OpenBao client is required")
-	}
-	return a.client.ReadRaftAutopilotState(ctx)
-}
-
-func (a raftClientAdapter) RemoveRaftPeer(ctx context.Context, serverID string) error {
-	if a.client == nil {
-		return fmt.Errorf("OpenBao client is required")
-	}
-	return a.client.RemoveRaftPeer(ctx, serverID)
-}
-
-func (a raftClientAdapter) StepDownLeader(ctx context.Context) error {
-	if a.client == nil {
-		return fmt.Errorf("OpenBao client is required")
-	}
-	return a.client.StepDownLeader(ctx)
-}
-
-// RaftManager returns the Raft Manager for autopilot configuration.
-func (m *Manager) RaftManager() *raft.Manager {
-	return m.raftManager
-}
-
-// AutopilotRuntime returns the optional day-2 autopilot runtime.
-func (m *Manager) AutopilotRuntime() initmanagerport.AutopilotRuntime {
-	return m.raftManager
-}
-
-// ScaleDownRuntime returns the optional day-2 scale-down runtime.
-func (m *Manager) ScaleDownRuntime() initmanagerport.ScaleDownRuntime {
-	return m.raftManager
-}
-
-// MembershipRuntime returns the optional authenticated raft membership reader.
-func (m *Manager) MembershipRuntime() initmanagerport.MembershipRuntime {
-	return m.raftManager
-}
-
-// ReadReplicaScaleDownRuntime returns the optional read-replica scale-down runtime.
-func (m *Manager) ReadReplicaScaleDownRuntime() initmanagerport.ReadReplicaScaleDownRuntime {
-	return m.raftManager
-}
-
-// Clientset returns the Kubernetes clientset.
-func (m *Manager) Clientset() kubernetes.Interface {
-	return m.clientset
-}
-
-// ClientManager returns the OpenBao ClientManager.
-func (m *Manager) ClientManager() *openbao.ClientManager {
-	return m.clientMgr
+	}, nil
 }

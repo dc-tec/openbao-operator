@@ -83,10 +83,8 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 		return err
 	}
 
-	if m.raftManager != nil {
-		if err := m.raftManager.ConfigureAutopilot(ctx, logger, cluster, initResp.RootToken); err != nil {
-			logger.Error(err, "Failed to configure Raft Autopilot; dead server cleanup may not work automatically")
-		}
+	if err := m.raftRuntime.ConfigureAutopilot(ctx, logger, cluster, initResp.RootToken); err != nil {
+		logger.Error(err, "Failed to configure Raft Autopilot; dead server cleanup may not work automatically")
 	}
 
 	logger.Info("OpenBao cluster initialized successfully via HTTP API")

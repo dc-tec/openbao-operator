@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	clienttesting "k8s.io/client-go/testing"
@@ -26,6 +27,69 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
+
+type initRaftRuntimeStub struct {
+	reconcileAutopilotCalls int
+}
+
+func (*initRaftRuntimeStub) ConfigureAutopilot(
+	context.Context,
+	logr.Logger,
+	*openbaov1alpha1.OpenBaoCluster,
+	string,
+) error {
+	return nil
+}
+
+func (s *initRaftRuntimeStub) ReconcileAutopilotConfig(
+	context.Context,
+	logr.Logger,
+	*openbaov1alpha1.OpenBaoCluster,
+) error {
+	s.reconcileAutopilotCalls++
+	return nil
+}
+
+func newTestManager(
+	t *testing.T,
+	config *rest.Config,
+	clientset kubernetes.Interface,
+	clientManager *openbao.ClientManager,
+	recorder ...events.EventRecorder,
+) *Manager {
+	t.Helper()
+
+	manager, err := NewManager(config, clientset, clientManager, &initRaftRuntimeStub{}, recorder...)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	return manager
+}
+
+func TestNewManagerUsesInjectedRaftRuntime(t *testing.T) {
+	clientset := kubernetesfake.NewClientset()
+	clientManager := openbao.NewClientManager(portopenbao.ClientConfig{})
+	raftRuntime := &initRaftRuntimeStub{}
+
+	manager, err := NewManager(&rest.Config{}, clientset, clientManager, raftRuntime)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	if manager.raftRuntime != raftRuntime {
+		t.Fatal("NewManager() did not retain the injected Raft runtime")
+	}
+}
+
+func TestNewManagerRequiresRaftRuntime(t *testing.T) {
+	manager, err := NewManager(&rest.Config{}, kubernetesfake.NewClientset(), nil, nil)
+	if err == nil {
+		t.Fatal("NewManager() error = nil, want missing Raft runtime error")
+	}
+	if manager != nil {
+		t.Fatal("NewManager() manager is non-nil after validation error")
+	}
+}
 
 func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {
 	t.Helper()
@@ -44,10 +108,11 @@ func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...s
 
 func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 	tests := []struct {
-		name            string
-		podReady        bool
-		wantInitialized bool
-		wantSelfInit    bool
+		name               string
+		podReady           bool
+		wantInitialized    bool
+		wantSelfInit       bool
+		wantAutopilotCalls int
 	}{
 		{
 			name:            "pod not ready does not mark initialized",
@@ -56,10 +121,11 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 			wantSelfInit:    false,
 		},
 		{
-			name:            "pod ready marks initialized",
-			podReady:        true,
-			wantInitialized: true,
-			wantSelfInit:    true,
+			name:               "pod ready marks initialized",
+			podReady:           true,
+			wantInitialized:    true,
+			wantSelfInit:       true,
+			wantAutopilotCalls: 1,
 		},
 	}
 
@@ -116,7 +182,11 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 
 			clientset := kubernetesfake.NewClientset(pod)
 			clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
-			manager := NewManager(&rest.Config{}, clientset, clientMgr)
+			raftRuntime := &initRaftRuntimeStub{}
+			manager, err := NewManager(&rest.Config{}, clientset, clientMgr, raftRuntime)
+			if err != nil {
+				t.Fatalf("NewManager() error = %v", err)
+			}
 
 			if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 				t.Fatalf("Reconcile() error = %v, want no error", err)
@@ -128,6 +198,14 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 
 			if cluster.Status.SelfInitialized != tt.wantSelfInit {
 				t.Fatalf("Status.SelfInitialized = %t, want %t", cluster.Status.SelfInitialized, tt.wantSelfInit)
+			}
+
+			if raftRuntime.reconcileAutopilotCalls != tt.wantAutopilotCalls {
+				t.Fatalf(
+					"ReconcileAutopilotConfig() calls = %d, want %d",
+					raftRuntime.reconcileAutopilotCalls,
+					tt.wantAutopilotCalls,
+				)
 			}
 		})
 	}
@@ -178,7 +256,7 @@ func TestReconcileSelfInitReady_EmitsInitEvents(t *testing.T) {
 	recorder := events.NewFakeRecorder(10)
 	clientset := kubernetesfake.NewClientset(pod)
 	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
-	manager := NewManager(&rest.Config{}, clientset, clientMgr, recorder)
+	manager := newTestManager(t, &rest.Config{}, clientset, clientMgr, recorder)
 
 	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -241,7 +319,7 @@ func TestReconcileSelfInitReady_InertizesConfigMapBeforeStatus(t *testing.T) {
 
 	clientset := kubernetesfake.NewClientset(pod, configMap)
 	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
-	manager := NewManager(&rest.Config{}, clientset, clientMgr)
+	manager := newTestManager(t, &rest.Config{}, clientset, clientMgr)
 
 	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -318,7 +396,7 @@ func TestReconcileSelfInitReady_DoesNotMarkCompleteWhenConfigMapUpdateFails(t *t
 		return true, nil, apierrors.NewTooManyRequests("too many requests", 0)
 	})
 	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
-	manager := NewManager(&rest.Config{}, clientset, clientMgr)
+	manager := newTestManager(t, &rest.Config{}, clientset, clientMgr)
 
 	_, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
 	if err == nil {
@@ -377,7 +455,7 @@ func TestReconcileOperatorInitFailure_EmitsInitFailedEvent(t *testing.T) {
 	recorder := events.NewFakeRecorder(10)
 	clientset := kubernetesfake.NewClientset(pod, tlsServerSecret)
 	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
-	manager := NewManager(&rest.Config{}, clientset, clientMgr, recorder)
+	manager := newTestManager(t, &rest.Config{}, clientset, clientMgr, recorder)
 
 	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err == nil {
 		t.Fatal("expected reconcile to fail when TLS CA Secret is missing")
@@ -430,7 +508,7 @@ func TestReconcileIgnoresServiceLabelsWhenSelfInitDisabled(t *testing.T) {
 
 	clientset := kubernetesfake.NewClientset(pod)
 	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
-	manager := NewManager(&rest.Config{}, clientset, clientMgr)
+	manager := newTestManager(t, &rest.Config{}, clientset, clientMgr)
 
 	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v, want no error", err)
@@ -504,7 +582,7 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clientset := kubernetesfake.NewClientset()
 			clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
-			manager := NewManager(&rest.Config{}, clientset, clientMgr)
+			manager := newTestManager(t, &rest.Config{}, clientset, clientMgr)
 
 			createFailuresObserved := 0
 			if tt.transientCreateFailures > 0 {
@@ -598,7 +676,7 @@ func TestStoreRootTokenRejectsImmutableOwnedSecretWithDifferentToken(t *testing.
 		},
 	}
 	clientset := kubernetesfake.NewClientset(existingSecret)
-	manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
+	manager := newTestManager(t, &rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "openbao.org/v1alpha1",
@@ -645,7 +723,7 @@ func TestEnsureRootTokenSecretPresent(t *testing.T) {
 			},
 		}
 		clientset := kubernetesfake.NewClientset(secret)
-		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
+		manager := newTestManager(t, &rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
 
 		if err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster()); err != nil {
 			t.Fatalf("ensureRootTokenSecretPresent() error = %v, want nil", err)
@@ -654,7 +732,7 @@ func TestEnsureRootTokenSecretPresent(t *testing.T) {
 
 	t.Run("returns transient error when root token Secret is missing", func(t *testing.T) {
 		clientset := kubernetesfake.NewClientset()
-		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
+		manager := newTestManager(t, &rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
 
 		err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster())
 		if err == nil {
@@ -670,7 +748,7 @@ func TestEnsureRootTokenSecretPresent(t *testing.T) {
 		clientset.PrependReactor("get", "secrets", func(clienttesting.Action) (bool, runtime.Object, error) {
 			return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "cluster-root-token", fmt.Errorf("forbidden"))
 		})
-		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
+		manager := newTestManager(t, &rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
 
 		err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster())
 		if err == nil {
@@ -686,7 +764,7 @@ func TestEnsureRootTokenSecretPresent(t *testing.T) {
 		clientset.PrependReactor("get", "secrets", func(clienttesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("boom")
 		})
-		manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
+		manager := newTestManager(t, &rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
 
 		err := manager.ensureRootTokenSecretPresent(context.Background(), newCluster())
 		if err == nil {

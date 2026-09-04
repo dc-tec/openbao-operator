@@ -201,7 +201,6 @@ serviceBoundaries:
     allowServiceImports: []
     allowAdapterImports:
       - internal/adapter/openbao
-      - internal/adapter/raft
   - name: networking
     displayName: Networking
     packageRoot: internal/service/networking
