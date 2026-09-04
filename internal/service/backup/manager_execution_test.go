@@ -353,6 +353,36 @@ func TestReconcile_OwnedBackupClearsCrashRecoveredManualTrigger(t *testing.T) {
 	}
 }
 
+func TestReconcile_OwnedBackupWithoutJobPreservesManualTrigger(t *testing.T) {
+	cluster := newTestClusterWithBackup("manual-before-job-crash", "default")
+	cluster.Annotations = map[string]string{constants.AnnotationTriggerBackup: "manual-request-1"}
+	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+		Operation: openbaov1alpha1.ClusterOperationBackup,
+		Holder:    backupOperationLockHolder,
+	}
+
+	k8sClient := newTestClient(t, cluster)
+	manager := newBackupManager(k8sClient)
+	result, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result.RequeueAfter != constants.RequeueShort {
+		t.Fatalf("RequeueAfter = %v, want %v", result.RequeueAfter, constants.RequeueShort)
+	}
+
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updated); err != nil {
+		t.Fatalf("Get() cluster error = %v", err)
+	}
+	if got := updated.Annotations[constants.AnnotationTriggerBackup]; got != "manual-request-1" {
+		t.Fatalf("manual trigger = %q, want preserved for retry", got)
+	}
+	if updated.Status.OperationLock != nil {
+		t.Fatalf("operation lock = %#v, want released", updated.Status.OperationLock)
+	}
+}
+
 func TestReconcile_AppliesRetentionOnceForNewSuccessfulJob(t *testing.T) {
 	cluster := newTestClusterWithBackup("async-retention", "default")
 	cluster.Status.Initialized = true
