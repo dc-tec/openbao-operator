@@ -54,10 +54,9 @@ func expectAnyEventContains(t *testing.T, recorder *events.FakeRecorder, attempt
 	t.Fatalf("did not find event containing %q within %d attempts", strings.Join(parts, ", "), attempts)
 }
 
-func TestHandleManualTrigger_EmitsAcceptedEvent(t *testing.T) {
+func TestRecordManualTriggerAccepted_EmitsAcceptedEvent(t *testing.T) {
 	t.Parallel()
 
-	now := time.Unix(1700000000, 0).UTC()
 	cluster := newTestClusterWithBackup("manual-events", "backup-ns")
 	const manualTriggerToken = "now"
 	cluster.Annotations = map[string]string{"openbao.org/trigger-backup": manualTriggerToken}
@@ -76,16 +75,7 @@ func TestHandleManualTrigger_EmitsAcceptedEvent(t *testing.T) {
 		k8sClient,
 	)
 
-	triggerToken, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
-	if err != nil {
-		t.Fatalf("handleManualTrigger() error = %v", err)
-	}
-	if triggerToken != manualTriggerToken {
-		t.Fatalf("triggerToken = %q, want %q", triggerToken, manualTriggerToken)
-	}
-	if !scheduledTime.Equal(now) {
-		t.Fatalf("scheduledTime = %v, want %v", scheduledTime, now)
-	}
+	manager.recordManualTriggerAccepted(logr.Discard(), cluster, manualTriggerToken)
 
 	expectEventContains(t, recorder, "Normal", ReasonBackupManualTriggerAccepted)
 }

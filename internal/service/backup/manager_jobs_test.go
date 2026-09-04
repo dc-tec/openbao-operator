@@ -2,13 +2,16 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
@@ -79,42 +82,20 @@ func TestObserveBackupJobs_FiltersByBackupType(t *testing.T) {
 	}
 }
 
-func TestCheckForCompletedJobs_RequiresBackupKeyOnlyForScheduledJobs(t *testing.T) {
+func TestObserveBackupJobs_ReturnsListError(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name       string
-		backupType string
-		wantErr    string
-	}{
-		{
-			name:       "rejects scheduled job without backup key",
-			backupType: constants.BackupTypeScheduled,
-			wantErr:    "without openbao.org/backup-key",
-		},
-		{
-			name:       "ignores pre-upgrade job without backup key",
-			backupType: constants.BackupTypePreUpgrade,
-		},
-	}
+	cluster := newTestClusterWithBackup("job-observation-error", "default")
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster).
+		WithInterceptorFuncs(interceptor.Funcs{
+			List: func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
+				return errors.New("list failed")
+			},
+		}).
+		Build()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			cluster := newTestClusterWithBackup("completed-job", "default")
-			job := newBackupJobForCluster(cluster, "completed-job", time.Now().UTC())
-			job.Labels[constants.LabelOpenBaoBackupType] = tt.backupType
-			job.Status = batchv1.JobStatus{Succeeded: 1}
-			manager := newBackupManager(newTestClient(t, cluster, job))
-
-			result, err := manager.checkForCompletedJobs(context.Background(), logr.Discard(), cluster)
-			assert.Equal(t, backupJobProcessResult{}, result)
-			if tt.wantErr != "" {
-				assert.ErrorContains(t, err, tt.wantErr)
-				return
-			}
-			require.NoError(t, err)
-		})
-	}
+	_, err := newBackupManager(k8sClient).observeBackupJobs(context.Background(), cluster)
+	require.EqualError(t, err, "failed to list backup jobs: list failed")
 }

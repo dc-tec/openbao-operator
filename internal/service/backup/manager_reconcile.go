@@ -2,12 +2,10 @@ package backup
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -21,130 +19,36 @@ import (
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	logger = logger.WithValues("component", constants.ComponentBackup)
 	metrics := NewMetrics(cluster.Namespace, cluster.Name)
-
-	if backupOperationLock.IsHeldBy(cluster.Status.OperationLock) {
-		return m.reconcileOwnedBackup(ctx, logger, cluster, metrics)
-	}
-	if cluster.Spec.Backup == nil {
-		return recon.Result{}, nil
-	}
-
-	if err := validateBackupHardenedConfiguration(cluster); err != nil {
-		return recon.Result{}, err
-	}
-
 	now := time.Now().UTC()
 
-	if err := m.syncBackupMetrics(ctx, logger, cluster, metrics); err != nil {
-		return recon.Result{}, err
-	}
-	if err := m.ensureBackupServiceAccount(ctx, logger, cluster); err != nil {
-		return recon.Result{}, fmt.Errorf("failed to ensure backup ServiceAccount: %w", err)
-	}
-	if err := m.ensureBackupRBAC(ctx, logger, cluster); err != nil {
-		return recon.Result{}, fmt.Errorf("failed to ensure backup RBAC: %w", err)
-	}
-	if err := m.ensureBackupStatus(ctx, cluster); err != nil {
-		return recon.Result{}, err
-	}
-
-	schedule, err := ParseSchedule(cluster.Spec.Backup.Schedule)
-	if err != nil {
-		return recon.Result{}, fmt.Errorf("failed to parse backup schedule: %w", err)
-	}
-	if cluster.Status.Backup.NextScheduledBackup == nil {
-		next := metav1.NewTime(schedule.Next(now))
-		cluster.Status.Backup.NextScheduledBackup = &next
-	}
-
-	manualTriggerToken, scheduledTime, err := m.handleManualTrigger(ctx, logger, cluster, now)
-	if err != nil {
-		return recon.Result{}, err
-	}
-	manualTrigger := manualTriggerToken != ""
-	if !manualTrigger {
-		scheduledTime = cluster.Status.Backup.NextScheduledBackup.Time
-	}
-	backupDue := manualTrigger || !now.Before(scheduledTime)
-
-	hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
-	if err != nil {
-		return recon.Result{}, fmt.Errorf("failed to check for active backup job: %w", err)
-	}
-	if hasActiveJob {
-		logger.V(1).Info("Backup Job in progress; requeueing to observe completion")
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
-	}
-
-	if shouldSkip, err := m.handleRestoreInProgress(ctx, logger, cluster, backupDue); err != nil {
-		return recon.Result{}, err
-	} else if shouldSkip {
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
-	}
-
-	if err := m.checkPreconditions(ctx, logger, cluster); err != nil {
-		var preconditionErr *backupPreconditionError
-		if errors.As(err, &preconditionErr) {
-			logger.Info("Backup preconditions not met", "reason", preconditionErr.Error())
-			if backupDue {
-				m.emitPreconditionEvent(cluster, preconditionErr)
-			}
-			return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
+	if backupOperationLock.IsHeldBy(cluster.Status.OperationLock) {
+		if err := m.ensureBackupStatus(ctx, cluster); err != nil {
+			return recon.Result{}, err
 		}
-		return recon.Result{}, err
-	}
-
-	shouldReturn, result, err := m.checkBackupDue(ctx, logger, cluster, metrics, now, scheduledTime, manualTrigger)
-	if shouldReturn {
-		return result, err
-	}
-
-	return m.executeAndProcessBackup(ctx, logger, cluster, schedule, metrics, now, scheduledTime, manualTriggerToken)
-}
-
-func (m *Manager) reconcileOwnedBackup(
-	ctx context.Context,
-	logger logr.Logger,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	metrics *Metrics,
-) (recon.Result, error) {
-	if err := m.ensureBackupStatus(ctx, cluster); err != nil {
-		return recon.Result{}, err
-	}
-	m.syncBackupStatusMetrics(cluster, metrics)
-
-	observation, err := m.observeBackupJobs(ctx, cluster)
-	if err != nil {
-		return recon.Result{}, fmt.Errorf("failed to observe owned backup Jobs: %w", err)
-	}
-	if observation.hasActive || observation.mostRecentTerminal != nil {
-		if err := m.clearManualTriggerAnnotation(ctx, logger, cluster); err != nil {
-			return recon.Result{}, fmt.Errorf("failed to clear manual backup trigger while finishing owned operation: %w", err)
+		m.syncBackupStatusMetrics(cluster, metrics)
+	} else if cluster.Spec.Backup != nil {
+		if err := validateBackupHardenedConfiguration(cluster); err != nil {
+			return recon.Result{}, err
+		}
+		if err := m.syncBackupMetrics(ctx, logger, cluster, metrics); err != nil {
+			return recon.Result{}, err
+		}
+		if err := m.ensureBackupServiceAccount(ctx, logger, cluster); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to ensure backup ServiceAccount: %w", err)
+		}
+		if err := m.ensureBackupRBAC(ctx, logger, cluster); err != nil {
+			return recon.Result{}, fmt.Errorf("failed to ensure backup RBAC: %w", err)
+		}
+		if err := m.ensureBackupStatus(ctx, cluster); err != nil {
+			return recon.Result{}, err
 		}
 	}
-	if observation.hasActive {
-		m.applyBackupJobSnapshotToMetrics(cluster, metrics, backupJobMetricsSnapshot{inProgress: true})
-		logger.V(1).Info("Owned backup Job is in progress; requeueing to observe completion")
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
-	}
 
-	jobResult := backupJobProcessResult{}
-	if observation.mostRecentTerminal != nil {
-		jobResult, err = m.processBackupJob(ctx, logger, cluster, observation.mostRecentTerminal)
-		if err != nil {
-			return recon.Result{}, fmt.Errorf("failed to process owned backup Job: %w", err)
-		}
+	observation, err := m.observeBackup(ctx, logger, cluster, now)
+	if err != nil {
+		return recon.Result{}, err
 	}
-	if jobResult.successfulCompletion && jobResult.statusUpdated {
-		m.applyRetentionAfterSuccess(ctx, logger, cluster, metrics)
-	}
-	if !jobResult.completed {
-		logger.Info("Releasing backup operation lock because no active or completed backup Job exists")
-	}
-	if err := m.releaseBackupLock(ctx, logger, cluster, "after owned Job observation"); err != nil {
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
-	}
-	return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+	return m.applyBackupDecision(ctx, logger, cluster, metrics, decideBackup(observation))
 }
 
 func (m *Manager) ensureBackupStatus(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -157,33 +61,6 @@ func (m *Manager) ensureBackupStatus(ctx context.Context, cluster *openbaov1alph
 		return fmt.Errorf("failed to initialize backup status: %w", err)
 	}
 	return nil
-}
-
-func (m *Manager) handleRestoreInProgress(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, backupDue bool) (bool, error) {
-	restoreInProgress, err := m.hasInProgressRestore(ctx, logger, cluster)
-	if err != nil {
-		return false, err
-	}
-	if !restoreInProgress {
-		return false, nil
-	}
-
-	if backupOperationLock.IsHeldBy(cluster.Status.OperationLock) {
-		hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
-		if err != nil {
-			return false, fmt.Errorf("failed to check for active backup job while restore is in progress: %w", err)
-		}
-		if !hasActiveJob {
-			if err := m.releaseBackupLock(ctx, logger, cluster, "while restore is in progress"); err != nil {
-				return true, err
-			}
-		}
-	}
-	if backupDue {
-		m.emitNormalEvent(cluster, ReasonBackupSkipped, "Skipping backup because a restore is in progress for cluster %s", cluster.Name)
-	}
-	logger.Info("Restore in progress; skipping backup reconciliation")
-	return true, nil
 }
 
 func (m *Manager) releaseBackupLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, contextNote string) error {
