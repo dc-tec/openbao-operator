@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -309,6 +311,7 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 }
 
 type fakeScaleDownClient struct {
+	calls          []string
 	configureCalls []portopenbao.AutopilotConfig
 	configureErr   error
 	raftConfig     *portopenbao.RaftConfigurationResponse
@@ -321,11 +324,13 @@ type fakeScaleDownClient struct {
 }
 
 func (c *fakeScaleDownClient) ConfigureRaftAutopilot(_ context.Context, config portopenbao.AutopilotConfig) error {
+	c.calls = append(c.calls, "configure")
 	c.configureCalls = append(c.configureCalls, config)
 	return c.configureErr
 }
 
 func (c *fakeScaleDownClient) ReadRaftConfiguration(context.Context) (*portopenbao.RaftConfigurationResponse, error) {
+	c.calls = append(c.calls, "read")
 	if c.readErr != nil {
 		return nil, c.readErr
 	}
@@ -340,11 +345,13 @@ func (c *fakeScaleDownClient) ReadRaftAutopilotState(context.Context) (*portopen
 }
 
 func (c *fakeScaleDownClient) RemoveRaftPeer(_ context.Context, serverID string) error {
+	c.calls = append(c.calls, "remove:"+serverID)
 	c.removeCalls = append(c.removeCalls, serverID)
 	return c.removeErr
 }
 
 func (c *fakeScaleDownClient) StepDownLeader(context.Context) error {
+	c.calls = append(c.calls, "step-down")
 	c.stepDownCalls++
 	return c.stepDownErr
 }
@@ -448,6 +455,9 @@ func TestPrepareScaleDown_RemovesFollowerAndUpdatesAutopilot(t *testing.T) {
 	if provider.tlsServerName != "openbao-cluster-cluster.local" {
 		t.Fatalf("tlsServerName = %q, want openbao-cluster-cluster.local", provider.tlsServerName)
 	}
+	if want := []string{"configure", "read", "remove:cluster-2"}; !slices.Equal(client.calls, want) {
+		t.Fatalf("calls = %v, want %v", client.calls, want)
+	}
 }
 
 func TestPrepareScaleDown_StepsDownLeaderVictim(t *testing.T) {
@@ -495,6 +505,12 @@ func TestPrepareScaleDown_StepsDownLeaderVictim(t *testing.T) {
 	}
 	if len(client.removeCalls) != 0 {
 		t.Fatalf("removeCalls = %v, want none", client.removeCalls)
+	}
+	if operatorerrors.IsTransient(err) || operatorerrors.IsPermanent(err) {
+		t.Fatalf("leader wait error gained a classification: %v", err)
+	}
+	if want := []string{"configure", "read", "step-down"}; !slices.Equal(client.calls, want) {
+		t.Fatalf("calls = %v, want %v", client.calls, want)
 	}
 }
 
@@ -547,6 +563,182 @@ func TestPrepareReadReplicaScaleDown_RemovesNonVoter(t *testing.T) {
 	if client.stepDownCalls != 0 {
 		t.Fatalf("stepDownCalls = %d, want 0", client.stepDownCalls)
 	}
+	if want := []string{"read", "remove:cluster-read-1"}; !slices.Equal(client.calls, want) {
+		t.Fatalf("calls = %v, want %v", client.calls, want)
+	}
+}
+
+func TestPrepareScaleDown_OperationResults(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("injected failure")
+	follower := &portopenbao.RaftConfigurationResponse{Config: portopenbao.RaftConfiguration{
+		Servers: []portopenbao.RaftServer{{NodeID: "peer-id", Address: "cluster-2.cluster.ns.svc", Voter: true}},
+	}}
+	leader := &portopenbao.RaftConfigurationResponse{Config: portopenbao.RaftConfiguration{
+		Servers: []portopenbao.RaftServer{{NodeID: "peer-id", Address: "cluster-2.cluster.ns.svc", Leader: true, Voter: true}},
+	}}
+	nonvoter := &portopenbao.RaftConfigurationResponse{Config: portopenbao.RaftConfiguration{
+		Servers: []portopenbao.RaftServer{{NodeID: "peer-id", Address: "cluster-2.cluster.ns.svc"}},
+	}}
+	nonvoterLeader := &portopenbao.RaftConfigurationResponse{Config: portopenbao.RaftConfiguration{
+		Servers: []portopenbao.RaftServer{{NodeID: "peer-id", Address: "cluster-2.cluster.ns.svc", Leader: true}},
+	}}
+	tests := []struct {
+		name        string
+		readReplica bool
+		client      *fakeScaleDownClient
+		wantCalls   []string
+		wantError   string
+		wantClass   error
+		wantCause   error
+	}{
+		{
+			name: "configure failure stops before membership read", client: &fakeScaleDownClient{configureErr: failure, raftConfig: follower},
+			wantCalls: []string{"configure"}, wantError: "transient connection error: failed to configure Raft Autopilot: injected failure",
+			wantClass: operatorerrors.ErrTransientConnection, wantCause: failure,
+		},
+		{
+			name: "membership failure stops before removal", client: &fakeScaleDownClient{readErr: failure, raftConfig: follower},
+			wantCalls: []string{"configure", "read"}, wantError: "failed to read Raft configuration before scale down: injected failure", wantCause: failure,
+		},
+		{
+			name: "step-down failure never removes peer", client: &fakeScaleDownClient{raftConfig: leader, stepDownErr: failure},
+			wantCalls: []string{"configure", "read", "step-down"}, wantError: "failed to step down leader cluster-2 before scale down: injected failure", wantCause: failure,
+		},
+		{
+			name: "successful step-down waits without removal", client: &fakeScaleDownClient{raftConfig: leader},
+			wantCalls: []string{"configure", "read", "step-down"}, wantError: "waiting for leader step-down on cluster-2 to complete",
+		},
+		{
+			name: "removal failure preserves server id", client: &fakeScaleDownClient{raftConfig: follower, removeErr: failure},
+			wantCalls: []string{"configure", "read", "remove:peer-id"}, wantError: `failed to remove Raft peer "peer-id" before scale down: injected failure`, wantCause: failure,
+		},
+		{name: "nil membership still configures autopilot", client: &fakeScaleDownClient{}, wantCalls: []string{"configure", "read"}},
+		{name: "absent peer still configures autopilot", client: &fakeScaleDownClient{raftConfig: &portopenbao.RaftConfigurationResponse{}}, wantCalls: []string{"configure", "read"}},
+		{
+			name: "read replica membership failure", readReplica: true, client: &fakeScaleDownClient{raftConfig: nonvoter, readErr: failure},
+			wantCalls: []string{"read"}, wantError: "failed to read Raft configuration before read-replica scale down: injected failure", wantCause: failure,
+		},
+		{
+			name: "read replica removal failure", readReplica: true, client: &fakeScaleDownClient{raftConfig: nonvoter, removeErr: failure},
+			wantCalls: []string{"read", "remove:peer-id"}, wantError: `failed to remove read-replica Raft peer "peer-id" before scale down: injected failure`, wantCause: failure,
+		},
+		{
+			name: "read replica voter refusal", readReplica: true, client: &fakeScaleDownClient{raftConfig: follower},
+			wantCalls: []string{"read"}, wantError: "permanent prerequisites missing: read-replica pod cluster-2 is registered as a voter; refusing read-replica scale down",
+			wantClass: operatorerrors.ErrPermanentPrerequisitesMissing,
+		},
+		{
+			name: "read replica voter leader refusal precedes step-down", readReplica: true, client: &fakeScaleDownClient{raftConfig: leader},
+			wantCalls: []string{"read"}, wantError: "permanent prerequisites missing: read-replica pod cluster-2 is registered as a voter; refusing read-replica scale down",
+			wantClass: operatorerrors.ErrPermanentPrerequisitesMissing,
+		},
+		{name: "read replica nonvoter leader is removed without step-down", readReplica: true, client: &fakeScaleDownClient{raftConfig: nonvoterLeader}, wantCalls: []string{"read", "remove:peer-id"}},
+		{name: "read replica nil membership", readReplica: true, client: &fakeScaleDownClient{}, wantCalls: []string{"read"}},
+		{name: "read replica absent peer", readReplica: true, client: &fakeScaleDownClient{raftConfig: &portopenbao.RaftConfigurationResponse{}}, wantCalls: []string{"read"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mgr, cluster := newMaintenanceTestManager(tt.client)
+			before := cluster.DeepCopy()
+			prepare := mgr.PrepareScaleDown
+			if tt.readReplica {
+				prepare = mgr.PrepareReadReplicaScaleDown
+			}
+			err := prepare(context.Background(), logr.Discard(), cluster, "cluster", 3, 2)
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			} else if err == nil || err.Error() != tt.wantError {
+				t.Fatalf("error = %v, want %q", err, tt.wantError)
+			}
+			if tt.wantClass != nil {
+				if !errors.Is(err, tt.wantClass) {
+					t.Errorf("error = %v, want classification %v", err, tt.wantClass)
+				}
+			} else if operatorerrors.IsTransient(err) || operatorerrors.IsPermanent(err) {
+				t.Errorf("error gained a classification: %v", err)
+			}
+			if tt.wantCause != nil && !errors.Is(err, tt.wantCause) {
+				t.Errorf("error = %v, want wrapped cause %v", err, tt.wantCause)
+			}
+			if !slices.Equal(tt.client.calls, tt.wantCalls) {
+				t.Errorf("calls = %v, want %v", tt.client.calls, tt.wantCalls)
+			}
+			if !tt.readReplica && (len(tt.client.configureCalls) != 1 || tt.client.configureCalls[0].MinQuorum != 2) {
+				t.Errorf("configure calls = %+v, want desired replicas quorum 2", tt.client.configureCalls)
+			}
+			if !reflect.DeepEqual(cluster, before) {
+				t.Fatal("scale-down preparation mutated the input cluster")
+			}
+		})
+	}
+}
+
+func TestPrepareScaleDown_NoDownscaleSkipsValidation(t *testing.T) {
+	t.Parallel()
+
+	mgr := &Manager{}
+	for _, replicas := range []int32{2, 3} {
+		if err := mgr.PrepareScaleDown(context.Background(), logr.Discard(), nil, "", 2, replicas); err != nil {
+			t.Errorf("PrepareScaleDown(2, %d) = %v, want nil", replicas, err)
+		}
+		if err := mgr.PrepareReadReplicaScaleDown(context.Background(), logr.Discard(), nil, "", 2, replicas); err != nil {
+			t.Errorf("PrepareReadReplicaScaleDown(2, %d) = %v, want nil", replicas, err)
+		}
+	}
+}
+
+func TestAutopilotConfiguration_ErrorClassification(t *testing.T) {
+	t.Parallel()
+
+	for _, initial := range []bool{true, false} {
+		t.Run(fmt.Sprintf("initial=%t", initial), func(t *testing.T) {
+			failure := errors.New("configuration rejected")
+			client := &fakeScaleDownClient{configureErr: failure}
+			mgr, cluster := newMaintenanceTestManager(client)
+			var err error
+			wantText := "failed to configure Raft Autopilot: configuration rejected"
+			if initial {
+				err = mgr.ConfigureAutopilot(context.Background(), logr.Discard(), cluster, "root-token")
+			} else {
+				err = mgr.ReconcileAutopilotConfig(context.Background(), logr.Discard(), cluster)
+				wantText = "transient connection error: " + wantText
+			}
+			if err == nil || err.Error() != wantText || !errors.Is(err, failure) {
+				t.Fatalf("error = %v, want %q wrapping %v", err, wantText, failure)
+			}
+			if operatorerrors.IsTransient(err) != !initial || operatorerrors.IsPermanent(err) {
+				t.Errorf("unexpected error classification: %v", err)
+			}
+			if want := []string{"configure"}; !slices.Equal(client.calls, want) {
+				t.Errorf("calls = %v, want %v", client.calls, want)
+			}
+		})
+	}
+}
+
+func newMaintenanceTestManager(client *fakeScaleDownClient) (*Manager, *openbaov1alpha1.OpenBaoCluster) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment, Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{Initialized: true},
+	}
+	clientset := k8sfake.NewClientset(
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster-root-token", Namespace: "ns"},
+			Data:       map[string][]byte{"token": []byte("root-token")},
+		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster-tls-ca", Namespace: "ns"},
+			Data:       map[string][]byte{"ca.crt": []byte("pem-data")},
+		},
+	)
+	return NewManager(clientset, &fakeScaleDownFactoryProvider{factory: &fakeScaleDownFactory{client: client}}), cluster
 }
 
 func TestWrapScaleDownPermissionError_SelfInitClusterRequiresUpdatedPolicy(t *testing.T) {
