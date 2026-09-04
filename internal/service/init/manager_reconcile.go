@@ -197,7 +197,7 @@ func (m *Manager) markSelfInitComplete(ctx context.Context, logger logr.Logger, 
 	cluster.Status.Initialized = true
 	cluster.Status.SelfInitialized = true
 
-	if err := m.raftManager.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
+	if err := m.raftRuntime.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
 		if operatorerrors.IsTransient(err) {
 			logger.V(1).Info("Raft Autopilot configuration not ready for self-init cluster; will retry via reconciler", "error", err)
 		} else {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/adapter/raft"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
@@ -53,7 +54,17 @@ func buildControllerProcessRuntime(
 	}
 
 	clientMgr := openbao.NewClientManager(smartClientConfig)
-	initMgr := initmanager.NewManager(config, clientset, clientMgr, mgr.GetEventRecorder(controllerNameOpenBaoCluster))
+	raftMgr := raft.NewManager(clientset, raftClientFactoryProvider{clientManager: clientMgr})
+	initMgr, err := initmanager.NewManager(
+		config,
+		clientset,
+		clientMgr,
+		raftMgr,
+		mgr.GetEventRecorder(controllerNameOpenBaoCluster),
+	)
+	if err != nil {
+		return controllerProcessRuntime{}, fmt.Errorf("unable to create initialization manager: %w", err)
+	}
 	imageVerifier := security.NewImageVerifier(mgr.GetLogger().WithName("image-verifier"), mgr.GetAPIReader(), nil)
 	operatorImageVerifier := security.NewImageVerifier(
 		mgr.GetLogger().WithName("operator-image-verifier"),
@@ -95,6 +106,7 @@ func buildControllerProcessRuntime(
 		openBaoRuntime: appopenbaocluster.RuntimeOpenBaoConfig{
 			TLSReload:         reloadSignaler,
 			InitManager:       initMgr,
+			Raft:              raftMgr,
 			SmartClientConfig: smartClientConfig,
 			ClientForPod: openBaoClusterPodClientFactory(
 				mgr.GetClient(),
@@ -107,6 +119,13 @@ func buildControllerProcessRuntime(
 }
 
 func setupControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) error {
+	if runtime.openBaoRuntime.Raft == nil {
+		return fmt.Errorf("OpenBaoCluster Raft runtime is required")
+	}
+	if runtime.openBaoRuntime.InitManager == nil {
+		return fmt.Errorf("OpenBaoCluster initialization manager is required")
+	}
+
 	applications := buildOpenBaoClusterApplications(mgr, runtime)
 	if err := (&openbaoclustercontroller.OpenBaoClusterReconciler{
 		Client: mgr.GetClient(),

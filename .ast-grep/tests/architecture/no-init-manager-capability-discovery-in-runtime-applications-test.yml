@@ -1,0 +1,22 @@
+id: no-init-manager-capability-discovery-in-runtime-applications
+valid:
+  - |
+    package openbaocluster
+    func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
+      runtime := config.OpenBao.Raft
+      return NewApplications(runtime)
+    }
+  - |
+    package openbaocluster
+    func other(config RuntimeApplicationsConfig) {
+      runtime, ok := config.OpenBao.InitManager.(AutopilotRuntime)
+      _, _ = runtime, ok
+    }
+invalid:
+  - |
+    package openbaocluster
+    func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
+      runtime, ok := config.OpenBao.InitManager.(AutopilotRuntime)
+      _, _ = runtime, ok
+      return nil
+    }

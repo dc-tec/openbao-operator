@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-init-manager-capability-discovery-in-runtime-applications
+message: Inject Raft runtime capabilities explicitly instead of discovering them from the initialization manager.
+severity: warning
+language: Go
+files:
+  - internal/app/openbaocluster/runtime_applications.go
+rule:
+  all:
+    - kind: type_assertion_expression
+    - has:
+        kind: selector_expression
+        regex: '^config\.OpenBao\.InitManager$'
+        stopBy: end
+    - inside:
+        all:
+          - kind: function_declaration
+          - regex: 'func NewRuntimeApplications\('
+        stopBy: end
+note: Startup composition provides the Raft runtime directly. Keep the initialization manager focused on initialization.
