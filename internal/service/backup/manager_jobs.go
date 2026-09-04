@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -97,42 +96,4 @@ func (m *Manager) observeBackupJobs(ctx context.Context, cluster *openbaov1alpha
 		}
 	}
 	return observation, nil
-}
-
-// checkForCompletedJobs checks for any completed backup jobs and processes them.
-// This is used to ensure completed jobs are processed even when backup is not due yet.
-// Only the most recent completed job is processed to avoid incrementing ConsecutiveFailures multiple times
-// when there are several old failed jobs.
-func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (backupJobProcessResult, error) {
-	observation, err := m.observeBackupJobs(ctx, cluster)
-	if err != nil {
-		return backupJobProcessResult{}, err
-	}
-
-	if observation.mostRecentTerminal == nil {
-		return backupJobProcessResult{}, nil
-	}
-
-	job := observation.mostRecentTerminal
-	logger.Info("Processing completed backup job", "job", job.Name,
-		"succeeded", job.Status.Succeeded, "failed", job.Status.Failed)
-
-	result, err := m.processBackupJob(ctx, logger, cluster, job)
-	if err != nil {
-		return backupJobProcessResult{}, err
-	}
-	if result.statusUpdated {
-		logger.Info("Completed backup job processed, status updated", "job", job.Name)
-	} else {
-		logger.V(1).Info("Completed backup job already processed", "job", job.Name)
-	}
-
-	return result, nil
-}
-
-// hasActiveBackupJob checks if there's any backup job (scheduled or manual) running or pending for this cluster.
-// This is used to prevent duplicate jobs from being created when manual triggers are processed multiple times.
-func (m *Manager) hasActiveBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	observation, err := m.observeBackupJobs(ctx, cluster)
-	return observation.hasActive, err
 }

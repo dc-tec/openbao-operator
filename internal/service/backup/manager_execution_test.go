@@ -19,7 +19,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
-func TestExecuteAndProcessBackup_FailedCurrentJobSkipsRetention(t *testing.T) {
+func TestApplyFinalizeBackup_FailedCurrentJobSkipsRetention(t *testing.T) {
 	cluster := newTestClusterWithBackup("retention-cluster", "default")
 	cluster.Spec.Backup.Retention = &openbaov1alpha1.BackupRetention{MaxCount: 1}
 	cluster.Spec.Backup.Target.CredentialsSecretRef = &corev1.LocalObjectReference{Name: "backup-creds"}
@@ -59,22 +59,24 @@ func TestExecuteAndProcessBackup_FailedCurrentJobSkipsRetention(t *testing.T) {
 	}
 	defer func() { openBlobStoreFn = originalOpenBlobStoreFn }()
 
-	schedule, err := ParseSchedule(cluster.Spec.Backup.Schedule)
-	if err != nil {
-		t.Fatalf("ParseSchedule() error = %v", err)
+	observation := backupObservation{
+		configured:    true,
+		ownsLock:      true,
+		now:           scheduledTime,
+		scheduledTime: scheduledTime,
+		jobs: backupJobObservation{
+			mostRecentTerminal: failedJob,
+		},
 	}
-	result, err := manager.executeAndProcessBackup(
+	result, err := manager.applyBackupDecision(
 		context.Background(),
 		logr.Discard(),
 		cluster,
-		schedule,
 		NewMetrics(cluster.Namespace, cluster.Name),
-		scheduledTime,
-		scheduledTime,
-		"",
+		decideBackup(observation),
 	)
 	if err != nil {
-		t.Fatalf("executeAndProcessBackup() error = %v", err)
+		t.Fatalf("applyBackupDecision() error = %v", err)
 	}
 	if result.RequeueAfter != constants.RequeueShort {
 		t.Fatalf("RequeueAfter = %v, want %v", result.RequeueAfter, constants.RequeueShort)
@@ -128,7 +130,7 @@ func (r *failOnceReader) Get(ctx context.Context, key types.NamespacedName, obj 
 	return r.Reader.Get(ctx, key, obj, opts...)
 }
 
-func TestCheckBackupDue_RetriesTransientLockReleaseFailure(t *testing.T) {
+func TestApplyFinalizeBackup_RetriesTransientLockReleaseFailure(t *testing.T) {
 	cluster := newTestClusterWithBackup("release-cluster", "default")
 	completedAt := time.Date(2025, 1, 2, 3, 0, 0, 0, time.UTC)
 	nextScheduled := completedAt.Add(24 * time.Hour)
@@ -150,20 +152,24 @@ func TestCheckBackupDue_RetriesTransientLockReleaseFailure(t *testing.T) {
 	reader := &failOnceReader{Reader: k8sClient, err: errors.New("temporary API read failure")}
 	manager := newBackupManager(k8sClient).WithReader(reader)
 
-	shouldReturn, result, err := manager.checkBackupDue(
+	decision := decideBackup(backupObservation{
+		configured:    true,
+		ownsLock:      true,
+		now:           completedAt,
+		scheduledTime: nextScheduled,
+		jobs: backupJobObservation{
+			mostRecentTerminal: succeededJob,
+		},
+	})
+	result, err := manager.applyBackupDecision(
 		context.Background(),
 		logr.Discard(),
 		cluster,
 		NewMetrics(cluster.Namespace, cluster.Name),
-		completedAt,
-		nextScheduled,
-		false,
+		decision,
 	)
 	if err != nil {
-		t.Fatalf("checkBackupDue() first call error = %v", err)
-	}
-	if !shouldReturn {
-		t.Fatal("checkBackupDue() first call should return")
+		t.Fatalf("applyBackupDecision() first call error = %v", err)
 	}
 	if result.RequeueAfter != constants.RequeueShort {
 		t.Fatalf("first RequeueAfter = %v, want %v", result.RequeueAfter, constants.RequeueShort)
@@ -172,17 +178,15 @@ func TestCheckBackupDue_RetriesTransientLockReleaseFailure(t *testing.T) {
 		t.Fatal("operation lock was cleared after failed release")
 	}
 
-	_, _, err = manager.checkBackupDue(
+	_, err = manager.applyBackupDecision(
 		context.Background(),
 		logr.Discard(),
 		cluster,
 		NewMetrics(cluster.Namespace, cluster.Name),
-		completedAt,
-		nextScheduled,
-		false,
+		decision,
 	)
 	if err != nil {
-		t.Fatalf("checkBackupDue() retry error = %v", err)
+		t.Fatalf("applyBackupDecision() retry error = %v", err)
 	}
 	if cluster.Status.OperationLock != nil {
 		t.Fatalf("operation lock was not cleared on retry: %#v", cluster.Status.OperationLock)
