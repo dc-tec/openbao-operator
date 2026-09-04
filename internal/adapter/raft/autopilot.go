@@ -59,73 +59,6 @@ func NewManager(clientset kubernetes.Interface, clientFactoryProvider ClientFact
 	}
 }
 
-// BuildAutopilotConfig constructs the Autopilot configuration from CRD settings or defaults.
-// It uses profile-aware logic to calculate safe defaults for min_quorum:
-// - Hardened: Never drop below 3, or use replicas if replicas > 3
-// - Development: Use replicas (minimum 1) to allow single-node clusters
-func BuildAutopilotConfig(cluster *openbaov1alpha1.OpenBaoCluster) portopenbao.AutopilotConfig {
-	// Initialize with defaults
-	config := portopenbao.AutopilotConfig{
-		CleanupDeadServers:             true,
-		DeadServerLastContactThreshold: "5m",
-		LastContactThreshold:           "10s",
-		MaxTrailingLogs:                1000,
-		ServerStabilizationTime:        "10s",
-	}
-
-	// Track if user explicitly set CleanupDeadServers
-	cleanupDeadServersOverridden := false
-
-	// Apply user overrides
-	if cluster.Spec.Configuration != nil &&
-		cluster.Spec.Configuration.Raft != nil &&
-		cluster.Spec.Configuration.Raft.Autopilot != nil {
-		userConfig := cluster.Spec.Configuration.Raft.Autopilot
-		if userConfig.CleanupDeadServers != nil {
-			config.CleanupDeadServers = *userConfig.CleanupDeadServers
-			cleanupDeadServersOverridden = true
-		}
-		if userConfig.DeadServerLastContactThreshold != "" {
-			config.DeadServerLastContactThreshold = userConfig.DeadServerLastContactThreshold
-		}
-		if userConfig.ServerStabilizationTime != "" {
-			config.ServerStabilizationTime = userConfig.ServerStabilizationTime
-		}
-		if userConfig.LastContactThreshold != "" {
-			config.LastContactThreshold = userConfig.LastContactThreshold
-		}
-		if userConfig.MaxTrailingLogs != nil {
-			config.MaxTrailingLogs = int(*userConfig.MaxTrailingLogs)
-		}
-		if userConfig.MinQuorum != nil {
-			config.MinQuorum = int(*userConfig.MinQuorum)
-		}
-	}
-
-	// Calculate MinQuorum if not set by user
-	if config.MinQuorum == 0 {
-		if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened {
-			config.MinQuorum = 3
-			if cluster.Spec.Replicas > 3 {
-				config.MinQuorum = int(cluster.Spec.Replicas)
-			}
-		} else {
-			config.MinQuorum = int(cluster.Spec.Replicas)
-			if config.MinQuorum < 1 {
-				config.MinQuorum = 1
-			}
-		}
-	}
-
-	// OpenBao requires MinQuorum >= 3 for CleanupDeadServers to be enabled.
-	// If the user didn't explicitly request it, force it to false for small clusters to ensure reconcile succeeds.
-	if config.MinQuorum < 3 && !cleanupDeadServersOverridden {
-		config.CleanupDeadServers = false
-	}
-
-	return config
-}
-
 // ReconcileAutopilotConfig reconciles Raft Autopilot configuration for an initialized cluster.
 // This is called during Day 2 operations (e.g., when replicas or autopilot config changes).
 // It handles authentication via root token (non-SelfInit) or JWT (SelfInit).
@@ -145,7 +78,7 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 	)
 
 	// Build desired Autopilot configuration
-	desiredConfig := BuildAutopilotConfig(cluster)
+	desiredConfig := portopenbao.BuildAutopilotConfig(cluster)
 
 	// Log the calculated min_quorum for debugging
 	logger.V(1).Info("Calculated autopilot config",
@@ -263,25 +196,25 @@ func (m *Manager) PrepareScaleDown(
 	}
 
 	victimPodName := fmt.Sprintf("%s-%d", statefulSetName, currentReplicas-1)
-	victimServer, found := findRaftServerForPod(raftConfig, victimPodName)
-	if !found {
+	decision := portopenbao.DecideRaftPeerRemoval(raftConfig, victimPodName)
+	if decision.Action == portopenbao.RaftPeerAbsent {
 		logger.Info("Victim pod already absent from Raft configuration; continuing with scale down", "victim", victimPodName)
 		return nil
 	}
 
-	if victimServer.Leader {
-		logger.Info("Victim pod is current Raft leader; stepping down before scale down", "victim", victimPodName, "node_id", victimServer.NodeID)
+	if decision.Action == portopenbao.RaftPeerStepDown {
+		logger.Info("Victim pod is current Raft leader; stepping down before scale down", "victim", victimPodName, "node_id", decision.ServerID)
 		if err := client.StepDownLeader(configCtx); err != nil {
 			return fmt.Errorf("failed to step down leader %s before scale down: %w", victimPodName, err)
 		}
 		return fmt.Errorf("waiting for leader step-down on %s to complete", victimPodName)
 	}
 
-	logger.Info("Removing Raft peer before scale down", "victim", victimPodName, "node_id", victimServer.NodeID)
-	if err := client.RemoveRaftPeer(configCtx, victimServer.NodeID); err != nil {
+	logger.Info("Removing Raft peer before scale down", "victim", victimPodName, "node_id", decision.ServerID)
+	if err := client.RemoveRaftPeer(configCtx, decision.ServerID); err != nil {
 		return m.wrapScaleDownPermissionError(
 			cluster,
-			fmt.Errorf("failed to remove Raft peer %q before scale down: %w", victimServer.NodeID, err),
+			fmt.Errorf("failed to remove Raft peer %q before scale down: %w", decision.ServerID, err),
 		)
 	}
 
@@ -327,22 +260,22 @@ func (m *Manager) PrepareReadReplicaScaleDown(
 	}
 
 	victimPodName := fmt.Sprintf("%s-%d", statefulSetName, currentReplicas-1)
-	victimServer, found := findRaftServerForPod(raftConfig, victimPodName)
-	if !found {
+	decision := portopenbao.DecideReadReplicaRemoval(raftConfig, victimPodName)
+	if decision.Action == portopenbao.RaftPeerAbsent {
 		logger.Info("Read-replica victim pod already absent from Raft configuration; continuing with scale down", "victim", victimPodName)
 		return nil
 	}
-	if victimServer.Voter {
+	if decision.Action == portopenbao.RaftPeerRefuseVoter {
 		return operatorerrors.WrapPermanentPrerequisitesMissing(
 			fmt.Errorf("read-replica pod %s is registered as a voter; refusing read-replica scale down", victimPodName),
 		)
 	}
 
-	logger.Info("Removing read-replica Raft peer before scale down", "victim", victimPodName, "node_id", victimServer.NodeID)
-	if err := client.RemoveRaftPeer(configCtx, victimServer.NodeID); err != nil {
+	logger.Info("Removing read-replica Raft peer before scale down", "victim", victimPodName, "node_id", decision.ServerID)
+	if err := client.RemoveRaftPeer(configCtx, decision.ServerID); err != nil {
 		return m.wrapScaleDownPermissionError(
 			cluster,
-			fmt.Errorf("failed to remove read-replica Raft peer %q before scale down: %w", victimServer.NodeID, err),
+			fmt.Errorf("failed to remove read-replica Raft peer %q before scale down: %w", decision.ServerID, err),
 		)
 	}
 
@@ -419,7 +352,7 @@ func (m *Manager) ConfigureAutopilot(ctx context.Context, logger logr.Logger, cl
 	}
 
 	// Build Autopilot configuration from CRD or use defaults
-	config := BuildAutopilotConfig(cluster)
+	config := portopenbao.BuildAutopilotConfig(cluster)
 
 	logger.Info("Configuring Raft Autopilot",
 		"cleanup_dead_servers", config.CleanupDeadServers,
@@ -446,7 +379,7 @@ func (m *Manager) configureAutopilotWithClient(ctx context.Context, logger logr.
 		return fmt.Errorf("cluster is required")
 	}
 
-	desiredConfig := BuildAutopilotConfig(cluster)
+	desiredConfig := portopenbao.BuildAutopilotConfig(cluster)
 
 	logger.V(1).Info("Reconciling Raft Autopilot configuration",
 		"cluster", cluster.Name,
@@ -631,20 +564,6 @@ func (m *Manager) clientFactory(clusterKey string, caCert []byte, tlsServerName 
 		return nil
 	}
 	return m.clientFactoryProvider.FactoryFor(clusterKey, caCert, tlsServerName)
-}
-
-func findRaftServerForPod(config *portopenbao.RaftConfigurationResponse, podName string) (portopenbao.RaftServer, bool) {
-	if config == nil || strings.TrimSpace(podName) == "" {
-		return portopenbao.RaftServer{}, false
-	}
-
-	for _, server := range config.Config.Servers {
-		if server.NodeID == podName || strings.Contains(server.Address, podName+".") {
-			return server, true
-		}
-	}
-
-	return portopenbao.RaftServer{}, false
 }
 
 // autopilotBaseURL returns a stable in-cluster address for performing Raft autopilot operations.
