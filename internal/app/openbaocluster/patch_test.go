@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -158,53 +159,54 @@ func TestPatchAdminOpsOwnedFields_PatchesAdminOpsFieldsWithoutBackup(t *testing.
 	}
 }
 
-func TestPatchAdminOpsOwnedFields_IgnoresBackupOnlyChanges(t *testing.T) {
+func TestPatchAdminOpsOwnedFields_IgnoresManagerOwnedChanges(t *testing.T) {
 	t.Parallel()
+	for _, tt := range []struct {
+		name   string
+		mutate func(*openbaov1alpha1.OpenBaoClusterStatus)
+	}{
+		{name: "backup", mutate: func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+			status.Backup.LastFailureReason = "new-backup-state"
+		}},
+		{name: "upgrade", mutate: func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+			status.Upgrade.CurrentPartition = 1
+		}},
+		{name: "restore", mutate: func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+			status.Restore.UID = "new-restore"
+		}},
+		{name: "restore-clear", mutate: func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+			status.Restore = nil
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "adminops-manager-owned", Namespace: "default"},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					Backup:  &openbaov1alpha1.BackupStatus{LastFailureReason: "existing-backup-state"},
+					Upgrade: &openbaov1alpha1.UpgradeProgress{TargetVersion: "2.6.2", CurrentPartition: 2},
+					Restore: &openbaov1alpha1.ClusterRestoreStatus{Name: "restore", UID: "existing-restore"},
+				},
+			}
+			original := cluster.DeepCopy()
+			desired := cluster.DeepCopy()
+			tt.mutate(&desired.Status)
+			applies := 0
+			c := fake.NewClientBuilder().WithScheme(newPatchTestScheme(t)).
+				WithStatusSubresource(cluster).WithObjects(cluster.DeepCopy()).
+				WithInterceptorFuncs(interceptor.Funcs{
+					SubResourceApply: func(ctx context.Context, c client.Client, subresource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+						applies++
+						return c.SubResource(subresource).Apply(ctx, obj, opts...)
+					},
+				}).Build()
 
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "adminops-backup-only",
-			Namespace: "default",
-		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			Backup: &openbaov1alpha1.BackupStatus{
-				LastFailureReason: "existing-backup-state",
-			},
-		},
-	}
-	original := cluster.DeepCopy()
-	desired := cluster.DeepCopy()
-	desired.Status.Backup = &openbaov1alpha1.BackupStatus{LastFailureReason: "new-backup-state"}
-
-	scheme := newPatchTestScheme(t)
-	var applyCalls int
-
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(cluster).
-		WithObjects(cluster.DeepCopy()).
-		WithInterceptorFuncs(interceptor.Funcs{
-			SubResourceApply: func(ctx context.Context, c client.Client, subResource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
-				applyCalls++
-				return c.Status().Apply(ctx, obj, opts...)
-			},
-		}).
-		Build()
-
-	if err := PatchAdminOpsOwnedFieldsWithReader(context.Background(), k8sClient, k8sClient, logr.Discard(), original, desired, "backup-only"); err != nil {
-		t.Fatalf("PatchAdminOpsOwnedFieldsWithReader() error = %v", err)
-	}
-
-	if applyCalls != 0 {
-		t.Fatalf("status apply calls = %d, want 0 for backup-only change", applyCalls)
-	}
-
-	stored := &openbaov1alpha1.OpenBaoCluster{}
-	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), stored); err != nil {
-		t.Fatalf("Get() error = %v", err)
-	}
-	if !reflect.DeepEqual(stored.Status.Backup, original.Status.Backup) {
-		t.Fatalf("stored backup = %#v, want original %#v", stored.Status.Backup, original.Status.Backup)
+			require.NoError(t, PatchAdminOpsOwnedFieldsWithReader(t.Context(), c, c, logr.Discard(), original, desired, tt.name))
+			require.Zero(t, applies, "manager-owned changes must not trigger a final status write")
+			stored := &openbaov1alpha1.OpenBaoCluster{}
+			require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(cluster), stored))
+			require.Equal(t, original.Status, stored.Status)
+		})
 	}
 }
 
