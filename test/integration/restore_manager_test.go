@@ -4,7 +4,6 @@
 package integration
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -232,17 +231,7 @@ func createSettledRestoreVoterStatefulSet(
 }
 
 func withIntegrationRestoreStatusPersistence(manager *restore.Manager, controllerClient client.Client) *restore.Manager {
-	return manager.WithAdminOpsStatusMutator(func(
-		ctx context.Context,
-		cluster *openbaov1alpha1.OpenBaoCluster,
-		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-		forceOwnership bool,
-	) error {
-		return adminopsstatus.MutateWithReader(ctx, controllerClient, controllerClient, cluster, mutate, adminopsstatus.MutateOptions{
-			ForceOwnership:  forceOwnership,
-			RetryOnConflict: !forceOwnership,
-		})
-	})
+	return manager.WithAdminOpsStatusMutator(adminopsstatus.NewMutator(controllerClient, controllerClient))
 }
 
 func TestRestoreManager_GCSProvider(t *testing.T) {

@@ -11,6 +11,9 @@ verifiedBy:
   - internal/app/openbaocluster/applications.go
   - internal/app/openbaocluster/applications_test.go
   - internal/app/openbaocluster/patch_test.go
+  - internal/port/adminops/status.go
+  - internal/app/openbaocluster/adminopsstatus/mutate_test.go
+  - test/integration/adminops_status_test.go
   - internal/platform/statusapply/openbaocluster_test.go
 ---
 
@@ -90,6 +93,19 @@ The AdminOps mutation gateway returns the object read after the apply, including
 read. It does not substitute the intended state for the observed state. If read-back fails, it returns an error even
 though the apply succeeded. The application wrapper updates the caller's AdminOps fields and resource version only
 after a successful read-back; it leaves other fields unchanged.
+
+Managers share the `adminops.StatusMutator` contract. The application layer binds it to the API reader and client through
+`adminopsstatus.NewMutator`. Each write selects an ownership policy:
+
+| Policy | Field ownership behavior |
+| --- | --- |
+| `RespectOwnership` | Never force ownership. |
+| `ForceOwnershipOnConflict` | Retry without force first. If conflicts persist, retry with forced ownership. |
+| `ForceOwnership` | Force ownership from the first attempt. |
+
+Every policy retries conflicts with a fresh read and mutation. The fallback policy applies to both resource-version and
+field-ownership conflicts. Routine AdminOps writes use that fallback; rolling upgrade finalization and retry cleanup
+force ownership immediately. These policies apply to the AdminOps status plane.
 
 ## Account for tenancy watch boundaries
 

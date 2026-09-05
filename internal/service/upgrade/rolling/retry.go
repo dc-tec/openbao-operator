@@ -15,6 +15,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
@@ -76,7 +77,7 @@ func (m *Manager) patchRetryStatusSSA(ctx context.Context, cluster *openbaov1alp
 		clearUpgradeFailureForRetry(obj)
 		upgrade.MarkRetryRequestHandled(&obj.Status, retryRequest)
 		return nil
-	}, true); err != nil {
+	}, adminops.ForceOwnership); err != nil {
 		return fmt.Errorf("failed to apply cleared retry status: %w", err)
 	}
 	if retryFailureFieldsRemain(cluster) {

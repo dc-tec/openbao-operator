@@ -13,6 +13,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
@@ -41,16 +42,9 @@ type Manager struct {
 	clientConfig          portopenbao.ClientConfig
 	imageVerifier         imageverify.Verifier
 	operatorImageVerifier imageverify.Verifier
-	adminOpsMutator       adminOpsStatusMutator
+	adminOpsMutator       adminops.StatusMutator
 	Platform              string
 }
-
-type adminOpsStatusMutator func(
-	ctx context.Context,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-	forceOwnership bool,
-) error
 
 // NewManager constructs a Manager.
 func NewManager(
@@ -94,7 +88,7 @@ func (m *Manager) WithReader(reader client.Reader) *Manager {
 }
 
 // WithAdminOpsStatusMutator configures the adminops-plane status persistence hook.
-func (m *Manager) WithAdminOpsStatusMutator(mutator adminOpsStatusMutator) *Manager {
+func (m *Manager) WithAdminOpsStatusMutator(mutator adminops.StatusMutator) *Manager {
 	if mutator != nil {
 		m.adminOpsMutator = mutator
 	}

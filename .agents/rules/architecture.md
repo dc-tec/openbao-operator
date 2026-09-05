@@ -17,7 +17,7 @@ See [Architecture Documentation](../../website/content/docs/architecture/_index.
 - `L4` Services/managers:
   `internal/service/{backup,bootstrap,certs,configuration,identity,init,networking,opslifecycle,provisioner,restore,upgrade,workload,workloadidentity}`
 - `L5` Ports/contracts:
-  `internal/port/{auth,backup,blobstore,imageverify,initmanager,openbao,security,workload}`
+  `internal/port/{adminops,auth,backup,blobstore,imageverify,initmanager,openbao,security,workload}`
 - `L6` Adapters/integrations:
   `internal/adapter/{auth,cluster,config,kube,openbao,probe,raft,revision,security,storage,storageenv}`
 - `L7` Platform/cross-cutting:

@@ -10,12 +10,15 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 )
 
-// MutateOptions controls how adminops-plane SSA writes handle ownership.
-type MutateOptions struct {
-	ForceOwnership  bool
-	RetryOnConflict bool
+// NewMutator binds the shared AdminOps status writer to its Kubernetes reader
+// and client. Use an uncached APIReader for immediate read-back visibility.
+func NewMutator(reader client.Reader, c client.Client) adminops.StatusMutator {
+	return func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, mutate func(*openbaov1alpha1.OpenBaoCluster) error, ownership adminops.OwnershipPolicy) error {
+		return MutateWithReader(ctx, reader, c, cluster, mutate, ownership)
+	}
 }
 
 // MutateWithReader applies an SSA read-modify-apply update for the
@@ -28,13 +31,21 @@ func MutateWithReader(
 	c client.Client,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-	opts MutateOptions,
+	ownership adminops.OwnershipPolicy,
 ) error {
 	if cluster == nil {
 		return nil
 	}
 	if mutate == nil {
 		return fmt.Errorf("mutate function is required")
+	}
+	var forceOwnership bool
+	switch ownership {
+	case adminops.RespectOwnership, adminops.ForceOwnershipOnConflict:
+	case adminops.ForceOwnership:
+		forceOwnership = true
+	default:
+		return fmt.Errorf("unsupported adminops ownership policy %d", ownership)
 	}
 
 	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
@@ -44,8 +55,8 @@ func MutateWithReader(
 		})
 	}
 
-	updated, err := applyAdminOps(opts.ForceOwnership)
-	if err != nil && apierrors.IsConflict(err) && opts.RetryOnConflict && !opts.ForceOwnership {
+	updated, err := applyAdminOps(forceOwnership)
+	if err != nil && apierrors.IsConflict(err) && ownership == adminops.ForceOwnershipOnConflict {
 		updated, err = applyAdminOps(true)
 	}
 	if err != nil {

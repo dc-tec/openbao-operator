@@ -8,12 +8,57 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 )
+
+func TestAdminOpsStatusOwnershipPolicy(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		ownership adminops.OwnershipPolicy
+		conflict  bool
+	}{
+		{name: "respect", ownership: adminops.RespectOwnership, conflict: true},
+		{name: "fallback", ownership: adminops.ForceOwnershipOnConflict},
+		{name: "force", ownership: adminops.ForceOwnership},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := createMinimalCluster(t, newTestNamespace(t), "adminops-ownership-"+tt.name)
+			cluster.Status.Backup = &openbaov1alpha1.BackupStatus{LastFailureReason: "other-writer"}
+			cluster.Status.CurrentVersion = testOpenBaoVersion244
+			require.NoError(t, k8sClient.Status().Update(ctx, cluster, client.FieldOwner("other-status-writer")))
+			before := cluster.DeepCopy()
+
+			mutateStatus := adminopsstatus.NewMutator(k8sClient, k8sClient)
+			err := mutateStatus(ctx, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+				obj.Status.Backup.LastFailureReason = "adminops-writer"
+				return nil
+			}, tt.ownership)
+
+			stored := &openbaov1alpha1.OpenBaoCluster{}
+			require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), stored))
+			if tt.conflict {
+				require.True(t, apierrors.HasStatusCause(err, metav1.CauseTypeFieldManagerConflict), "expected ownership conflict, got %v", err)
+				require.Equal(t, before, cluster, "failed writes leave the caller unchanged")
+				require.Equal(t, before.Status, stored.Status)
+				require.Equal(t, before.ResourceVersion, stored.ResourceVersion)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, "adminops-writer", stored.Status.Backup.LastFailureReason)
+				require.NotEqual(t, before.ResourceVersion, stored.ResourceVersion)
+				require.Equal(t, stored.Status, cluster.Status)
+				require.Equal(t, stored.ResourceVersion, cluster.ResourceVersion)
+			}
+			require.Equal(t, before.Status.CurrentVersion, stored.Status.CurrentVersion)
+		})
+	}
+}
 
 func TestAdminOpsStatusReadBackAfterUpgradeClears(t *testing.T) {
 	tests := []struct {
@@ -66,7 +111,7 @@ func TestAdminOpsStatusReadBackAfterUpgradeClears(t *testing.T) {
 					}
 					obj.Status.Backup = &openbaov1alpha1.BackupStatus{LastFailureReason: "preserve-backup"}
 					return nil
-				}, adminopsstatus.MutateOptions{}); err != nil {
+				}, adminops.RespectOwnership); err != nil {
 				t.Fatalf("seed adminops status: %v", err)
 			}
 
@@ -77,7 +122,7 @@ func TestAdminOpsStatusReadBackAfterUpgradeClears(t *testing.T) {
 				func(obj *openbaov1alpha1.OpenBaoCluster) error {
 					obj.Status.Upgrade = tt.clear(obj.Status.Upgrade)
 					return nil
-				}, adminopsstatus.MutateOptions{}); err != nil {
+				}, adminops.RespectOwnership); err != nil {
 				t.Fatalf("clear upgrade status: %v", err)
 			}
 
@@ -115,7 +160,7 @@ func TestAdminOpsStatusReadBackPreservesFieldsOwnedByAnotherWriter(t *testing.T)
 			obj.Status.Upgrade = nil
 			obj.Status.Backup = &openbaov1alpha1.BackupStatus{LastFailureReason: "persist-backup"}
 			return nil
-		}, adminopsstatus.MutateOptions{}); err != nil {
+		}, adminops.RespectOwnership); err != nil {
 		t.Fatalf("apply adminops status: %v", err)
 	}
 

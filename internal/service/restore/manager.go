@@ -3,25 +3,17 @@
 package restore
 
 import (
-	"context"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
-
-type adminOpsStatusMutator func(
-	ctx context.Context,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-	forceOwnership bool,
-) error
 
 const (
 	// RestoreJobNamePrefix is the prefix for restore job names.
@@ -43,13 +35,13 @@ type Manager struct {
 	scheme                *runtime.Scheme
 	recorder              events.EventRecorder
 	operatorImageVerifier imageverify.Verifier
-	adminOpsMutator       adminOpsStatusMutator
+	adminOpsMutator       adminops.StatusMutator
 	clientConfig          portopenbao.ClientConfig
 	Platform              string
 }
 
 // WithAdminOpsStatusMutator configures the adminops-plane status persistence hook.
-func (m *Manager) WithAdminOpsStatusMutator(mutator adminOpsStatusMutator) *Manager {
+func (m *Manager) WithAdminOpsStatusMutator(mutator adminops.StatusMutator) *Manager {
 	if mutator != nil {
 		m.adminOpsMutator = mutator
 	}

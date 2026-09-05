@@ -17,20 +17,11 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 )
 
-func testBlueGreenAdminOpsMutator(c client.Client) adminOpsStatusMutator {
-	return func(
-		ctx context.Context,
-		cluster *openbaov1alpha1.OpenBaoCluster,
-		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-		forceOwnership bool,
-	) error {
-		return adminopsstatus.MutateWithReader(ctx, c, c, cluster, mutate, adminopsstatus.MutateOptions{
-			ForceOwnership:  forceOwnership,
-			RetryOnConflict: !forceOwnership,
-		})
-	}
+func testBlueGreenAdminOpsMutator(c client.Client) adminops.StatusMutator {
+	return adminopsstatus.NewMutator(c, c)
 }
 
 func newValidationHookLifecycleTest(t *testing.T) (*openbaov1alpha1.OpenBaoCluster, *openbaov1alpha1.ValidationHookConfig, client.Client, *Manager) {
