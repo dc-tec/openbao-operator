@@ -79,6 +79,107 @@ func (r *stagedReader) List(ctx context.Context, list client.ObjectList, opts ..
 	return r.then.List(ctx, list, opts...)
 }
 
+func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_ReadBackContract(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		withoutUpgrade bool
+		mutate         OpenBaoClusterAdminOpsStatusMutator
+	}{
+		{name: "upgrade unchanged", mutate: func(*openbaov1alpha1.OpenBaoCluster) error { return nil }},
+		{name: "upgrade cleared", mutate: func(obj *openbaov1alpha1.OpenBaoCluster) error {
+			obj.Status.Upgrade = nil
+			return nil
+		}},
+		{name: "failure cleared", mutate: func(obj *openbaov1alpha1.OpenBaoCluster) error {
+			obj.Status.Upgrade.Failure = nil
+			return nil
+		}},
+		{name: "failure timestamp cleared", mutate: func(obj *openbaov1alpha1.OpenBaoCluster) error {
+			obj.Status.Upgrade.Failure.At = nil
+			return nil
+		}},
+		{name: "step-down timestamp cleared", mutate: func(obj *openbaov1alpha1.OpenBaoCluster) error {
+			obj.Status.Upgrade.LastStepDownTime = nil
+			return nil
+		}},
+		{name: "no upgrade", withoutUpgrade: true, mutate: func(*openbaov1alpha1.OpenBaoCluster) error { return nil }},
+	}
+
+	for _, tt := range tests {
+		for _, readFails := range []bool{false, true} {
+			outcome := "observed result"
+			if readFails {
+				outcome = "read error"
+			}
+			t.Run(tt.name+"/"+outcome, func(t *testing.T) {
+				t.Parallel()
+				now := metav1.Now()
+				cluster := &openbaov1alpha1.OpenBaoCluster{
+					ObjectMeta: metav1.ObjectMeta{Name: "readback", Namespace: "default"},
+					Status: openbaov1alpha1.OpenBaoClusterStatus{
+						Upgrade: &openbaov1alpha1.UpgradeProgress{
+							TargetVersion:    concurrentTargetVersion,
+							Failure:          &openbaov1alpha1.ControllerErrorStatus{Reason: "failed", At: &now},
+							LastStepDownTime: &now,
+						},
+					},
+				}
+				if tt.withoutUpgrade {
+					cluster.Status.Upgrade = nil
+				}
+				c := fake.NewClientBuilder().WithScheme(newOpenBaoClusterStatusTestScheme(t)).
+					WithStatusSubresource(cluster).WithObjects(cluster).Build()
+				readErr := errors.New("read-back unavailable")
+				var observed *openbaov1alpha1.OpenBaoCluster
+				reader := &stagedReader{first: c, then: interceptor.NewClient(c, interceptor.Funcs{
+					Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+						if readFails {
+							return readErr
+						}
+						if err := c.Get(ctx, key, obj, opts...); err != nil {
+							return err
+						}
+						// Model another writer's update between the apply and read-back.
+						updated := obj.(*openbaov1alpha1.OpenBaoCluster)
+						updated.ResourceVersion = "later-version"
+						updated.Status.Backup.LastFailureReason = "concurrent update"
+						observed = updated.DeepCopy()
+						return nil
+					},
+				})}
+				mutations := 0
+				updated, err := MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(
+					context.Background(), reader, c, client.ObjectKeyFromObject(cluster),
+					func(obj *openbaov1alpha1.OpenBaoCluster) error {
+						mutations++
+						obj.Status.Backup = &openbaov1alpha1.BackupStatus{LastFailureReason: persistMe}
+						return tt.mutate(obj)
+					}, OpenBaoClusterAdminOpsStatusApplyOptions{},
+				)
+				if readFails {
+					if !errors.Is(err, readErr) || updated != nil {
+						t.Fatalf("result = (%+v, %v), want (nil, read-back error)", updated, err)
+					}
+				} else if err != nil || !reflect.DeepEqual(updated, observed) {
+					t.Fatalf("result = (%+v, %v), want observed object %+v", updated, err, observed)
+				}
+				if mutations != 1 {
+					t.Fatalf("mutation calls = %d, want 1", mutations)
+				}
+				stored := &openbaov1alpha1.OpenBaoCluster{}
+				if err := c.Get(context.Background(), client.ObjectKeyFromObject(cluster), stored); err != nil {
+					t.Fatal(err)
+				}
+				if stored.Status.Backup == nil || stored.Status.Backup.LastFailureReason != persistMe {
+					t.Fatalf("stored backup = %+v, want successful apply even if read-back fails", stored.Status.Backup)
+				}
+			})
+		}
+	}
+}
+
 func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_UsesLatestStateAndPreservesSiblingFields(t *testing.T) {
 	t.Parallel()
 

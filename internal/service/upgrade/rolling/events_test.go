@@ -211,10 +211,11 @@ func TestPrepareFailedUpgradeRetry_EmitsRetryEvents(t *testing.T) {
 	recorder := events.NewFakeRecorder(10)
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithObjects(cluster, staleJob, sts, staleTargetPod).
+		WithObjects(withoutUpgradeStatus(cluster), staleJob, sts, staleTargetPod).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithReturnManagedFields().
 		Build()
+	seedUpgradeStatus(t, k8sClient, cluster)
 	manager := &Manager{
 		client:          k8sClient,
 		reader:          k8sClient,

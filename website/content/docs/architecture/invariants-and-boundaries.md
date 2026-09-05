@@ -86,6 +86,11 @@ A writer applies only its plane. Within the shared AdminOps plane, a writer must
 concern, and apply the complete plane; omitting a sibling field with the same field manager can clear it. Read directly
 from the API after a write when the next decision depends on the committed value because the controller cache can lag.
 
+The AdminOps mutation gateway returns the object read after the apply, including any concurrent updates visible to that
+read. It does not substitute the intended state for the observed state. If read-back fails, it returns an error even
+though the apply succeeded. The application wrapper updates the caller's AdminOps fields and resource version only
+after a successful read-back; it leaves other fields unchanged.
+
 ## Account for tenancy watch boundaries
 
 Single-tenant mode can watch owned child resources in the operator namespace. Multi-tenant mode avoids cluster-wide

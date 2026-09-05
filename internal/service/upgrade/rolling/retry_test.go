@@ -374,7 +374,7 @@ func TestPatchRetryStatusSSA_ApplyPayloadOmitsClearedFailureFields(t *testing.T)
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
-		WithObjects(stored.DeepCopy()).
+		WithObjects(withoutUpgradeStatus(stored)).
 		WithInterceptorFuncs(interceptor.Funcs{
 			SubResourceApply: func(ctx context.Context, c client.Client, subResource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
 				payload, err := json.Marshal(obj)
@@ -393,6 +393,7 @@ func TestPatchRetryStatusSSA_ApplyPayloadOmitsClearedFailureFields(t *testing.T)
 		adminOpsMutator: testAdminOpsMutator(k8sClient),
 	}
 	cluster := stored.DeepCopy()
+	seedUpgradeStatus(t, k8sClient, cluster)
 	if err := manager.patchRetryStatusSSA(context.Background(), cluster, "retry-now"); err != nil {
 		t.Fatalf("patchRetryStatusSSA() error = %v", err)
 	}
@@ -484,8 +485,9 @@ func TestPrepareFailedUpgradeRetry_DeletesStaleCompletedPod(t *testing.T) {
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
-		WithObjects(cluster, sts, currentTargetPod, staleCompletedPod).
+		WithObjects(withoutUpgradeStatus(cluster), sts, currentTargetPod, staleCompletedPod).
 		Build()
+	seedUpgradeStatus(t, k8sClient, cluster)
 	manager := &Manager{
 		client:          k8sClient,
 		reader:          k8sClient,
@@ -757,11 +759,12 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			builder := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
-				WithObjects(cluster, staleJob, sts, staleTargetPod)
+				WithObjects(withoutUpgradeStatus(cluster), staleJob, sts, staleTargetPod)
 			if tt.withManagedFields {
 				builder = builder.WithReturnManagedFields()
 			}
 			k8sClient := builder.Build()
+			seedUpgradeStatus(t, k8sClient, cluster)
 
 			mgr := &Manager{
 				client:          k8sClient,

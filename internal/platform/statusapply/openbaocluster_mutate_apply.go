@@ -20,6 +20,8 @@ type OpenBaoClusterAdminOpsStatusMutator func(*openbaov1alpha1.OpenBaoCluster) e
 // read-before-write and read-after-write freshness. A resource-version conflict
 // repeats the fresh read and mutation before another apply attempt. Callers
 // should pass an uncached APIReader when immediate apiserver visibility matters.
+// The result is the object read after the apply, which can include concurrent
+// updates. A read-back failure returns an error even though the apply succeeded.
 func MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(
 	ctx context.Context,
 	reader client.Reader,
@@ -41,14 +43,13 @@ func MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(
 		reader = c
 	}
 
-	var current, desired *openbaov1alpha1.OpenBaoCluster
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		current = &openbaov1alpha1.OpenBaoCluster{}
+		current := &openbaov1alpha1.OpenBaoCluster{}
 		if err := reader.Get(ctx, key, current); err != nil {
 			return fmt.Errorf("failed to get cluster %s/%s before adminops status apply: %w", key.Namespace, key.Name, err)
 		}
 
-		desired = current.DeepCopy()
+		desired := current.DeepCopy()
 		if err := mutate(desired); err != nil {
 			return err
 		}
@@ -60,36 +61,7 @@ func MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(
 
 	updated := &openbaov1alpha1.OpenBaoCluster{}
 	if err := reader.Get(ctx, key, updated); err != nil {
-		if desired.Status.Upgrade == nil || upgradeFailureFieldsCleared(current, desired) {
-			// Fake client SSA does not reliably materialize omission-based clears on readback.
-			// Return desired status for clear-oriented flows to keep callers deterministic.
-			return desired, nil
-		}
 		return nil, fmt.Errorf("failed to get cluster %s/%s after adminops status apply: %w", key.Namespace, key.Name, err)
 	}
-	if desired.Status.Upgrade == nil || upgradeFailureFieldsCleared(current, desired) {
-		desired.ResourceVersion = updated.ResourceVersion
-		return desired, nil
-	}
 	return updated, nil
-}
-
-func upgradeFailureFieldsCleared(current, desired *openbaov1alpha1.OpenBaoCluster) bool {
-	if current == nil || desired == nil || current.Status.Upgrade == nil || desired.Status.Upgrade == nil {
-		return false
-	}
-
-	currentFailure := current.Status.Upgrade.Failure
-	desiredFailure := desired.Status.Upgrade.Failure
-	if currentFailure != nil && desiredFailure == nil {
-		return true
-	}
-	if currentFailure != nil && desiredFailure != nil && currentFailure.At != nil && desiredFailure.At == nil {
-		return true
-	}
-	if current.Status.Upgrade.LastStepDownTime != nil && desired.Status.Upgrade.LastStepDownTime == nil {
-		return true
-	}
-
-	return false
 }

@@ -19,7 +19,9 @@ type MutateOptions struct {
 }
 
 // MutateWithReader applies an SSA read-modify-apply update for the
-// adminops-owned status plane and syncs cluster from the persisted result.
+// adminops-owned status plane and syncs its fields and resource version from
+// the read-back result. On error, cluster is unchanged, even if the apply
+// succeeded and only the read-back failed.
 func MutateWithReader(
 	ctx context.Context,
 	reader client.Reader,
