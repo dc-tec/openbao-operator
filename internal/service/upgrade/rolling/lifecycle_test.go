@@ -311,8 +311,9 @@ func TestPatchFinalizedUpgradeStatus_ClearsUpgradeWithoutTouchingCurrentVersion(
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
-		WithObjects(cluster).
+		WithObjects(withoutUpgradeStatus(cluster)).
 		Build()
+	seedUpgradeStatus(t, c, cluster)
 	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, nil).
 		WithReader(c).
 		WithAdminOpsStatusMutator(testAdminOpsMutator(c))
