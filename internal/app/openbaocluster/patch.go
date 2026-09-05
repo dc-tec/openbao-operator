@@ -112,9 +112,9 @@ func PatchWorkloadOwnedFields(
 	return nil
 }
 
-// PatchAdminOpsOwnedFieldsWithReader patches only admin-ops controller owned
-// status fields, using reader for live read-before-write freshness when
-// available.
+// PatchAdminOpsOwnedFieldsWithReader persists pending application status changes.
+// Backup, Upgrade, and Restore are persisted by their managers and preserved
+// from the live read performed by the shared AdminOps mutation gateway.
 func PatchAdminOpsOwnedFieldsWithReader(
 	ctx context.Context,
 	reader client.Reader,
@@ -128,13 +128,12 @@ func PatchAdminOpsOwnedFieldsWithReader(
 		return nil
 	}
 
-	// Backup-only diffs are persisted by the backup manager. When we do patch
-	// adminops status for other reasons, we still apply the full current adminops
-	// plane so shared SSA ownership does not clear backup or peer fields by omission.
+	// Manager-owned fields do not trigger a final patch. When application fields
+	// change, the gateway still applies the full current AdminOps plane so shared
+	// SSA ownership does not clear sibling fields by omission.
 	if original.Status.AcceptedUpgradeStrategy == cluster.Status.AcceptedUpgradeStrategy &&
 		reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
 		reflect.DeepEqual(original.Status.UpgradeRequests, cluster.Status.UpgradeRequests) &&
-		reflect.DeepEqual(original.Status.Restore, cluster.Status.Restore) &&
 		reflect.DeepEqual(original.Status.BreakGlass, cluster.Status.BreakGlass) &&
 		reflect.DeepEqual(original.Status.AdminOps, cluster.Status.AdminOps) {
 		return nil
@@ -150,7 +149,6 @@ func PatchAdminOpsOwnedFieldsWithReader(
 		obj.Status.AcceptedUpgradeStrategy = cluster.Status.AcceptedUpgradeStrategy
 		obj.Status.BlueGreen = cluster.Status.BlueGreen
 		obj.Status.UpgradeRequests = cluster.Status.UpgradeRequests
-		obj.Status.Restore = cluster.Status.Restore
 		obj.Status.BreakGlass = cluster.Status.BreakGlass
 		obj.Status.AdminOps = adminOps
 		return nil

@@ -14,6 +14,7 @@ verifiedBy:
   - internal/port/adminops/status.go
   - internal/app/openbaocluster/adminopsstatus/mutate_test.go
   - test/integration/adminops_status_test.go
+  - test/integration/adminops_restore_status_test.go
   - internal/platform/statusapply/openbaocluster_test.go
 ---
 
@@ -82,7 +83,7 @@ The `OpenBaoCluster` status is divided among server-side apply field managers.
 | --- | --- |
 | Observed status | Phase, leader, replicas, current version, observed generation, and conditions |
 | Workload status | Initialization, self-initialization, and workload progress |
-| AdminOps status | Backup, upgrade, blue-green, requests, break-glass, and AdminOps state |
+| AdminOps status | Backup, upgrade, restore, blue-green, requests, break-glass, and AdminOps state |
 | Operation lock | `status.operationLock` only |
 
 A writer applies only its plane. Within the shared AdminOps plane, a writer must read the latest object, mutate its
@@ -93,6 +94,11 @@ The AdminOps mutation gateway returns the object read after the apply, including
 read. It does not substitute the intended state for the observed state. If read-back fails, it returns an error even
 though the apply succeeded. The application wrapper updates the caller's AdminOps fields and resource version only
 after a successful read-back; it leaves other fields unchanged.
+
+The final AdminOps patch persists pending changes to accepted upgrade strategy, blue-green state, upgrade requests,
+break-glass state, and AdminOps state. Managers persist backup, rolling-upgrade progress, and restore restart state.
+The final patch preserves the latest API values for those manager-owned fields in the complete SSA payload. Changes to
+those fields alone do not trigger a final patch.
 
 Managers share the `adminops.StatusMutator` contract. The application layer binds it to the API reader and client through
 `adminopsstatus.NewMutator`. Each write selects an ownership policy:
