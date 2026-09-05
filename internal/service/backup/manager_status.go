@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 )
 
 // patchStatusSSA updates the backup status using Server-Side Apply.
@@ -19,7 +20,7 @@ func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.O
 	return m.adminOpsMutator(ctx, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 		obj.Status.Backup = cluster.Status.Backup
 		return nil
-	}, false)
+	}, adminops.ForceOwnershipOnConflict)
 }
 
 func (m *Manager) recordBackupAttempt(

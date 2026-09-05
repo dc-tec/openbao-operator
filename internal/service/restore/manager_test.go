@@ -39,17 +39,7 @@ func testLogger() logr.Logger {
 }
 
 func withTestAdminOpsStatusPersistence(manager *Manager, k8sClient client.Client) *Manager {
-	return manager.WithAdminOpsStatusMutator(func(
-		ctx context.Context,
-		cluster *openbaov1alpha1.OpenBaoCluster,
-		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-		forceOwnership bool,
-	) error {
-		return adminopsstatus.MutateWithReader(ctx, k8sClient, k8sClient, cluster, mutate, adminopsstatus.MutateOptions{
-			ForceOwnership:  forceOwnership,
-			RetryOnConflict: !forceOwnership,
-		})
-	})
+	return manager.WithAdminOpsStatusMutator(adminopsstatus.NewMutator(k8sClient, k8sClient))
 }
 
 const statusSubresourceName = "status"

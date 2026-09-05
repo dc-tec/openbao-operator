@@ -8,6 +8,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 )
 
 // withoutUpgradeStatus leaves upgrade fields for seedUpgradeStatus to create
@@ -25,21 +26,11 @@ func seedUpgradeStatus(t *testing.T, c client.Client, cluster *openbaov1alpha1.O
 		func(obj *openbaov1alpha1.OpenBaoCluster) error {
 			obj.Status.Upgrade = progress.DeepCopy()
 			return nil
-		}, adminopsstatus.MutateOptions{}); err != nil {
+		}, adminops.RespectOwnership); err != nil {
 		t.Fatalf("seed upgrade status: %v", err)
 	}
 }
 
-func testAdminOpsMutator(c client.Client) adminOpsStatusMutator {
-	return func(
-		ctx context.Context,
-		cluster *openbaov1alpha1.OpenBaoCluster,
-		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-		forceOwnership bool,
-	) error {
-		return adminopsstatus.MutateWithReader(ctx, c, c, cluster, mutate, adminopsstatus.MutateOptions{
-			ForceOwnership:  forceOwnership,
-			RetryOnConflict: !forceOwnership,
-		})
-	}
+func testAdminOpsMutator(c client.Client) adminops.StatusMutator {
+	return adminopsstatus.NewMutator(c, c)
 }

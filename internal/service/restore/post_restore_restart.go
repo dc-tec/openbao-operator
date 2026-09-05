@@ -13,6 +13,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 )
 
@@ -59,7 +60,7 @@ func (m *Manager) requestPostRestoreRestart(
 			}
 			return nil
 		},
-		false,
+		adminops.ForceOwnershipOnConflict,
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to request post-restore workload restart: %w", err)
@@ -91,7 +92,7 @@ func (m *Manager) markPostRestoreRestartCompleted(
 			obj.Status.Restore.RestartCompletedAt = &completedAt
 			return nil
 		},
-		false,
+		adminops.ForceOwnershipOnConflict,
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to record post-restore workload restart completion: %w", err)

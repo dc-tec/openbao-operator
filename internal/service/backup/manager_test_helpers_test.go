@@ -63,17 +63,7 @@ func newBackupManager(k8sClient client.Client) *Manager {
 }
 
 func withTestAdminOpsStatusPersistence(manager *Manager, k8sClient client.Client) *Manager {
-	return manager.WithReader(k8sClient).WithAdminOpsStatusMutator(func(
-		ctx context.Context,
-		cluster *openbaov1alpha1.OpenBaoCluster,
-		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-		forceOwnership bool,
-	) error {
-		return adminopsstatus.MutateWithReader(ctx, k8sClient, k8sClient, cluster, mutate, adminopsstatus.MutateOptions{
-			ForceOwnership:  forceOwnership,
-			RetryOnConflict: !forceOwnership,
-		})
-	})
+	return manager.WithReader(k8sClient).WithAdminOpsStatusMutator(adminopsstatus.NewMutator(k8sClient, k8sClient))
 }
 
 func newBackupJobForCluster(cluster *openbaov1alpha1.OpenBaoCluster, name string, createdAt time.Time) *batchv1.Job {

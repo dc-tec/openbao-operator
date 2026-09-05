@@ -4,7 +4,6 @@
 package integration
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -34,17 +33,7 @@ func newIntegrationBackupManager(t *testing.T) *backup.Manager {
 		portopenbao.ClientConfig{},
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
 		"",
-	).WithReader(k8sClient).WithAdminOpsStatusMutator(func(
-		ctx context.Context,
-		cluster *openbaov1alpha1.OpenBaoCluster,
-		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-		forceOwnership bool,
-	) error {
-		return adminopsstatus.MutateWithReader(ctx, k8sClient, k8sClient, cluster, mutate, adminopsstatus.MutateOptions{
-			ForceOwnership:  forceOwnership,
-			RetryOnConflict: !forceOwnership,
-		})
-	})
+	).WithReader(k8sClient).WithAdminOpsStatusMutator(adminopsstatus.NewMutator(k8sClient, k8sClient))
 }
 
 func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {

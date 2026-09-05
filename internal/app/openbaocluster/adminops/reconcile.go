@@ -185,17 +185,7 @@ func buildReconcilers(deps Dependencies) reconcilerPlan {
 	if strategyReader == nil {
 		strategyReader = deps.Client
 	}
-	adminOpsMutator := func(
-		ctx context.Context,
-		cluster *openbaov1alpha1.OpenBaoCluster,
-		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
-		forceOwnership bool,
-	) error {
-		return adminopsstatus.MutateWithReader(ctx, deps.APIReader, deps.Client, cluster, mutate, adminopsstatus.MutateOptions{
-			ForceOwnership:  forceOwnership,
-			RetryOnConflict: !forceOwnership,
-		})
-	}
+	adminOpsMutator := adminopsstatus.NewMutator(deps.APIReader, deps.Client)
 
 	return reconcilerPlan{
 		upgradeReconcilers: []subReconciler{

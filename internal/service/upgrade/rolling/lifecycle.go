@@ -10,6 +10,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
@@ -22,7 +23,7 @@ func (m *Manager) patchFinalizedUpgradeStatus(ctx context.Context, cluster *open
 	if err := m.adminOpsMutator(ctx, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 		obj.Status.Upgrade = nil
 		return nil
-	}, true); err != nil {
+	}, adminops.ForceOwnership); err != nil {
 		return fmt.Errorf("failed to patch finalized rolling upgrade status: %w", err)
 	}
 
@@ -41,7 +42,7 @@ func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.O
 		obj.Status.Upgrade = cluster.Status.Upgrade
 		obj.Status.UpgradeRequests = cluster.Status.UpgradeRequests
 		return nil
-	}, false); err != nil {
+	}, adminops.ForceOwnershipOnConflict); err != nil {
 		return fmt.Errorf("failed to apply adminops status plane for rolling upgrade status: %w", err)
 	}
 

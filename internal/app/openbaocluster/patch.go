@@ -14,6 +14,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 )
 
 // PatchStatusOwnedFields patches only status-controller owned status fields.
@@ -153,7 +154,7 @@ func PatchAdminOpsOwnedFieldsWithReader(
 		obj.Status.BreakGlass = cluster.Status.BreakGlass
 		obj.Status.AdminOps = adminOps
 		return nil
-	}, adminopsstatus.MutateOptions{RetryOnConflict: true})
+	}, adminops.ForceOwnershipOnConflict)
 	if err != nil {
 		return fmt.Errorf("failed to patch adminops status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}

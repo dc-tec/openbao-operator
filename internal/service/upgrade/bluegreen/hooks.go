@@ -23,6 +23,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 )
 
@@ -107,7 +108,7 @@ func (m *Manager) persistBlueGreenStatus(ctx context.Context, cluster *openbaov1
 	if err := m.adminOpsMutator(ctx, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 		obj.Status.BlueGreen = desired
 		return nil
-	}, false); err != nil {
+	}, adminops.ForceOwnershipOnConflict); err != nil {
 		return fmt.Errorf("failed to persist blue/green validation hook status: %w", err)
 	}
 	return nil
