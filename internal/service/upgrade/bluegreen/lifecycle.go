@@ -128,8 +128,7 @@ func (m *Manager) completeBlueGreenUpgrade(
 ) (phaseOutcome, error) {
 	if shouldRestoreSteadyReadReplicas(cluster) {
 		beginSteadyReadReplicaRestore(logger, cluster)
-		m.transitionToPhase(logger, cluster, openbaov1alpha1.PhaseRestoringReadReplicas)
-		return requeueAfterOutcome(constants.RequeueShort), nil
+		return advance(openbaov1alpha1.PhaseRestoringReadReplicas), nil
 	}
 
 	return m.finalizeCompletedBlueGreenUpgrade(ctx, logger, cluster, true)

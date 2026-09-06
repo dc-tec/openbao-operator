@@ -336,6 +336,11 @@ func TestTriggerRollbackOrAbort_EarlyAndLatePhase(t *testing.T) {
 	t.Run("late phase triggers rollback", func(t *testing.T) {
 		cluster := newBlueGreenCluster()
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+		phaseStart := metav1.NewTime(time.Now().Add(-time.Minute))
+		cluster.Status.BlueGreen.StartTime = &phaseStart
+		cluster.Status.BlueGreen.JobFailureCount = 3
+		cluster.Status.BlueGreen.LastJobFailure = "promotion-job"
+
 		manager := &Manager{}
 
 		result, err := manager.triggerRollbackOrAbort(context.Background(), logr.Discard(), cluster, "cleanup failed")
@@ -354,5 +359,9 @@ func TestTriggerRollbackOrAbort_EarlyAndLatePhase(t *testing.T) {
 		if cluster.Status.BlueGreen.RollbackStartTime == nil {
 			t.Fatal("rollback start time not set")
 		}
+		if !cluster.Status.BlueGreen.StartTime.Equal(&phaseStart) || cluster.Status.BlueGreen.JobFailureCount != 3 || cluster.Status.BlueGreen.LastJobFailure != "promotion-job" {
+			t.Fatal("starting rollback must preserve the phase timer and failure history")
+		}
+
 	})
 }

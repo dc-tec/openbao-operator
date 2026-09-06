@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
@@ -13,32 +12,12 @@ import (
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
 // calculateRevision computes a deterministic revision hash from relevant spec fields.
 func (m *Manager) calculateRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
-}
-
-// transitionToPhase is a helper that sets the phase and restarts the StartTime timer.
-// This reduces boilerplate in phase handlers.
-// It also resets the job failure count when transitioning phases.
-func (m *Manager) transitionToPhase(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, phase openbaov1alpha1.BlueGreenPhase) {
-	previousPhase := cluster.Status.BlueGreen.Phase
-	cluster.Status.BlueGreen.Phase = phase
-	if phase == openbaov1alpha1.PhaseIdle {
-		cluster.Status.BlueGreen.StartTime = nil
-	} else {
-		now := metav1.Now()
-		cluster.Status.BlueGreen.StartTime = &now
-	}
-	// Reset job failure count on phase transition
-	cluster.Status.BlueGreen.JobFailureCount = 0
-	cluster.Status.BlueGreen.LastJobFailure = ""
-	opslifecycle.LogPhaseTransition(logger, logging.EventBlueGreenPhaseTransition, string(previousPhase), string(phase), map[string]string{
-		"cluster_namespace": cluster.Namespace,
-		"cluster_name":      cluster.Name,
-	})
 }
 
 // executeStateMachine runs the blue/green upgrade state machine.
@@ -89,7 +68,12 @@ func (m *Manager) applyOutcome(ctx context.Context, logger logr.Logger, cluster 
 
 	switch outcome.kind {
 	case phaseOutcomeAdvance:
-		m.transitionToPhase(logger, cluster, outcome.nextPhase)
+		previousPhase := cluster.Status.BlueGreen.Phase
+		core.AdvanceBlueGreenPhase(cluster.Status.BlueGreen, outcome.nextPhase)
+		opslifecycle.LogPhaseTransition(logger, logging.EventBlueGreenPhaseTransition, string(previousPhase), string(outcome.nextPhase), map[string]string{
+			"cluster_namespace": cluster.Namespace,
+			"cluster_name":      cluster.Name,
+		})
 		if outcome.nextPhase == openbaov1alpha1.PhaseIdle {
 			return recon.Result{}, nil
 		}

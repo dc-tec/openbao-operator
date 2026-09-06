@@ -1,6 +1,10 @@
 package core
 
-import openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+)
 
 // CurrentBlueGreenPhase returns the current blue/green phase, defaulting to Idle.
 func CurrentBlueGreenPhase(cluster *openbaov1alpha1.OpenBaoCluster) openbaov1alpha1.BlueGreenPhase {
@@ -44,17 +48,42 @@ func InitializeBlueGreenManualPromotion(cluster *openbaov1alpha1.OpenBaoCluster)
 		!cluster.Spec.Upgrade.BlueGreen.AutoPromote
 }
 
+// AdvanceBlueGreenPhase starts a new phase timer and clears per-phase job
+// failures. Advancing to Idle clears the timer without clearing operation state.
+func AdvanceBlueGreenPhase(status *openbaov1alpha1.BlueGreenStatus, phase openbaov1alpha1.BlueGreenPhase) {
+	if status == nil {
+		return
+	}
+	status.Phase = phase
+	status.StartTime = nil
+	if phase != openbaov1alpha1.PhaseIdle {
+		now := metav1.Now()
+		status.StartTime = &now
+	}
+	status.JobFailureCount = 0
+	status.LastJobFailure = ""
+}
+
+// BeginBlueGreenRollback starts the rollback timer while retaining the phase
+// timer and job failure history that led to rollback.
+func BeginBlueGreenRollback(status *openbaov1alpha1.BlueGreenStatus, reason string) {
+	if status == nil {
+		return
+	}
+	now := metav1.Now()
+	status.RollbackReason = reason
+	status.RollbackStartTime = &now
+	status.Phase = openbaov1alpha1.PhaseRollingBack
+}
+
 // ResetBlueGreenTransientState clears in-flight blue/green fields after a terminal transition.
 func ResetBlueGreenTransientState(status *openbaov1alpha1.BlueGreenStatus) {
 	if status == nil {
 		return
 	}
-	status.Phase = openbaov1alpha1.PhaseIdle
+	AdvanceBlueGreenPhase(status, openbaov1alpha1.PhaseIdle)
 	status.GreenRevision = ""
 	status.ManualPromotionRequired = false
-	status.StartTime = nil
-	status.JobFailureCount = 0
-	status.LastJobFailure = ""
 	if status.ValidationHook == nil {
 		status.OperationID = ""
 	}
