@@ -37,22 +37,28 @@ type TenantRuntime struct {
 	RequeueStandard          time.Duration
 }
 
+// TenantReconcileResult reports requeue timing and the observed tenant lifecycle.
+type TenantReconcileResult struct {
+	recon.Result
+	OwnerAbsent           bool
+	FinalizationCompleted bool
+}
+
 // ReconcileOpenBaoTenant runs the business flow for namespace provisioning.
-func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logger logr.Logger, runtime TenantRuntime) (recon.Result, error) {
+func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logger logr.Logger, runtime TenantRuntime) (TenantReconcileResult, error) {
 	if runtime.Client == nil {
-		return recon.Result{}, fmt.Errorf("client is required")
+		return TenantReconcileResult{}, fmt.Errorf("client is required")
 	}
 	if runtime.Provisioner == nil {
-		return recon.Result{}, fmt.Errorf("provisioner manager is required")
+		return TenantReconcileResult{}, fmt.Errorf("provisioner manager is required")
 	}
 
 	tenant := &openbaov1alpha1.OpenBaoTenant{}
 	if err := runtime.Client.Get(ctx, key, tenant); err != nil {
 		if apierrors.IsNotFound(err) {
-			// OpenBaoTenant deleted - nothing to do.
-			return recon.Result{}, nil
+			return TenantReconcileResult{OwnerAbsent: true}, nil
 		}
-		return recon.Result{}, fmt.Errorf("failed to get OpenBaoTenant %s: %w", key, err)
+		return TenantReconcileResult{}, fmt.Errorf("failed to get OpenBaoTenant %s: %w", key, err)
 	}
 
 	targetNS := tenant.Spec.TargetNamespace
@@ -83,25 +89,30 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 			err.Error(),
 		)
 		if patchErr := patchStatus(ctx, runtime.Client, tenant, original); patchErr != nil {
-			return recon.Result{}, fmt.Errorf("failed to patch status for security violation: %w", patchErr)
+			return TenantReconcileResult{}, fmt.Errorf("failed to patch status for security violation: %w", patchErr)
 		}
 
 		// Do not requeue. User must fix the CR.
-		return recon.Result{}, nil
+		return TenantReconcileResult{}, nil
 	}
 
 	if !tenant.DeletionTimestamp.IsZero() {
-		return reconcileDeletion(ctx, logger, runtime, tenant, targetNS, key)
+		result, err := reconcileDeletion(ctx, logger, runtime, tenant, targetNS, key)
+		return TenantReconcileResult{
+			Result: result,
+			FinalizationCompleted: err == nil &&
+				!controllerutil.ContainsFinalizer(tenant, openbaov1alpha1.OpenBaoTenantFinalizer),
+		}, err
 	}
 
 	if !controllerutil.ContainsFinalizer(tenant, openbaov1alpha1.OpenBaoTenantFinalizer) {
 		original := tenant.DeepCopy()
 		controllerutil.AddFinalizer(tenant, openbaov1alpha1.OpenBaoTenantFinalizer)
 		if err := runtime.Client.Patch(ctx, tenant, client.MergeFrom(original)); err != nil {
-			return recon.Result{}, fmt.Errorf("failed to add finalizer to OpenBaoTenant %s: %w", key, err)
+			return TenantReconcileResult{}, fmt.Errorf("failed to add finalizer to OpenBaoTenant %s: %w", key, err)
 		}
 		// Requeue to observe the resource with the finalizer attached.
-		return recon.Result{RequeueAfter: resolveRequeueShort(runtime)}, nil
+		return TenantReconcileResult{Result: recon.Result{RequeueAfter: resolveRequeueShort(runtime)}}, nil
 	}
 
 	ns := &corev1.Namespace{}
@@ -114,17 +125,17 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 			setTenantProvisionedCondition(runtime, tenant, metav1.ConditionFalse, ReasonTenantProvisioningBlocked, message)
 			runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked because target namespace %s was not found", targetNS))
 			if patchErr := patchStatus(ctx, runtime.Client, tenant, original); patchErr != nil {
-				return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", patchErr)
+				return TenantReconcileResult{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", patchErr)
 			}
 			logger.Info("Target namespace not found; will retry", "target_namespace", targetNS)
-			return recon.Result{RequeueAfter: resolveRequeueStandard(runtime)}, nil
+			return TenantReconcileResult{Result: recon.Result{RequeueAfter: resolveRequeueStandard(runtime)}}, nil
 		}
-		return recon.Result{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
+		return TenantReconcileResult{}, fmt.Errorf("failed to get namespace %s: %w", targetNS, err)
 	}
 
 	ready, result := ensureAdmissionDependenciesReady(ctx, logger, runtime, tenant)
 	if !ready {
-		return result, nil
+		return TenantReconcileResult{Result: result}, nil
 	}
 
 	logger.Info("Provisioning tenant RBAC", "target_namespace", targetNS)
@@ -135,9 +146,9 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 		tenant.Status.LastError = err.Error()
 		setTenantProvisionedCondition(runtime, tenant, metav1.ConditionFalse, ReasonTenantProvisioningFailed, err.Error())
 		if statusErr := patchStatus(ctx, runtime.Client, tenant, original); statusErr != nil {
-			return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w (original error: %w)", statusErr, err)
+			return TenantReconcileResult{}, fmt.Errorf("failed to update OpenBaoTenant status: %w (original error: %w)", statusErr, err)
 		}
-		return recon.Result{}, fmt.Errorf("failed to ensure tenant RBAC for namespace %s: %w", targetNS, err)
+		return TenantReconcileResult{}, fmt.Errorf("failed to ensure tenant RBAC for namespace %s: %w", targetNS, err)
 	}
 
 	original := tenant.DeepCopy()
@@ -151,7 +162,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 		fmt.Sprintf("Tenant RBAC provisioned for namespace %s", targetNS),
 	)
 	if err := patchStatus(ctx, runtime.Client, tenant, original); err != nil {
-		return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
+		return TenantReconcileResult{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
 	}
 
 	logger.Info("Successfully provisioned tenant RBAC", "target_namespace", targetNS)
@@ -161,7 +172,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 		"target_namespace": targetNS,
 	})
 	runtime.emitTenantNormalEvent(tenant, ReasonTenantProvisioned, fmt.Sprintf("Provisioned tenant RBAC for namespace %s", targetNS))
-	return recon.Result{}, nil
+	return TenantReconcileResult{}, nil
 }
 
 func reconcileDeletion(

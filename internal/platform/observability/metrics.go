@@ -157,12 +157,13 @@ func init() {
 	)
 }
 
-// ReconcileMetrics provides helpers to record reconcile-level metrics for a
-// specific controller and OpenBaoCluster.
+// ReconcileMetrics records metrics for one reconciliation of a controller's
+// resource. Create a new helper for each reconciliation.
 type ReconcileMetrics struct {
 	namespace  string
 	name       string
 	controller string
+	cleared    bool
 }
 
 // NewReconcileMetrics creates a new ReconcileMetrics instance.
@@ -176,6 +177,9 @@ func NewReconcileMetrics(namespace, name, controller string) *ReconcileMetrics {
 
 // ObserveDuration records the duration of a reconcile loop in seconds.
 func (m *ReconcileMetrics) ObserveDuration(durationSeconds float64) {
+	if m.cleared {
+		return
+	}
 	reconcileDurationHistogram.
 		WithLabelValues(m.namespace, m.name, m.controller).
 		Observe(durationSeconds)
@@ -184,9 +188,27 @@ func (m *ReconcileMetrics) ObserveDuration(durationSeconds float64) {
 // IncrementError increments the reconcile error counter with the given reason.
 // Reason values should be low-cardinality strings (for example, "KubernetesAPIError").
 func (m *ReconcileMetrics) IncrementError(reason string) {
+	if m.cleared {
+		return
+	}
 	reconcileErrorsTotal.
 		WithLabelValues(m.namespace, m.name, m.controller, reason).
 		Inc()
+}
+
+// Clear removes this controller's metrics for an absent or finalized resource.
+// Further observations through this helper are ignored, including deferred ones.
+func (m *ReconcileMetrics) Clear() {
+	if m.cleared {
+		return
+	}
+	m.cleared = true
+	reconcileDurationHistogram.DeleteLabelValues(m.namespace, m.name, m.controller)
+	reconcileErrorsTotal.DeletePartialMatch(prometheus.Labels{
+		"namespace":  m.namespace,
+		"name":       m.name,
+		"controller": m.controller,
+	})
 }
 
 // ClusterMetrics provides helpers to record per-cluster state metrics.

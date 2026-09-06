@@ -64,12 +64,17 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := r.parent.Get(ctx, req.NamespacedName, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
+			reconcileMetrics.Clear()
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoCluster %s/%s: %w", req.Namespace, req.Name, err)
 	}
 
 	if shouldSkipWorkloadReconcile(cluster) {
+		if !cluster.DeletionTimestamp.IsZero() &&
+			!controllerutil.ContainsFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer) {
+			reconcileMetrics.Clear()
+		}
 		return ctrl.Result{}, nil
 	}
 	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameWorkload, cluster.Namespace); blocked {
@@ -150,12 +155,17 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	}
 	if err := reader.Get(ctx, req.NamespacedName, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
+			reconcileMetrics.Clear()
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoCluster %s/%s: %w", req.Namespace, req.Name, err)
 	}
 
 	if !cluster.DeletionTimestamp.IsZero() || cluster.Spec.Paused || cluster.Spec.Profile == "" {
+		if !cluster.DeletionTimestamp.IsZero() &&
+			!controllerutil.ContainsFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer) {
+			reconcileMetrics.Clear()
+		}
 		return ctrl.Result{}, nil
 	}
 	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameAdminOps, cluster.Namespace); blocked {
@@ -201,6 +211,7 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := r.parent.Get(ctx, req.NamespacedName, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
+			reconcileMetrics.Clear()
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoCluster %s/%s: %w", req.Namespace, req.Name, err)
@@ -221,6 +232,7 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 				return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 			}
 		}
+		reconcileMetrics.Clear()
 		return ctrl.Result{}, nil
 	}
 

@@ -6,19 +6,83 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
-func TestReconcileMetrics_NoPanic(t *testing.T) {
-	m := NewReconcileMetrics("ns", "name", "ctrl")
+func TestReconcileMetrics_Clear(t *testing.T) {
+	for _, tc := range []struct {
+		name, namespace, resource, controller string
+	}{
+		{name: "other namespace", namespace: "other", resource: "cluster", controller: "workload"},
+		{name: "other resource", namespace: "ns", resource: "other", controller: "workload"},
+		{name: "other controller", namespace: "ns", resource: "cluster", controller: "restore"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := NewReconcileMetrics("ns", "cluster", "workload")
+			other := NewReconcileMetrics(tc.namespace, tc.resource, tc.controller)
+			t.Cleanup(m.Clear)
+			t.Cleanup(other.Clear)
+			for _, helper := range []*ReconcileMetrics{m, other} {
+				helper.ObserveDuration(0.5)
+				helper.ObserveDuration(1)
+				helper.IncrementError("FirstReason")
+				helper.IncrementError("SecondReason")
+			}
+			before := gatherReconcileSeries(t, m)
+			require.Len(t, before["openbao_reconcile_errors_total"], 2)
+			histogram := before["openbao_reconcile_duration_seconds"][0].GetHistogram()
+			require.Equal(t, uint64(2), histogram.GetSampleCount())
+			require.Equal(t, 1.5, histogram.GetSampleSum())
+			require.NotEmpty(t, histogram.GetBucket())
+			otherBefore := gatherReconcileSeries(t, other)
 
-	// These calls should not panic and will register/update metrics for the
-	// given label set.
-	m.ObserveDuration(0.5)
-	m.ObserveDuration(1.0)
-	m.IncrementError("Error")
+			func() {
+				defer m.ObserveDuration(2)
+				defer m.IncrementError("DeferredError")
+				m.Clear()
+				m.Clear()
+			}()
+			require.Empty(t, gatherReconcileSeries(t, m))
+			require.Equal(t, otherBefore, gatherReconcileSeries(t, other))
+
+			// A replacement observed after cleanup starts with fresh counters.
+			recreated := NewReconcileMetrics("ns", "cluster", "workload")
+			t.Cleanup(recreated.Clear)
+			recreated.ObserveDuration(3)
+			recreated.IncrementError("FirstReason")
+			m.Clear()
+			m.ObserveDuration(4)
+			m.IncrementError("LateError")
+			after := gatherReconcileSeries(t, recreated)
+			require.Len(t, after["openbao_reconcile_errors_total"], 1)
+			require.Equal(t, 1.0, after["openbao_reconcile_errors_total"][0].GetCounter().GetValue())
+			require.Equal(t, uint64(1), after["openbao_reconcile_duration_seconds"][0].GetHistogram().GetSampleCount())
+		})
+	}
+}
+
+func gatherReconcileSeries(t *testing.T, m *ReconcileMetrics) map[string][]*dto.Metric {
+	t.Helper()
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(reconcileDurationHistogram, reconcileErrorsTotal)
+	families, err := registry.Gather()
+	require.NoError(t, err)
+	result := make(map[string][]*dto.Metric)
+	for _, family := range families {
+		for _, metric := range family.GetMetric() {
+			labels := make(map[string]string)
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			if labels["namespace"] == m.namespace && labels["name"] == m.name && labels["controller"] == m.controller {
+				result[family.GetName()] = append(result[family.GetName()], metric)
+			}
+		}
+	}
+	return result
 }
 
 func TestClusterMetrics_SetPhase(t *testing.T) {

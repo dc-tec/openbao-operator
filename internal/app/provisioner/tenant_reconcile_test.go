@@ -163,7 +163,7 @@ func TestReconcileOpenBaoTenant_SecurityViolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != (recon.Result{}) {
+	if result.Result != (recon.Result{}) {
 		t.Fatalf("result=%v, want zero", result)
 	}
 
@@ -213,7 +213,7 @@ func TestReconcileOpenBaoTenant_FinalizerAndProvisioning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reconcile 2: %v", err)
 	}
-	if result != (recon.Result{}) {
+	if result.Result != (recon.Result{}) {
 		t.Fatalf("result=%v, want zero", result)
 	}
 
@@ -354,7 +354,7 @@ func TestReconcileOpenBaoTenant_ProvisioningFailure(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "failed to ensure tenant RBAC") {
 		t.Fatalf("expected tenant RBAC provisioning error, got %v", err)
 	}
-	if result != (recon.Result{}) {
+	if result.Result != (recon.Result{}) {
 		t.Fatalf("result=%v, want zero", result)
 	}
 
@@ -433,7 +433,7 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if result != (recon.Result{}) {
+		if result.Result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
 		}
 
@@ -496,7 +496,7 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 		if err == nil || !errors.Is(err, listErr) {
 			t.Fatalf("ReconcileOpenBaoTenant() error = %v, want tenant list error", err)
 		}
-		if result != (recon.Result{}) {
+		if result.Result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
 		}
 
@@ -532,7 +532,7 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 		if err == nil || !errors.Is(err, cleanupErr) {
 			t.Fatalf("ReconcileOpenBaoTenant() error = %v, want cleanup error", err)
 		}
-		if result != (recon.Result{}) {
+		if result.Result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
 		}
 
@@ -569,7 +569,7 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ReconcileOpenBaoTenant() error = %v", err)
 		}
-		if result != (recon.Result{}) {
+		if result.Result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
 		}
 		if getErr := runtime.Client.Get(context.Background(), req, &openbaov1alpha1.OpenBaoTenant{}); !apierrors.IsNotFound(getErr) {
@@ -760,7 +760,7 @@ func TestReconcileOpenBaoTenant_FinalizerRemoveFailureUsesMergePatchAndRetainsFi
 	if err == nil || !errors.Is(err, patchErr) {
 		t.Fatalf("ReconcileOpenBaoTenant() error = %v, want finalizer patch error", err)
 	}
-	if result != (recon.Result{}) {
+	if result.Result != (recon.Result{}) {
 		t.Fatalf("result=%v, want zero", result)
 	}
 	if updates != 0 {

@@ -89,10 +89,12 @@ func (r *NamespaceProvisionerReconciler) Reconcile(ctx context.Context, req ctrl
 	)
 
 	appResult, appErr := appprovisioner.ReconcileOpenBaoTenant(ctx, req.NamespacedName, logger, r.tenantRuntime())
-	result = controllerResult(appResult)
+	result = controllerResult(appResult.Result)
 	err = appErr
 	if err != nil {
 		recordError(err)
+	} else if appResult.OwnerAbsent || appResult.FinalizationCompleted {
+		reconcileMetrics.Clear()
 	}
 
 	return result, err
