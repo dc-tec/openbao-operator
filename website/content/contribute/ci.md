@@ -34,6 +34,7 @@ the project migrates their setup steps incrementally.
 | --- | --- |
 | Pinned environment contract | `devenv test` |
 | Core quality gates | `devenv tasks run operator:ci-core` |
+| API inventory and released CRD compatibility | `make verify-api-contract` |
 | Hugo documentation and redirects | `make docs-build` |
 | Vendored dependencies and licenses | `make verify-vendor`, `make license-check` |
 | Static and filesystem security | `make semgrep-ci`, `make security-ci` |
@@ -42,6 +43,11 @@ the project migrates their setup steps incrementally.
 | Existing platform cluster | `make test-e2e-existing` |
 
 Docs-only changes normally avoid broad cluster E2E. Backup, upgrade, security, provisioner, admission, controller-critical, or seal-path changes expand into targeted shards. Maintainers can request the full E2E set with the repository's CI label.
+
+The required `API Contract` job rejects unclassified API fields, stale inventory snapshots, and breaking or
+review-required schema changes against the released 0.5.0 CRDs. It runs for contract-related changes, pushes to
+`main`, and manual CI runs. Release validation runs the same gate before image builds and publication.
+`make report-crd-compatibility` produces a diagnostic report without weakening the required gate.
 
 The E2E manifest owns suite routing, isolation, parallelism, and supported test versions. Do not duplicate those values in workflow logic. Run `make e2e-ci-matrix` or the nightly matrix commands before changing routing.
 

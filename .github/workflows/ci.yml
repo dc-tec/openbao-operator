@@ -61,6 +61,7 @@ jobs:
       toolchain: ${{ steps.diff.outputs.toolchain }}
       docs: ${{ steps.diff.outputs.docs }}
       go_quality: ${{ steps.diff.outputs.go_quality }}
+      api_contract: ${{ steps.diff.outputs.api_contract }}
       go_toolchain: ${{ steps.diff.outputs.go_toolchain }}
       go_tests: ${{ steps.diff.outputs.go_tests }}
       config_compat: ${{ steps.diff.outputs.config_compat }}
@@ -107,7 +108,7 @@ jobs:
               echo "manual_upgrade_e2e=${MANUAL_UPGRADE_E2E}"
               echo "manual_hardened_e2e=${MANUAL_HARDENED_E2E}"
               echo "manual_seal_e2e=${MANUAL_SEAL_E2E}"
-              for key in chart workflow toolchain docs go_quality go_toolchain go_tests config_compat security_scan security_image fuzz e2e operator_upgrade_e2e e2e_backup e2e_upgrade e2e_hardened e2e_seal; do
+              for key in chart workflow toolchain docs go_quality api_contract go_toolchain go_tests config_compat security_scan security_image fuzz e2e operator_upgrade_e2e e2e_backup e2e_upgrade e2e_hardened e2e_seal; do
                 echo "${key}=false"
               done
             } >> "${GITHUB_OUTPUT}"
@@ -174,6 +175,12 @@ jobs:
             echo "go_quality=true" >> "${GITHUB_OUTPUT}"
           else
             echo "go_quality=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if changed_matches '^(api/|config/crd/|hack/tools/(api_inventory|crd_compatibility)/|test/manifests/apicontract/|go\.(mod|sum)$|vendor/|Makefile$|mk/|\.github/(workflows/(ci|release)\.yml|actions/setup-repo-tools/))'; then
+            echo "api_contract=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "api_contract=false" >> "${GITHUB_OUTPUT}"
           fi
 
           if changed_matches '^(Dockerfile(\..*)?|go\.mod$|Makefile|mk/|hack/ci/verify-go-toolchain-sync\.sh|\.github/workflows/ci\.yml)'; then
@@ -500,6 +507,26 @@ jobs:
 
       - name: Verify generated files
         run: make verify-generated
+
+  api-contract:
+    name: API Contract
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.api_contract == 'true'
+    runs-on: *runner
+    env:
+      GOFLAGS: -mod=vendor
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
+
+      - name: Test API contract enforcement
+        run: go test -count=1 ./hack/tools/api_inventory ./hack/tools/crd_compatibility ./test/manifests/apicontract
+
+      - name: Verify API contract
+        run: make verify-api-contract
 
   test-unit:
     name: Unit Tests
@@ -1183,6 +1210,7 @@ jobs:
       - go-toolchain-sync
       - verify-vendor
       - verify-generated
+      - api-contract
       - test-unit
       - test-integration
       - fuzz
@@ -1209,6 +1237,7 @@ jobs:
           GO_TOOLCHAIN_SYNC: ${{ needs.go-toolchain-sync.result }}
           VERIFY_VENDOR: ${{ needs.verify-vendor.result }}
           VERIFY_GENERATED: ${{ needs.verify-generated.result }}
+          API_CONTRACT: ${{ needs.api-contract.result }}
           TEST_UNIT: ${{ needs.test-unit.result }}
           TEST_INTEGRATION: ${{ needs.test-integration.result }}
           FUZZ: ${{ needs.fuzz.result }}
@@ -1245,6 +1274,7 @@ jobs:
           go-toolchain-sync=${GO_TOOLCHAIN_SYNC}
           verify-vendor=${VERIFY_VENDOR}
           verify-generated=${VERIFY_GENERATED}
+          api-contract=${API_CONTRACT}
           test-unit=${TEST_UNIT}
           test-integration=${TEST_INTEGRATION}
           fuzz=${FUZZ}
@@ -1337,6 +1367,7 @@ jobs:
       - go-toolchain-sync
       - verify-vendor
       - verify-generated
+      - api-contract
       - test-unit
       - test-integration
       - openbao-config-compat
