@@ -17,6 +17,9 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"os"
 
@@ -28,35 +31,46 @@ import (
 
 	"github.com/dc-tec/openbao-operator/cmd/controller"
 	"github.com/dc-tec/openbao-operator/cmd/provisioner"
+	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
 )
 
-var (
-	setupLog = ctrl.Log.WithName("setup")
-)
-
-func run() error {
-	if len(os.Args) < 2 {
-		return fmt.Errorf("missing command (valid commands: provisioner, controller)")
+func run(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return &entrypoint.UsageError{Err: fmt.Errorf("missing command (valid commands: provisioner, controller)")}
 	}
 
-	// Shift args so flag parsing works inside sub-functions (e.g., --leader-elect)
-	command := os.Args[1]
-	args := os.Args[2:]
-
-	switch command {
+	switch command := args[0]; command {
 	case "provisioner":
-		provisioner.Run(args)
+		return provisioner.Run(ctx, args[1:])
 	case "controller":
-		controller.Run(args)
+		return controller.Run(ctx, args[1:])
+	case "-h", "--help":
+		fmt.Fprintln(os.Stderr, "Usage: manager <controller|provisioner> [flags]")
+		return flag.ErrHelp
 	default:
-		return fmt.Errorf("unknown command %q (valid commands: provisioner, controller)", command)
+		return &entrypoint.UsageError{
+			Err: fmt.Errorf("unknown command %q (valid commands: provisioner, controller)", command),
+		}
 	}
-	return nil
+}
+
+func exitCode(err error) int {
+	if err == nil || errors.Is(err, flag.ErrHelp) {
+		return 0
+	}
+	var usageError *entrypoint.UsageError
+	if errors.As(err, &usageError) {
+		return 2
+	}
+	return 1
 }
 
 func main() {
-	if err := run(); err != nil {
-		setupLog.Error(err, "command failed")
-		os.Exit(1)
+	err := run(ctrl.SetupSignalHandler(), os.Args[1:])
+	code := exitCode(err)
+	if code != 0 {
+		// Argument and kubeconfig failures can occur before logging is configured.
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(code)
 	}
 }

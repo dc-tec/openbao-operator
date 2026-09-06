@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	AdmissionEnforcementFail        = "fail"
-	AdmissionEnforcementWarn        = "warn"
-	AdmissionEnforcementExpectedMsg = "expected --admission-enforcement=fail or warn"
+	AdmissionEnforcementFail = "fail"
+	AdmissionEnforcementWarn = "warn"
 )
 
 // NormalizeAdmissionEnforcement validates and canonicalizes admission enforcement mode.

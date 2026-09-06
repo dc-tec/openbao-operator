@@ -14,8 +14,9 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -31,41 +32,59 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-func detectPlatform(cfg *rest.Config) string {
-	clientset, err := kubernetes.NewForConfig(cfg)
+const platformDiscoveryTimeout = 10 * time.Second
+
+func detectPlatform(ctx context.Context, cfg *rest.Config) (string, error) {
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
-		return constants.PlatformKubernetes
+		return "", fmt.Errorf("create platform discovery client: %w", err)
 	}
 
-	groups, err := clientset.Discovery().ServerGroups()
-	if err != nil {
-		return constants.PlatformKubernetes
+	discoveryCtx, cancel := context.WithTimeout(ctx, platformDiscoveryTimeout)
+	defer cancel()
+	// Request the named API groups in legacy JSON format so discovery remains
+	// cancellable. ServerGroups does not accept the startup context.
+	groups := &metav1.APIGroupList{}
+	if err := discoveryClient.RESTClient().Get().AbsPath("/apis").
+		SetHeader("Accept", "application/json").Do(discoveryCtx).Into(groups); err != nil {
+		return "", fmt.Errorf("discover target platform: %w", err)
 	}
 
-	for _, g := range groups.Groups {
-		if g.Name == "security.openshift.io" {
-			return constants.PlatformOpenShift
+	for _, group := range groups.Groups {
+		if group.Name == "security.openshift.io" {
+			return constants.PlatformOpenShift, nil
 		}
 	}
-
-	return constants.PlatformKubernetes
+	return constants.PlatformKubernetes, nil
 }
 
-func resolvePlatform(config *rest.Config, configured string) string {
+func configuredPlatform(configured, environment string) (string, error) {
 	platform := configured
-	if envPlatform := strings.TrimSpace(os.Getenv("OPERATOR_PLATFORM")); envPlatform != "" {
-		platform = strings.ToLower(envPlatform)
+	if strings.TrimSpace(environment) != "" {
+		platform = environment
 	}
+	platform = strings.ToLower(strings.TrimSpace(platform))
 	if platform == "" {
 		platform = constants.PlatformAuto
 	}
-	if platform == constants.PlatformAuto {
-		detected := detectPlatform(config)
-		setupLog.Info("Auto-detected target platform", "platform", detected)
-		return detected
+	switch platform {
+	case constants.PlatformAuto, constants.PlatformKubernetes, constants.PlatformOpenShift:
+		return platform, nil
+	default:
+		return "", fmt.Errorf("invalid target platform %q: expected auto, kubernetes, or openshift", platform)
 	}
+}
 
-	return platform
+func resolvePlatform(ctx context.Context, config *rest.Config, configured string) (string, error) {
+	if configured == constants.PlatformAuto {
+		detected, err := detectPlatform(ctx, config)
+		if err != nil {
+			return "", err
+		}
+		setupLog.Info("Auto-detected target platform", "platform", detected)
+		return detected, nil
+	}
+	return configured, nil
 }
 
 func newManagerOptions(
@@ -121,8 +140,8 @@ func newManagerOptions(
 	return mgrOpts
 }
 
-func discoverStartupOIDC(config *rest.Config) *portauth.OIDCConfig {
-	oidcConfig, err := auth.DiscoverConfig(context.Background(), config, "")
+func discoverStartupOIDC(ctx context.Context, config *rest.Config) *portauth.OIDCConfig {
+	oidcConfig, err := auth.DiscoverConfig(ctx, config, "")
 	if err != nil {
 		setupLog.Error(err, "Failed to discover Kubernetes OIDC configuration. Hardened profile requires OIDC.")
 		if oidcConfig == nil {
@@ -144,12 +163,13 @@ func discoverStartupOIDC(config *rest.Config) *portauth.OIDCConfig {
 }
 
 func initializeAdmissionTracker(
-	mgr ctrl.Manager,
+	ctx context.Context,
+	reader client.Reader,
 	admissionEnforcement string,
 	admissionStartupTimeout time.Duration,
-) *admission.Tracker {
+) (*admission.Tracker, error) {
 	admissionTracker := admission.NewTracker(
-		mgr.GetAPIReader(),
+		reader,
 		admission.DefaultDependencies(),
 		admission.DefaultNamePrefixes(),
 		30*time.Second,
@@ -163,7 +183,7 @@ func initializeAdmissionTracker(
 		})
 		admission.SetAdmissionDependenciesReady(true)
 		admissionTracker.MarkReadyForUnsafeMode()
-		return admissionTracker
+		return admissionTracker, nil
 	}
 
 	var admissionStatus admission.Status
@@ -171,8 +191,8 @@ func initializeAdmissionTracker(
 	case entrypoint.AdmissionEnforcementFail:
 		setupLog.Info("Waiting for admission policy dependencies", "timeout", admissionStartupTimeout)
 		status, err := admission.WaitForDependencies(
-			context.Background(),
-			mgr.GetAPIReader(),
+			ctx,
+			reader,
 			admission.DefaultDependencies(),
 			admission.DefaultNamePrefixes(),
 			admissionStartupTimeout,
@@ -194,14 +214,16 @@ func initializeAdmissionTracker(
 				"summary",
 				admissionStatus.SummaryMessage(),
 			)
-			os.Exit(1)
+			admission.SetAdmissionDependenciesReady(false)
+			return nil, fmt.Errorf("admission policy dependencies not ready (%s): %w",
+				admissionStatus.SummaryMessage(), err)
 		}
 	default:
-		admissionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		admissionCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		status, err := admission.CheckDependencies(
 			admissionCtx,
-			mgr.GetAPIReader(),
+			reader,
 			admission.DefaultDependencies(),
 			admission.DefaultNamePrefixes(),
 		)
@@ -229,7 +251,7 @@ func initializeAdmissionTracker(
 		})
 	}
 
-	return admissionTracker
+	return admissionTracker, nil
 }
 
 func operatorNamespaceFromEnv() string {

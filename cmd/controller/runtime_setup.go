@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/client-go/kubernetes"
@@ -33,6 +34,7 @@ type controllerProcessRuntime struct {
 }
 
 func buildControllerProcessRuntime(
+	ctx context.Context,
 	mgr ctrl.Manager,
 	cfg runConfig,
 	platform string,
@@ -82,8 +84,13 @@ func buildControllerProcessRuntime(
 		)
 	}
 
-	oidcConfig := discoverStartupOIDC(config)
-	admissionTracker := initializeAdmissionTracker(mgr, cfg.admissionEnforcement, cfg.admissionStartupTimeout)
+	oidcConfig := discoverStartupOIDC(ctx, config)
+	admissionTracker, err := initializeAdmissionTracker(
+		ctx, mgr.GetAPIReader(), cfg.admissionEnforcement, cfg.admissionStartupTimeout,
+	)
+	if err != nil {
+		return controllerProcessRuntime{}, err
+	}
 	clientFactory := func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return openbao.NewClient(config)
 	}

@@ -24,22 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// Note: OIDC/JWKS tests have been moved to internal/adapter/auth/oidc_test.go
-// These tests verify the controller's integration with the auth package.
-
-// TestRun verifies that Run can be called without panicking.
-// This is a minimal smoke test to ensure the function signature is correct.
-func TestRun(t *testing.T) {
-	// This test verifies that Run accepts []string args as expected
-	// Full integration tests would require a real Kubernetes cluster
-	// and are covered in e2e tests.
-
-	// Test that Run function exists and accepts the correct signature
-	// We can't easily test the full Run() function without a real cluster,
-	// so this is a placeholder for future integration tests.
-	_ = Run
-}
-
 func TestUnavailableHelperImageDefaultFields(t *testing.T) {
 	t.Run("returns all helper image fields when operator version is missing", func(t *testing.T) {
 		t.Setenv(constants.EnvOperatorVersion, "")
