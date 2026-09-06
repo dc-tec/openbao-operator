@@ -8,6 +8,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
@@ -90,20 +91,23 @@ func (m *Manager) startUpgradeExecutionIfNeeded(
 	if cluster.Status.Upgrade != nil {
 		return nil
 	}
-	return upgrade.StartRootUpgradeLifecycle(ctx, logger, cluster, metrics, strategy, upgrade.RootUpgradeStartOptions{
-		Persist: func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, start upgrade.RootUpgradeSessionStart) error {
-			if err := m.setStatefulSetPartition(ctx, cluster, start.Replicas); err != nil {
-				return fmt.Errorf("failed to lock StatefulSet partition: %w", err)
-			}
-			if err := m.patchUpgradeStatus(ctx, cluster); err != nil {
-				return fmt.Errorf("failed to update status after initializing upgrade: %w", err)
-			}
-			return nil
-		},
-		EmitEvent: func(fromVersion, toVersion string) {
-			m.emitNormalEvent(cluster, upgrade.ReasonUpgradeStarted, upgrade.MessageUpgradeStarted, fromVersion, toVersion)
-		},
-	})
+	fromVersion, toVersion, replicas := cluster.Status.CurrentVersion, cluster.Spec.Version, cluster.Spec.Replicas
+	logger.Info("Initializing upgrade", "from", fromVersion, "to", toVersion, "replicas", replicas)
+	core.SetUpgradeStarted(&cluster.Status, fromVersion, toVersion, replicas)
+	if err := m.setStatefulSetPartition(ctx, cluster, replicas); err != nil {
+		return fmt.Errorf("failed to lock StatefulSet partition: %w", err)
+	}
+	if err := m.patchUpgradeStatus(ctx, cluster); err != nil {
+		return fmt.Errorf("failed to update status after initializing upgrade: %w", err)
+	}
+
+	if metrics != nil {
+		metrics.IncrementTotal(strategy)
+	}
+	logging.LogAuditEvent(logger, logging.EventUpgradeStarted, upgrade.UpgradeStartedAuditFields(cluster, strategy, fromVersion, toVersion))
+	m.emitNormalEvent(cluster, upgrade.ReasonUpgradeStarted, upgrade.MessageUpgradeStarted, fromVersion, toVersion)
+	logger.Info("Upgrade initialized", "partition", replicas)
+	return nil
 }
 
 func (m *Manager) resumeUpgradeState(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, resumeUpgrade bool) error {

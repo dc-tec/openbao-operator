@@ -3,13 +3,16 @@ package rolling
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
 func (m *Manager) reconcileUpgradeExecution(
@@ -45,20 +48,30 @@ func (m *Manager) finalizeConvergedUpgrade(
 		return m.requeueAfterProgressPatch(ctx, cluster, "failed to persist upgrade progress while waiting for convergence")
 	}
 
-	if err := upgrade.CompleteRootUpgradeLifecycle(ctx, logger, cluster, metrics, strategy, upgrade.RootUpgradeCompletionOptions{
-		Persist: func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, _ upgrade.RootUpgradeSessionCompletion) error {
-			if err := m.patchFinalizedUpgradeStatus(ctx, cluster); err != nil {
-				return fmt.Errorf("failed to update status after completing upgrade: %w", err)
-			}
-			return nil
-		},
-		EmitEvent: func(fromVersion, toVersion string) {
-			m.emitNormalEvent(cluster, upgrade.ReasonUpgradeComplete, upgrade.MessageUpgradeComplete, fromVersion, toVersion)
-		},
-	}); err != nil {
-		return recon.Result{}, err
+	// Capture completion details before clearing progress or reading status back.
+	fromVersion, toVersion := "", cluster.Spec.Version
+	var duration time.Duration
+	if cluster.Status.Upgrade != nil {
+		fromVersion = cluster.Status.Upgrade.FromVersion
+		if cluster.Status.Upgrade.StartedAt != nil {
+			duration = time.Since(cluster.Status.Upgrade.StartedAt.Time)
+		}
+	}
+	core.SetUpgradeComplete(&cluster.Status, toVersion)
+	if err := m.patchFinalizedUpgradeStatus(ctx, cluster); err != nil {
+		return recon.Result{}, fmt.Errorf("failed to update status after completing upgrade: %w", err)
 	}
 
+	if metrics != nil {
+		if duration > 0 {
+			metrics.RecordDuration(duration.Seconds(), fromVersion, toVersion)
+		}
+		upgrade.SetTerminalProgressMetrics(metrics, upgrade.UpgradeStatusSuccess)
+		metrics.IncrementSuccess(strategy)
+	}
+	logging.LogAuditEvent(logger, logging.EventUpgradeCompleted, upgrade.UpgradeCompletedAuditFields(cluster, strategy, toVersion))
+	m.emitNormalEvent(cluster, upgrade.ReasonUpgradeComplete, upgrade.MessageUpgradeComplete, fromVersion, toVersion)
+	logger.Info("Upgrade completed successfully", "version", toVersion, "duration", duration.Seconds())
 	return recon.Result{}, nil
 }
 
