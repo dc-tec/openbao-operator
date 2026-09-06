@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -317,12 +316,9 @@ func TestPrepareFailedUpgradeRetry_WaitsForStatefulSetTemplateToMatchRetryTarget
 
 	mgr := &Manager{client: k8sClient, scheme: scheme}
 
-	resumed, err := mgr.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster)
+	err := mgr.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster, upgrade.RetryRequestValue(cluster))
 	if err == nil {
 		t.Fatal("prepareFailedUpgradeRetry() error=nil, want transient retry wait")
-	}
-	if resumed {
-		t.Fatal("prepareFailedUpgradeRetry() resumed=true, want false")
 	}
 	if !errors.Is(err, operatorerrors.ErrTransientKubernetesAPI) {
 		t.Fatalf("prepareFailedUpgradeRetry() error = %v, want transient Kubernetes API error", err)
@@ -495,12 +491,9 @@ func TestPrepareFailedUpgradeRetry_DeletesStaleCompletedPod(t *testing.T) {
 		adminOpsMutator: testAdminOpsMutator(k8sClient),
 	}
 
-	resumed, err := manager.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster)
+	err := manager.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster, upgrade.RetryRequestValue(cluster))
 	if err != nil {
 		t.Fatalf("prepareFailedUpgradeRetry() error = %v, want nil", err)
-	}
-	if !resumed {
-		t.Fatal("prepareFailedUpgradeRetry() resumed=false, want true")
 	}
 
 	remainingTargetPod := &corev1.Pod{}
@@ -546,98 +539,6 @@ func retryPodForResetTest(namespace, name, revision, image string, ready bool) *
 		}
 	}
 	return pod
-}
-
-func TestPrepareFailedUpgradeRetry_GuardConditions(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		cluster *openbaov1alpha1.OpenBaoCluster
-	}{
-		{
-			name:    "nil cluster",
-			cluster: nil,
-		},
-		{
-			name: "nil upgrade status",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{Version: "2.5.0"},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					Upgrade: nil,
-				},
-			},
-		},
-		{
-			name: "empty failure reason",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{Version: "2.5.0"},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion: "2.5.0",
-						Failure:       &openbaov1alpha1.ControllerErrorStatus{},
-					},
-				},
-			},
-		},
-		{
-			name: "target version mismatch",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{Version: "2.5.1"},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion: "2.5.0",
-						Failure: &openbaov1alpha1.ControllerErrorStatus{
-							Reason: upgrade.ReasonUpgradeFailed,
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "missing retry request",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{Version: "2.5.0"},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion: "2.5.0",
-						Failure: &openbaov1alpha1.ControllerErrorStatus{
-							Reason: upgrade.ReasonUpgradeFailed,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	mgr := &Manager{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			before := (*openbaov1alpha1.OpenBaoCluster)(nil)
-			if tt.cluster != nil {
-				before = tt.cluster.DeepCopy()
-			}
-
-			resumed, err := mgr.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), tt.cluster)
-			if err != nil {
-				t.Fatalf("prepareFailedUpgradeRetry() unexpected error: %v", err)
-			}
-			if resumed {
-				t.Fatalf("prepareFailedUpgradeRetry() resumed=true, want false")
-			}
-
-			if tt.cluster != nil && before != nil {
-				if tt.cluster.Status.Upgrade == nil && before.Status.Upgrade != nil {
-					t.Fatalf("Upgrade unexpectedly changed from non-nil to nil")
-				}
-				if tt.cluster.Status.Upgrade != nil && before.Status.Upgrade != nil && !reflect.DeepEqual(tt.cluster.Status.Upgrade.Failure, before.Status.Upgrade.Failure) {
-					t.Fatalf("Failure mutated to %#v, want unchanged %#v", tt.cluster.Status.Upgrade.Failure, before.Status.Upgrade.Failure)
-				}
-			}
-		})
-	}
 }
 
 func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *testing.T) {
@@ -773,12 +674,9 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 				adminOpsMutator: testAdminOpsMutator(k8sClient),
 			}
 
-			resumed, err := mgr.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster)
+			err := mgr.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster, upgrade.RetryRequestValue(cluster))
 			if err != nil {
 				t.Fatalf("prepareFailedUpgradeRetry() unexpected error: %v", err)
-			}
-			if !resumed {
-				t.Fatalf("prepareFailedUpgradeRetry() resumed=false, want true")
 			}
 
 			if cluster.Status.Upgrade == nil {

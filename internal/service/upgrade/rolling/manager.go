@@ -116,12 +116,18 @@ func (m *Manager) reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return result, nil
 	}
 
-	upgradeNeeded, resumeUpgrade := m.detectUpgradeState(logger, cluster, acknowledgements)
-	if result, done, err := m.ensureUpgradeLock(ctx, logger, cluster, metrics, strategy, upgradeNeeded, resumeUpgrade); done || err != nil {
+	decision := decideUpgrade(cluster)
+	acknowledgements.Merge(decision.acknowledgements)
+	if decision.action != upgradeIdle {
+		logger.Info("Selected rolling upgrade action", "action", decision.action,
+			"failureReason", upgrade.UpgradeFailureReason(cluster.Status.Upgrade),
+			"retryRequestField", upgrade.RequestRetryFieldPath)
+	}
+	if result, done, err := m.ensureUpgradeLock(ctx, logger, cluster, metrics, strategy, decision.action); done || err != nil {
 		return result, err
 	}
 
-	if result, done, err := m.prepareUpgradeExecution(ctx, logger, cluster, metrics, strategy, resumeUpgrade); done || err != nil {
+	if result, done, err := m.prepareUpgradeExecution(ctx, logger, cluster, metrics, strategy, decision); done || err != nil {
 		return result, err
 	}
 

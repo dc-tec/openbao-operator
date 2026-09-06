@@ -20,9 +20,9 @@ func (m *Manager) prepareUpgradeExecution(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	metrics *upgrade.Metrics,
 	strategy string,
-	resumeUpgrade bool,
+	decision upgradeDecision,
 ) (recon.Result, bool, error) {
-	if err := m.resumeUpgradeState(ctx, logger, cluster, resumeUpgrade); err != nil {
+	if err := m.applyUpgradeDecision(ctx, logger, cluster, decision); err != nil {
 		return recon.Result{}, false, err
 	}
 
@@ -110,20 +110,17 @@ func (m *Manager) startUpgradeExecutionIfNeeded(
 	return nil
 }
 
-func (m *Manager) resumeUpgradeState(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, resumeUpgrade bool) error {
-	if !resumeUpgrade || cluster.Status.Upgrade == nil {
-		return nil
-	}
-
-	if cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion {
+func (m *Manager) applyUpgradeDecision(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, decision upgradeDecision) error {
+	switch decision.action {
+	case upgradeRetarget:
 		logger.Info("Spec.Version changed during upgrade; clearing upgrade state and starting fresh",
 			"previousTarget", cluster.Status.Upgrade.TargetVersion,
 			"newTarget", cluster.Spec.Version)
 		core.ClearUpgrade(&cluster.Status)
+	case upgradeRetry:
+		return m.prepareFailedUpgradeRetry(ctx, logger, cluster, decision.retryRequest)
 	}
-
-	_, err := m.prepareFailedUpgradeRetry(ctx, logger, cluster)
-	return err
+	return nil
 }
 
 func (m *Manager) persistValidationFailure(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, validationErr error) error {

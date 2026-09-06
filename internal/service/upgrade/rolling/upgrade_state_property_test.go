@@ -2,10 +2,10 @@ package rolling
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -14,7 +14,7 @@ import (
 	"pgregory.net/rapid"
 )
 
-func TestDetectUpgradeStateRetryProperties(t *testing.T) {
+func TestUpgradeDecisionProperties(t *testing.T) {
 	t.Parallel()
 
 	rapid.Check(t, func(rt *rapid.T) {
@@ -46,72 +46,44 @@ func TestDetectUpgradeStateRetryProperties(t *testing.T) {
 			},
 		}
 
-		wantUpgradeNeeded, wantResumeUpgrade, wantHandledRetry := expectedDetectUpgradeState(cluster)
-
-		var acknowledgements upgrade.RequestAcknowledgements
-		gotUpgradeNeeded, gotResumeUpgrade := (&Manager{}).detectUpgradeState(logr.Discard(), cluster, &acknowledgements)
-		if cluster.Status.UpgradeRequests.LastHandledRetry != lastHandledRetry {
-			t.Fatal("detectUpgradeState changed the observed retry acknowledgement")
+		before := cluster.DeepCopy()
+		decision := decideUpgrade(cluster)
+		if !reflect.DeepEqual(before, cluster) {
+			rt.Fatal("decision changed observed state")
 		}
-
-		if gotUpgradeNeeded != wantUpgradeNeeded {
-			t.Fatalf("upgradeNeeded = %t, want %t for cluster=%+v", gotUpgradeNeeded, wantUpgradeNeeded, cluster)
+		pending := strings.TrimSpace(retryRequest) != "" && strings.TrimSpace(retryRequest) != strings.TrimSpace(lastHandledRetry)
+		failed := upgrade.UpgradeFailed(upgradeProgress)
+		matchingTarget := upgradeProgress != nil && upgradeProgress.TargetVersion == specVersion
+		valid := false
+		switch decision.action {
+		case upgradeIdle:
+			valid = upgradeProgress == nil && (currentVersion == "" || currentVersion == specVersion)
+		case upgradeStart:
+			valid = upgradeProgress == nil && currentVersion != "" && currentVersion != specVersion
+		case upgradeResume:
+			valid = matchingTarget && !failed
+		case upgradeRetarget:
+			valid = upgradeProgress != nil && !matchingTarget
+		case upgradeRetry:
+			valid = matchingTarget && failed && pending
+		case upgradeWaitForRetry:
+			valid = matchingTarget && failed && !pending
 		}
-		if gotResumeUpgrade != wantResumeUpgrade {
-			t.Fatalf("resumeUpgrade = %t, want %t for cluster=%+v", gotResumeUpgrade, wantResumeUpgrade, cluster)
+		if !valid {
+			rt.Fatalf("action %s violates its preconditions: cluster=%+v", decision.action, cluster)
 		}
-		gotHandledRetry := ""
-		if cluster.Status.UpgradeRequests != nil {
-			gotHandledRetry = cluster.Status.UpgradeRequests.LastHandledRetry
+		wantRetry, wantIgnored := "", ""
+		if pending {
+			if matchingTarget && failed {
+				wantRetry = strings.TrimSpace(retryRequest)
+			} else {
+				wantIgnored = strings.TrimSpace(retryRequest)
+			}
 		}
-		if acknowledgements.Retry != "" {
-			gotHandledRetry = acknowledgements.Retry
-		}
-		if gotHandledRetry != wantHandledRetry {
-			t.Fatalf("LastHandledRetry = %q, want %q for retryRequest=%q upgrade=%+v",
-				gotHandledRetry, wantHandledRetry, retryRequest, upgradeProgress)
+		if decision.retryRequest != wantRetry || decision.acknowledgements.Retry != wantIgnored {
+			rt.Fatalf("retry=%q ignored=%q, want retry=%q ignored=%q", decision.retryRequest, decision.acknowledgements.Retry, wantRetry, wantIgnored)
 		}
 	})
-}
-
-func expectedDetectUpgradeState(cluster *openbaov1alpha1.OpenBaoCluster) (bool, bool, string) {
-	storedHandledRetry := ""
-	handledRetry := ""
-	if cluster.Status.UpgradeRequests != nil {
-		storedHandledRetry = cluster.Status.UpgradeRequests.LastHandledRetry
-		handledRetry = strings.TrimSpace(storedHandledRetry)
-	}
-	retryRequest := upgrade.RetryRequestValue(cluster)
-	retryPending := retryRequest != "" && retryRequest != handledRetry
-
-	if retryPending &&
-		(cluster.Status.Upgrade == nil ||
-			!upgrade.UpgradeFailed(cluster.Status.Upgrade) ||
-			cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion) {
-		storedHandledRetry = retryRequest
-		retryPending = false
-	}
-
-	if cluster.Status.Upgrade != nil {
-		if upgrade.UpgradeFailed(cluster.Status.Upgrade) {
-			if cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion {
-				return false, true, storedHandledRetry
-			}
-			if !retryPending {
-				return false, false, storedHandledRetry
-			}
-			return false, true, storedHandledRetry
-		}
-		return false, true, storedHandledRetry
-	}
-
-	if cluster.Status.CurrentVersion == "" {
-		return false, false, storedHandledRetry
-	}
-	if cluster.Spec.Version == cluster.Status.CurrentVersion {
-		return false, false, storedHandledRetry
-	}
-	return true, false, storedHandledRetry
 }
 
 func upgradeProgressGenerator(specVersion string) *rapid.Generator[*openbaov1alpha1.UpgradeProgress] {
