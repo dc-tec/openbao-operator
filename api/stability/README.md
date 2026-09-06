@@ -4,6 +4,11 @@
 `spec` and `status` path in the three served CRDs. It is a release-planning contract,
 not a declaration that `v1alpha1` is already stable.
 
+Its `baseline: 0.4.2` and `release: 0.5.0` preserve the approved migration's
+provenance. The operator-upgrade E2E harness uses these fields to select its
+release notes and migration fixtures. They do not select the schema checker's
+compatibility baseline, which advances independently after a supported release.
+
 The inventory uses inherited path rules. Every top-level field requires an explicit
 rule, while nested fields inherit the closest matching rule unless a more specific
 decision overrides it. The checker expands those rules against the generated CRD
@@ -54,21 +59,53 @@ Render the fully resolved field table for review with:
 go run ./hack/tools/api_inventory --format markdown
 ```
 
-## CRD compatibility report
+## CRD compatibility gate
 
-`baselines/0.4.2.json` is a normalized snapshot of the CRDs shipped in the
-`0.4.2` release asset. The snapshot records the source asset SHA-256 digest so
-the comparison remains tied to what users installed rather than to a mutable
-source checkout.
+`baselines/0.5.0.json` is the supported baseline. It records the normalized schemas
+from the [released 0.5.0 CRD bundle](https://github.com/dc-tec/openbao-operator/releases/download/0.5.0/crds.yaml),
+whose SHA-256 digest is `58bf30cec5c7a98e931f25a80c60deaa5bbcad3df7e57d227445d4b0a0f62af8`.
+Keep `baselines/0.4.2.json` for historical comparisons.
 
-Run the report with:
+Run the inventory and compatibility gate with:
+
+```sh
+make verify-api-contract
+```
+
+The gate rejects breaking and review-required schema changes, including field
+removal, validation tightening, and changed defaults. Updating the inventory
+snapshot does not authorize an incompatible schema change. The approved 0.5.0
+field decisions remain in effect; this gate does not graduate `v1alpha1` to beta.
+
+The `API Contract` job runs for API, CRD, checker, gate-test, dependency, build-rule,
+and gate-workflow changes, every push to `main`, and manual CI runs. `CI Required`
+includes its result. Edge candidate builds and release image builds also depend
+on this gate. Release validation verifies generated artifacts before checking
+the API contract and labels the report with the release tag. Other runs use `next`.
+
+For a diagnostic report that does not reject schema differences, run:
 
 ```sh
 make report-crd-compatibility
 ```
 
-The 0.5.0 stabilization cycle runs this check in report-only mode so intentional
-pre-beta removals and validation tightening stay visible without blocking the
-work. After 0.5.0 is published, generate a baseline from its released
-`crds.yaml` asset and switch `CRD_COMPAT_MODE` to `enforce` so breaking or
-review-required changes fail CI by default.
+`verify-api-contract` always enforces compatibility. The former
+`CRD_COMPAT_MODE=report` override cannot weaken this gate. The Go checker also
+defaults to enforcement; use `--mode report` for a direct diagnostic invocation.
+
+After a supported release, download its published `crds.yaml` and generate the
+next baseline from that asset. Replace `<release>` with the published tag and
+`/path/to/released/crds.yaml` with the downloaded asset path:
+
+```sh
+go run ./hack/tools/crd_compatibility \
+  --write-baseline api/stability/baselines/<release>.json \
+  --baseline-bundle /path/to/released/crds.yaml --release <release>
+```
+
+Review the recorded digest and update the checker default. Preserve the inventory's
+approved migration metadata unless a new migration plan, release notes, and upgrade
+fixtures are reviewed together. Run `make verify-api-contract verify-operator-upgrade-e2e`
+to check both contracts. Never replace a released baseline with schemas generated
+from the current checkout. A planned incompatible change requires a reviewed
+migration and compatibility-policy change before integration.

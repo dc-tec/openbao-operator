@@ -170,11 +170,18 @@ verify-generated: manifests generate api-reference ## Verify generated artifacts
 verify-api-stability-inventory: ## Verify every served CRD field has a proposed or approved stability classification.
 	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/api_inventory
 
-CRD_COMPAT_MODE ?= report
+CRD_COMPAT_TARGET ?= next
+
+.PHONY: verify-crd-compatibility
+verify-crd-compatibility: ## Reject breaking or review-required CRD schema changes against the supported release baseline.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/crd_compatibility --mode enforce --target "$(CRD_COMPAT_TARGET)"
+
+.PHONY: verify-api-contract
+verify-api-contract: verify-api-stability-inventory verify-crd-compatibility ## Enforce the served API inventory and release compatibility contract.
 
 .PHONY: report-crd-compatibility
 report-crd-compatibility: ## Report CRD schema compatibility against the supported release baseline.
-	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/crd_compatibility --mode "$(CRD_COMPAT_MODE)"
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/crd_compatibility --mode report --target "$(CRD_COMPAT_TARGET)"
 
 .PHONY: update-api-stability-inventory
 update-api-stability-inventory: ## Update the resolved CRD stability snapshot after an intentional API or inventory change.

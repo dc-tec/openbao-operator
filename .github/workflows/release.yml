@@ -101,9 +101,35 @@ jobs:
           echo "Merge the release-please PR and allow the tag workflow to create the tag and draft release." >&2
           exit 1
 
+  api-contract:
+    name: API Contract Gate
+    runs-on: *runner
+    needs: prepare
+    env:
+      GOFLAGS: -mod=vendor
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
+
+      - name: Test API contract enforcement
+        run: go test -count=1 ./hack/tools/api_inventory ./hack/tools/crd_compatibility ./test/manifests/apicontract
+
+      - name: Verify generated files
+        run: make verify-generated
+
+      - name: Verify API contract
+        env:
+          CRD_COMPAT_TARGET: ${{ needs.prepare.outputs.version }}
+        run: make verify-api-contract
+
   build:
     name: Build Images
-    needs: prepare
+    needs: [prepare, api-contract]
     permissions:
       contents: read
       packages: write
@@ -119,7 +145,7 @@ jobs:
 
   rebuild:
     name: Independent Rebuild Images
-    needs: prepare
+    needs: [prepare, api-contract]
     permissions:
       contents: read
       packages: write
@@ -783,6 +809,7 @@ jobs:
     needs:
       - prepare
       - build
+      - api-contract
       - security-govulncheck
       - security-images
       - e2e

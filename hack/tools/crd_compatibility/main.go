@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	defaultBaselinePath = "api/stability/baselines/0.4.2.json"
+	defaultBaselinePath = "api/stability/baselines/0.5.0.json"
 	defaultCurrentDir   = "config/crd/bases"
-	defaultTarget       = "0.5.0"
+	defaultTarget       = "next"
 	impactBreaking      = "breaking"
 	impactCompatible    = "compatible"
 	impactReview        = "review"
@@ -117,7 +117,7 @@ func parseOptions() (options, error) {
 	flag.StringVar(&opts.BaselinePath, "baseline", defaultBaselinePath, "normalized baseline snapshot")
 	flag.StringVar(&opts.CurrentDir, "current-dir", defaultCurrentDir, "directory containing current generated CRDs")
 	flag.StringVar(&opts.Format, "format", "markdown", "output format: markdown or json")
-	flag.StringVar(&opts.Mode, "mode", "report", "compatibility mode: report or enforce")
+	flag.StringVar(&opts.Mode, "mode", "enforce", "compatibility mode: report or enforce")
 	flag.StringVar(&opts.Target, "target", defaultTarget, "target release label")
 	flag.StringVar(&opts.WriteBaseline, "write-baseline", "", "write a normalized baseline snapshot to this path")
 	flag.StringVar(&opts.BaselineBundle, "baseline-bundle", "", "released CRD YAML bundle used with --write-baseline")
@@ -682,12 +682,16 @@ func writeReport(writer io.Writer, result report, format string) error {
 	for _, item := range result.Changes {
 		counts[item.Impact]++
 	}
+	modeLabel := "enforced"
+	if result.Mode == "report" {
+		modeLabel = "report-only"
+	}
 	if _, err := fmt.Fprintf(
 		writer,
-		"CRD compatibility: %s -> %s (%s-only)\n",
+		"CRD compatibility: %s -> %s (%s)\n",
 		result.Baseline,
 		result.Target,
-		result.Mode,
+		modeLabel,
 	); err != nil {
 		return err
 	}
