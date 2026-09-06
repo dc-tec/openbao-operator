@@ -7,6 +7,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	adminopsapp "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminops"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // AdminOpsDependencies holds dependencies required to build admin operations reconcilers.
@@ -24,9 +25,10 @@ func NewAdminOpsApplication(deps AdminOpsDependencies) *AdminOpsApplication {
 			logger logr.Logger,
 			original *openbaov1alpha1.OpenBaoCluster,
 			cluster *openbaov1alpha1.OpenBaoCluster,
+			acknowledgements upgrade.RequestAcknowledgements,
 			reason string,
 		) error {
-			return PatchAdminOpsOwnedFieldsWithReader(ctx, deps.APIReader, deps.Client, logger, original, cluster, reason)
+			return PatchAdminOpsOwnedFieldsWithReader(ctx, deps.APIReader, deps.Client, logger, original, cluster, acknowledgements, reason)
 		},
 		controllerErrorStatus,
 	)

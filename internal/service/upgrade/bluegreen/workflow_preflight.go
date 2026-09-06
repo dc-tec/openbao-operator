@@ -48,6 +48,7 @@ func (m *Manager) prepareBlueGreenReconcile(
 	ctx context.Context,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
+	acknowledgements *upgrade.RequestAcknowledgements,
 ) (recon.Result, bool, error) {
 	if err := upgrade.EnsureUpgradeServiceAccount(ctx, m.client, cluster, constants.FieldOwnerOpenBaoOperator); err != nil {
 		return recon.Result{}, false, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
@@ -63,7 +64,7 @@ func (m *Manager) prepareBlueGreenReconcile(
 		return requeueStandard(), true, nil
 	}
 
-	m.handleUnexpectedPromoteRequest(logger, cluster)
+	m.handleUnexpectedPromoteRequest(logger, cluster, acknowledgements)
 
 	upgradeActive, upgradeNeeded := core.BlueGreenUpgradeState(cluster)
 
@@ -100,7 +101,7 @@ func shouldWaitForSteadyReadReplicaDrain(cluster *openbaov1alpha1.OpenBaoCluster
 	return core.CurrentBlueGreenPhase(cluster) != openbaov1alpha1.PhaseRestoringReadReplicas
 }
 
-func (m *Manager) handleUnexpectedPromoteRequest(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
+func (m *Manager) handleUnexpectedPromoteRequest(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, acknowledgements *upgrade.RequestAcknowledgements) {
 	if !upgrade.PromoteRequestPending(cluster) {
 		return
 	}
@@ -111,7 +112,7 @@ func (m *Manager) handleUnexpectedPromoteRequest(logger logr.Logger, cluster *op
 	}
 
 	promoteRequest := upgrade.PromoteRequestValue(cluster)
-	upgrade.MarkPromoteRequestHandled(&cluster.Status, promoteRequest)
+	acknowledgements.Promote = promoteRequest
 	logger.Info("Ignoring promote request because no held blue/green upgrade is waiting for approval",
 		"promoteRequest", promoteRequest,
 		"promoteRequestField", upgrade.RequestPromoteFieldPath)

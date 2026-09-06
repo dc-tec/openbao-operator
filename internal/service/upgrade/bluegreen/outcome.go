@@ -5,6 +5,7 @@ import (
 	"time"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 type phaseOutcomeKind string
@@ -19,10 +20,11 @@ const (
 )
 
 type phaseOutcome struct {
-	kind      phaseOutcomeKind
-	nextPhase openbaov1alpha1.BlueGreenPhase
-	after     time.Duration
-	reason    string
+	kind             phaseOutcomeKind
+	nextPhase        openbaov1alpha1.BlueGreenPhase
+	after            time.Duration
+	reason           string
+	acknowledgements upgrade.RequestAcknowledgements
 }
 
 func (o phaseOutcome) validate() error {

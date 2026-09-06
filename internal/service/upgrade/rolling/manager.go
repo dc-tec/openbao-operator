@@ -98,7 +98,12 @@ func (m *Manager) WithAdminOpsStatusMutator(mutator adminops.StatusMutator) *Man
 //  5. Finalization: Clear upgrade state, update current version
 //
 // Returns the reconcile result for follow-up scheduling along with any error.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (outcome upgrade.ReconcileResult, err error) {
+	outcome.Result, err = m.reconcile(ctx, logger, cluster, &outcome.Acknowledgements)
+	return outcome, err
+}
+
+func (m *Manager) reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, acknowledgements *upgrade.RequestAcknowledgements) (recon.Result, error) {
 	logger = logger.WithValues(
 		"specVersion", cluster.Spec.Version,
 		"statusVersion", cluster.Status.CurrentVersion,
@@ -111,7 +116,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return result, nil
 	}
 
-	upgradeNeeded, resumeUpgrade := m.detectUpgradeState(logger, cluster)
+	upgradeNeeded, resumeUpgrade := m.detectUpgradeState(logger, cluster, acknowledgements)
 	if result, done, err := m.ensureUpgradeLock(ctx, logger, cluster, metrics, strategy, upgradeNeeded, resumeUpgrade); done || err != nil {
 		return result, err
 	}

@@ -30,9 +30,8 @@ func (m *Manager) patchFinalizedUpgradeStatus(ctx context.Context, cluster *open
 	return nil
 }
 
-// patchStatusSSA updates the cluster status using Server-Side Apply.
-// SSA eliminates race conditions by having the API server merge changes,
-// rather than requiring the client to refresh and merge manually.
+// patchStatusSSA persists rolling progress while preserving the latest request
+// acknowledgements and sibling AdminOps fields through the shared mutation gateway.
 func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if m.adminOpsMutator == nil {
 		return fmt.Errorf("adminops status mutator is required")
@@ -40,7 +39,6 @@ func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.O
 
 	if err := m.adminOpsMutator(ctx, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 		obj.Status.Upgrade = cluster.Status.Upgrade
-		obj.Status.UpgradeRequests = cluster.Status.UpgradeRequests
 		return nil
 	}, adminops.ForceOwnershipOnConflict); err != nil {
 		return fmt.Errorf("failed to apply adminops status plane for rolling upgrade status: %w", err)

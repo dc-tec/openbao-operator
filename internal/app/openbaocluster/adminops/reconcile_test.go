@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
@@ -28,21 +29,22 @@ type fakeSubReconciler struct {
 	err    error
 }
 
-func (f fakeSubReconciler) Reconcile(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-	return f.result, f.err
+func (f fakeSubReconciler) Reconcile(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster) (upgrademanager.ReconcileResult, error) {
+	return upgrademanager.ReconcileResult{Result: f.result}, f.err
 }
 
 type fakeMutatingSubReconciler struct {
-	result recon.Result
-	err    error
-	mutate func(*openbaov1alpha1.OpenBaoCluster)
+	result           recon.Result
+	err              error
+	mutate           func(*openbaov1alpha1.OpenBaoCluster)
+	acknowledgements upgrademanager.RequestAcknowledgements
 }
 
-func (f fakeMutatingSubReconciler) Reconcile(_ context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+func (f fakeMutatingSubReconciler) Reconcile(_ context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (upgrademanager.ReconcileResult, error) {
 	if f.mutate != nil {
 		f.mutate(cluster)
 	}
-	return f.result, f.err
+	return upgrademanager.ReconcileResult{Result: f.result, Acknowledgements: f.acknowledgements}, f.err
 }
 
 type recordingSubReconciler struct {
@@ -51,9 +53,9 @@ type recordingSubReconciler struct {
 	result recon.Result
 }
 
-func (f recordingSubReconciler) Reconcile(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+func (f recordingSubReconciler) Reconcile(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster) (upgrademanager.ReconcileResult, error) {
 	*f.calls = append(*f.calls, f.name)
-	return f.result, nil
+	return upgrademanager.ReconcileResult{Result: f.result}, nil
 }
 
 func applicationForTest(
@@ -70,6 +72,78 @@ func applicationForTest(
 		patchStatus:  patchStatus,
 		errorStatus:  errorStatus,
 	}
+}
+
+func TestReconcile_PreservesAcknowledgementsAcrossReadBack(t *testing.T) {
+	t.Parallel()
+	checkpointErr := errors.New("checkpoint failed")
+	for _, tt := range []struct {
+		name   string
+		result recon.Result
+		err    error
+		reason string
+	}{
+		{"complete", recon.Result{}, nil, "adminops-complete"},
+		{"requeue", recon.Result{RequeueAfter: time.Minute}, nil, "adminops-requeue"},
+		{"error", recon.Result{}, checkpointErr, "adminops-error"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cluster := &openbaov1alpha1.OpenBaoCluster{}
+			want := upgrademanager.RequestAcknowledgements{Rollback: "rollback", Retry: "retry"}
+			patches := 0
+			application := applicationForTest(reconcilerPlan{
+				upgradeReconcilers: []subReconciler{
+					fakeMutatingSubReconciler{acknowledgements: upgrademanager.RequestAcknowledgements{Rollback: "rollback"}},
+					fakeMutatingSubReconciler{
+						result:           tt.result,
+						err:              tt.err,
+						acknowledgements: upgrademanager.RequestAcknowledgements{Retry: "retry"},
+						mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+							// An immediate checkpoint refreshes the observed AdminOps plane.
+							cluster.Status.UpgradeRequests = nil
+							cluster.Status.AdminOps = nil
+						},
+					},
+				},
+			}, func(_ context.Context, _ logr.Logger, _, cluster *openbaov1alpha1.OpenBaoCluster, acknowledgements upgrademanager.RequestAcknowledgements, reason string) error {
+				patches++
+				require.Equal(t, tt.reason, reason)
+				require.Equal(t, want, acknowledgements)
+				require.Nil(t, cluster.Status.UpgradeRequests, "pending intent must remain separate from observed status")
+				return nil
+			}, nil)
+			result, err := application.Reconcile(t.Context(), logr.Discard(), cluster.DeepCopy(), cluster, nil)
+			if tt.err != nil {
+				require.ErrorIs(t, err, tt.err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.result, result)
+			require.Equal(t, 1, patches)
+		})
+	}
+}
+
+func TestReconcile_AcknowledgementsDoNotLeakBetweenPasses(t *testing.T) {
+	t.Parallel()
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	var recorded []upgrademanager.RequestAcknowledgements
+	want := upgrademanager.RequestAcknowledgements{Promote: "promote"}
+	application := applicationForTest(reconcilerPlan{
+		upgradeReconcilers: []subReconciler{fakeMutatingSubReconciler{acknowledgements: want}},
+	}, func(_ context.Context, _ logr.Logger, _, cluster *openbaov1alpha1.OpenBaoCluster, acknowledgements upgrademanager.RequestAcknowledgements, _ string) error {
+		recorded = append(recorded, acknowledgements)
+		acknowledgements.ApplyTo(&cluster.Status)
+		return nil
+	}, nil)
+	_, err := application.Reconcile(t.Context(), logr.Discard(), cluster.DeepCopy(), cluster, nil)
+	require.NoError(t, err)
+	application.plan.upgradeReconcilers = []subReconciler{fakeSubReconciler{}}
+	_, err = application.Reconcile(t.Context(), logr.Discard(), cluster.DeepCopy(), cluster, nil)
+	require.NoError(t, err)
+	require.Equal(t, []upgrademanager.RequestAcknowledgements{want, {}}, recorded)
+	require.Equal(t, "promote", cluster.Status.UpgradeRequests.LastHandledPromote)
 }
 
 func TestReconcile_RunsCurrentOperationOwnerFirst(t *testing.T) {
@@ -231,7 +305,7 @@ func TestReconcile_AdminOpsErrorPaths(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var recorded []error
 			var patchReasons []string
-			patchStatus := func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
+			patchStatus := func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, _ upgrademanager.RequestAcknowledgements, reason string) error {
 				patchReasons = append(patchReasons, reason)
 				return tt.patchErr
 			}
@@ -293,7 +367,7 @@ func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 		var patchReasons []string
 		application := applicationForTest(
 			reconcilerPlan{upgradeReconcilers: []subReconciler{fakeSubReconciler{result: recon.Result{RequeueAfter: 7 * time.Second}}}},
-			func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
+			func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, _ upgrademanager.RequestAcknowledgements, reason string) error {
 				patchReasons = append(patchReasons, reason)
 				return nil
 			},
@@ -335,7 +409,7 @@ func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 		var patchReasons []string
 		application := applicationForTest(
 			reconcilerPlan{upgradeReconcilers: []subReconciler{fakeSubReconciler{}}},
-			func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
+			func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, _ upgrademanager.RequestAcknowledgements, reason string) error {
 				patchReasons = append(patchReasons, reason)
 				return nil
 			},
@@ -376,7 +450,7 @@ func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 					cluster.Status.AdminOps = nil
 				},
 			}}},
-			func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
+			func(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, _ upgrademanager.RequestAcknowledgements, reason string) error {
 				patchReasons = append(patchReasons, reason)
 				return nil
 			},
@@ -469,7 +543,7 @@ func TestNewApplication_BuildsReconcilersAndInjectsRecorder(t *testing.T) {
 		t.Fatalf("len(reconcilers) = %d, want 4", len(orderedReconcilers))
 	}
 
-	if _, ok := orderedReconcilers[0].(*upgrademanager.StrategyTransitionManager); !ok {
+	if _, ok := orderedReconcilers[0].(reconcilerWithoutRequests).inner.(*upgrademanager.StrategyTransitionManager); !ok {
 		t.Fatalf("reconcilers[0] = %T, want *upgrade.StrategyTransitionManager", orderedReconcilers[0])
 	}
 
@@ -485,7 +559,7 @@ func TestNewApplication_BuildsReconcilersAndInjectsRecorder(t *testing.T) {
 	}
 	assertRecorderInjected(t, rollingMgr)
 
-	backupMgr, ok := orderedReconcilers[3].(*backupmanager.Manager)
+	backupMgr, ok := orderedReconcilers[3].(reconcilerWithoutRequests).inner.(*backupmanager.Manager)
 	if !ok {
 		t.Fatalf("reconcilers[3] = %T, want *backup.Manager", orderedReconcilers[3])
 	}

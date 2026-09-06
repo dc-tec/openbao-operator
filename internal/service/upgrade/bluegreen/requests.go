@@ -18,7 +18,7 @@ func blueGreenPhaseString(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return string(cluster.Status.BlueGreen.Phase)
 }
 
-func (m *Manager) handleManualRollbackRequest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {
+func (m *Manager) handleManualRollbackRequest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, acknowledgements *upgrade.RequestAcknowledgements) (bool, recon.Result, error) {
 	if !upgrade.RollbackRequestPending(cluster) {
 		return false, recon.Result{}, nil
 	}
@@ -26,7 +26,7 @@ func (m *Manager) handleManualRollbackRequest(ctx context.Context, logger logr.L
 	rollbackRequest := upgrade.RollbackRequestValue(cluster)
 
 	if cluster.Status.BlueGreen == nil || cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle {
-		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
+		acknowledgements.Rollback = rollbackRequest
 		logger.Info("Ignoring rollback request because no blue/green upgrade is active",
 			"rollbackRequest", rollbackRequest,
 			"rollbackRequestField", upgrade.RequestRollbackFieldPath)
@@ -35,7 +35,7 @@ func (m *Manager) handleManualRollbackRequest(ctx context.Context, logger logr.L
 
 	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack ||
 		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollbackCleanup {
-		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
+		acknowledgements.Rollback = rollbackRequest
 		logger.Info("Ignoring rollback request because rollback is already in progress",
 			"rollbackRequest", rollbackRequest,
 			"phase", cluster.Status.BlueGreen.Phase,
@@ -52,13 +52,13 @@ func (m *Manager) handleManualRollbackRequest(ctx context.Context, logger logr.L
 		if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
 			return false, recon.Result{}, fmt.Errorf("failed to abort upgrade via %s: %w", upgrade.RequestRollbackFieldPath, err)
 		}
-		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
+		acknowledgements.Rollback = rollbackRequest
 		return true, recon.Result{}, nil
 	}
 
 	result, err := m.triggerRollback(logger, cluster, fmt.Sprintf("manual rollback request via %s", upgrade.RequestRollbackFieldPath))
 	if err == nil {
-		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
+		acknowledgements.Rollback = rollbackRequest
 	}
 	return true, result, err
 }

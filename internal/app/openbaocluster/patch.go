@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
 	"github.com/dc-tec/openbao-operator/internal/port/adminops"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // PatchStatusOwnedFields patches only status-controller owned status fields.
@@ -115,6 +116,8 @@ func PatchWorkloadOwnedFields(
 // PatchAdminOpsOwnedFieldsWithReader persists pending application status changes.
 // Backup, Upgrade, and Restore are persisted by their managers and preserved
 // from the live read performed by the shared AdminOps mutation gateway.
+// Request acknowledgements are applied from per-reconcile intent, never copied
+// from the cluster's observed UpgradeRequests snapshot.
 func PatchAdminOpsOwnedFieldsWithReader(
 	ctx context.Context,
 	reader client.Reader,
@@ -122,6 +125,7 @@ func PatchAdminOpsOwnedFieldsWithReader(
 	logger logr.Logger,
 	original *openbaov1alpha1.OpenBaoCluster,
 	cluster *openbaov1alpha1.OpenBaoCluster,
+	acknowledgements upgrade.RequestAcknowledgements,
 	reason string,
 ) error {
 	if original == nil || cluster == nil {
@@ -133,7 +137,7 @@ func PatchAdminOpsOwnedFieldsWithReader(
 	// SSA ownership does not clear sibling fields by omission.
 	if original.Status.AcceptedUpgradeStrategy == cluster.Status.AcceptedUpgradeStrategy &&
 		reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
-		reflect.DeepEqual(original.Status.UpgradeRequests, cluster.Status.UpgradeRequests) &&
+		acknowledgements.IsEmpty() &&
 		reflect.DeepEqual(original.Status.BreakGlass, cluster.Status.BreakGlass) &&
 		reflect.DeepEqual(original.Status.AdminOps, cluster.Status.AdminOps) {
 		return nil
@@ -148,7 +152,7 @@ func PatchAdminOpsOwnedFieldsWithReader(
 	err := adminopsstatus.MutateWithReader(ctx, reader, c, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 		obj.Status.AcceptedUpgradeStrategy = cluster.Status.AcceptedUpgradeStrategy
 		obj.Status.BlueGreen = cluster.Status.BlueGreen
-		obj.Status.UpgradeRequests = cluster.Status.UpgradeRequests
+		acknowledgements.ApplyTo(&obj.Status)
 		obj.Status.BreakGlass = cluster.Status.BreakGlass
 		obj.Status.AdminOps = adminOps
 		return nil

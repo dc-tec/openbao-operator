@@ -44,6 +44,7 @@ func TestPatchStatusSSA_PreservesSiblingAdminOpsFieldsFromLatestObject(t *testin
 	}
 	cluster := stored.DeepCopy()
 	cluster.Status.Backup = nil
+	cluster.Status.UpgradeRequests = &openbaov1alpha1.UpgradeRequestStatus{LastHandledRetry: "stale"}
 	cluster.Status.Upgrade.CurrentPartition = 2
 
 	c := fake.NewClientBuilder().
@@ -71,6 +72,9 @@ func TestPatchStatusSSA_PreservesSiblingAdminOpsFieldsFromLatestObject(t *testin
 	}
 	if updated.Status.Upgrade == nil || updated.Status.Upgrade.CurrentPartition != 2 {
 		t.Fatalf("persisted upgrade = %#v, want updated rolling status", updated.Status.Upgrade)
+	}
+	if updated.Status.UpgradeRequests == nil || updated.Status.UpgradeRequests.LastHandledRetry != "retry-1" {
+		t.Fatalf("persisted requests = %#v, want latest acknowledgement preserved", updated.Status.UpgradeRequests)
 	}
 }
 

@@ -21,7 +21,6 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/platform/testutil/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
@@ -215,7 +214,8 @@ func TestDetectUpgradeState(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &Manager{}
 
-			gotUpgradeNeeded, gotResumeUpgrade := m.detectUpgradeState(testLogger(), tt.cluster)
+			var acknowledgements upgrade.RequestAcknowledgements
+			gotUpgradeNeeded, gotResumeUpgrade := m.detectUpgradeState(testLogger(), tt.cluster, &acknowledgements)
 
 			if gotUpgradeNeeded != tt.wantUpgradeNeeded {
 				t.Errorf("detectUpgradeState() upgradeNeeded = %v, want %v", gotUpgradeNeeded, tt.wantUpgradeNeeded)
@@ -224,8 +224,8 @@ func TestDetectUpgradeState(t *testing.T) {
 				t.Errorf("detectUpgradeState() resumeUpgrade = %v, want %v", gotResumeUpgrade, tt.wantResumeUpgrade)
 			}
 			if tt.name == "stale retry request is ignored when no failed upgrade is waiting" {
-				if tt.cluster.Status.UpgradeRequests == nil || tt.cluster.Status.UpgradeRequests.LastHandledRetry != "retry-1" {
-					t.Fatalf("LastHandledRetry = %+v, want retry-1 to be recorded as handled", tt.cluster.Status.UpgradeRequests)
+				if acknowledgements.Retry != "retry-1" {
+					t.Fatalf("retry acknowledgement = %q, want retry-1", acknowledgements.Retry)
 				}
 			}
 		})
@@ -1048,7 +1048,7 @@ func TestReconcile_SkipsBlueGreenStrategy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v, want nil", err)
 	}
-	if result != (recon.Result{}) {
+	if result != (upgrade.ReconcileResult{}) {
 		t.Fatalf("Reconcile() result = %+v, want empty result", result)
 	}
 }
@@ -1137,7 +1137,7 @@ func TestReconcile_ReleasesStaleUpgradeLockWhenUpgradeIsIdle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v, want nil", err)
 	}
-	if result != (recon.Result{}) {
+	if result != (upgrade.ReconcileResult{}) {
 		t.Fatalf("Reconcile() result = %+v, want empty result", result)
 	}
 
@@ -1223,7 +1223,7 @@ func TestReconcile_RetriesStaleUpgradeLockReleaseAfterFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Reconcile() error = %v, want nil", err)
 	}
-	if result != (recon.Result{}) {
+	if result != (upgrade.ReconcileResult{}) {
 		t.Fatalf("second Reconcile() result = %+v, want empty result", result)
 	}
 	if freshCluster.Status.OperationLock != nil {
@@ -1455,7 +1455,7 @@ func TestUpgradeStateTransitions(t *testing.T) {
 			}
 
 			m := &Manager{}
-			gotUpgrade, gotResume := m.detectUpgradeState(testLogger(), cluster)
+			gotUpgrade, gotResume := m.detectUpgradeState(testLogger(), cluster, &upgrade.RequestAcknowledgements{})
 
 			if gotUpgrade != tt.wantUpgradeNeeded {
 				t.Errorf("%s: upgradeNeeded = %v, want %v", tt.description, gotUpgrade, tt.wantUpgradeNeeded)

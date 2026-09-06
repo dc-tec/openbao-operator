@@ -8,13 +8,13 @@ import (
 )
 
 // detectUpgradeState determines whether an upgrade is needed or if we're resuming one.
-func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (upgradeNeeded bool, resumeUpgrade bool) {
+func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, acknowledgements *upgrade.RequestAcknowledgements) (upgradeNeeded bool, resumeUpgrade bool) {
 	if upgrade.RetryRequestPending(cluster) &&
 		(cluster.Status.Upgrade == nil ||
 			!upgrade.UpgradeFailed(cluster.Status.Upgrade) ||
 			cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion) {
 		retryRequest := upgrade.RetryRequestValue(cluster)
-		upgrade.MarkRetryRequestHandled(&cluster.Status, retryRequest)
+		acknowledgements.Retry = retryRequest
 		logger.Info("Ignoring retry request because no failed rolling upgrade is waiting to resume",
 			"retryRequest", retryRequest,
 			"retryRequestField", upgrade.RequestRetryFieldPath)

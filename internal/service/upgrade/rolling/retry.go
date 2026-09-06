@@ -57,8 +57,6 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 	if cluster.Status.Upgrade == nil {
 		return false, nil
 	}
-	upgrade.MarkRetryRequestHandled(&cluster.Status, retryRequest)
-
 	logger.Info("Cleared failed rolling upgrade state and resumed upgrade")
 	m.emitNormalEvent(cluster, upgrade.ReasonRollingRetryAccepted, "Rolling upgrade retry accepted for target version %s", cluster.Status.Upgrade.TargetVersion)
 	return true, nil

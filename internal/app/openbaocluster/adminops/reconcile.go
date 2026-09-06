@@ -46,6 +46,7 @@ type StatusPatcher func(
 	logger logr.Logger,
 	original *openbaov1alpha1.OpenBaoCluster,
 	cluster *openbaov1alpha1.OpenBaoCluster,
+	acknowledgements upgrademanager.RequestAcknowledgements,
 	reason string,
 ) error
 
@@ -53,7 +54,19 @@ type StatusPatcher func(
 type ErrorStatusBuilder func(error) *openbaov1alpha1.ControllerErrorStatus
 
 type subReconciler interface {
-	Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error)
+	Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (upgrademanager.ReconcileResult, error)
+}
+
+// reconcilerWithoutRequests adapts collaborators that only return scheduling.
+type reconcilerWithoutRequests struct {
+	inner interface {
+		Reconcile(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) (recon.Result, error)
+	}
+}
+
+func (r reconcilerWithoutRequests) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (upgrademanager.ReconcileResult, error) {
+	result, err := r.inner.Reconcile(ctx, logger, cluster)
+	return upgrademanager.ReconcileResult{Result: result}, err
 }
 
 type reconcilerPlan struct {
@@ -113,17 +126,20 @@ func (a *Application) Reconcile(
 	recordError ErrorRecorder,
 ) (recon.Result, error) {
 	ensureAdminOpsStatus(cluster)
+	var acknowledgements upgrademanager.RequestAcknowledgements
 
 	for _, rec := range a.plan.orderedFor(cluster) {
 		result, err := rec.Reconcile(ctx, logger, cluster)
+		acknowledgements.Merge(result.Acknowledgements)
 		if err != nil {
 			if recordError != nil {
 				recordError(err)
 			}
+			ensureAdminOpsStatus(cluster)
 			cluster.Status.AdminOps.LastError = a.errorStatus(err)
 
 			if a.patchStatus != nil {
-				if statusErr := a.patchStatus(ctx, logger, original, cluster, "adminops-error"); statusErr != nil {
+				if statusErr := a.patchStatus(ctx, logger, original, cluster, acknowledgements, "adminops-error"); statusErr != nil {
 					return recon.Result{}, statusErr
 				}
 			}
@@ -149,7 +165,7 @@ func (a *Application) Reconcile(
 			ensureAdminOpsStatus(cluster)
 			cluster.Status.AdminOps.LastError = nil
 			if a.patchStatus != nil {
-				if statusErr := a.patchStatus(ctx, logger, original, cluster, "adminops-requeue"); statusErr != nil {
+				if statusErr := a.patchStatus(ctx, logger, original, cluster, acknowledgements, "adminops-requeue"); statusErr != nil {
 					return recon.Result{}, statusErr
 				}
 			}
@@ -161,7 +177,7 @@ func (a *Application) Reconcile(
 	ensureAdminOpsStatus(cluster)
 	cluster.Status.AdminOps.LastError = nil
 	if a.patchStatus != nil {
-		if err := a.patchStatus(ctx, logger, original, cluster, "adminops-complete"); err != nil {
+		if err := a.patchStatus(ctx, logger, original, cluster, acknowledgements, "adminops-complete"); err != nil {
 			return recon.Result{}, fmt.Errorf("failed to patch adminops owned fields: %w", err)
 		}
 	}
@@ -189,7 +205,7 @@ func buildReconcilers(deps Dependencies) reconcilerPlan {
 
 	return reconcilerPlan{
 		upgradeReconcilers: []subReconciler{
-			upgrademanager.NewStrategyTransitionManager(strategyReader),
+			reconcilerWithoutRequests{inner: upgrademanager.NewStrategyTransitionManager(strategyReader)},
 			bluegreen.NewManager(
 				deps.Client,
 				deps.Scheme,
@@ -211,14 +227,14 @@ func buildReconcilers(deps Dependencies) reconcilerPlan {
 				deps.Recorder,
 			).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
 		},
-		backupReconciler: backupmanager.NewManager(
+		backupReconciler: reconcilerWithoutRequests{inner: backupmanager.NewManager(
 			deps.Client,
 			deps.Scheme,
 			deps.SmartClientConfig,
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.Recorder,
-		).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
+		).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator)},
 	}
 }
 
