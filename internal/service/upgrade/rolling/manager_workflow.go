@@ -41,10 +41,9 @@ func (m *Manager) ensureUpgradeLock(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	metrics *upgrade.Metrics,
 	strategy string,
-	upgradeNeeded bool,
-	resumeUpgrade bool,
+	action upgradeAction,
 ) (recon.Result, bool, error) {
-	if !upgradeNeeded && !resumeUpgrade {
+	if action == upgradeIdle || action == upgradeWaitForRetry {
 		upgrade.SetInactiveProgressMetrics(metrics)
 		if err := m.releaseIdleUpgradeLock(ctx, logger, cluster); err != nil {
 			logger.Error(err, "Failed to release stale upgrade operation lock")

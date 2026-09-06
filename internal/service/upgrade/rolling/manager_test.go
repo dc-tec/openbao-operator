@@ -33,205 +33,6 @@ func testLogger() logr.Logger {
 	return logr.Discard()
 }
 
-func TestDetectUpgradeState(t *testing.T) {
-	tests := []struct {
-		name              string
-		cluster           *openbaov1alpha1.OpenBaoCluster
-		wantUpgradeNeeded bool
-		wantResumeUpgrade bool
-	}{
-		{
-			name: "no upgrade needed - versions match",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version: "2.4.0",
-				},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					CurrentVersion: "2.4.0",
-					Initialized:    true,
-				},
-			},
-			wantUpgradeNeeded: false,
-			wantResumeUpgrade: false,
-		},
-		{
-			name: "upgrade needed - version mismatch",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version: "2.5.0",
-				},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					CurrentVersion: "2.4.0",
-					Initialized:    true,
-				},
-			},
-			wantUpgradeNeeded: true,
-			wantResumeUpgrade: false,
-		},
-		{
-			name: "stale retry request is ignored when no failed upgrade is waiting",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version: "2.5.0",
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						Requests: &openbaov1alpha1.UpgradeRequestConfig{
-							Retry: "retry-1",
-						},
-					},
-				},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					CurrentVersion: "2.4.0",
-					Initialized:    true,
-				},
-			},
-			wantUpgradeNeeded: true,
-			wantResumeUpgrade: false,
-		},
-		{
-			name: "resume upgrade - in progress",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version: "2.5.0",
-				},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					CurrentVersion: "2.4.0",
-					Initialized:    true,
-					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion:    "2.5.0",
-						FromVersion:      "2.4.0",
-						CurrentPartition: 2,
-					},
-				},
-			},
-			wantUpgradeNeeded: false,
-			wantResumeUpgrade: true,
-		},
-		{
-			name: "failed upgrade waits for manual retry",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version: "2.5.0",
-				},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					CurrentVersion: "2.4.0",
-					Initialized:    true,
-					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion:    "2.5.0",
-						FromVersion:      "2.4.0",
-						CurrentPartition: 1,
-						Failure: &openbaov1alpha1.ControllerErrorStatus{
-							Reason:  upgrade.ReasonUpgradeFailed,
-							Message: "step-down timeout",
-						},
-					},
-				},
-			},
-			wantUpgradeNeeded: false,
-			wantResumeUpgrade: false,
-		},
-		{
-			name: "failed upgrade resumes when retry request is set",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version: "2.5.0",
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						Requests: &openbaov1alpha1.UpgradeRequestConfig{
-							Retry: "retry-1",
-						},
-					},
-				},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					CurrentVersion: "2.4.0",
-					Initialized:    true,
-					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion:    "2.5.0",
-						FromVersion:      "2.4.0",
-						CurrentPartition: 1,
-						Failure: &openbaov1alpha1.ControllerErrorStatus{
-							Reason:  upgrade.ReasonUpgradeFailed,
-							Message: "step-down timeout",
-						},
-					},
-				},
-			},
-			wantUpgradeNeeded: false,
-			wantResumeUpgrade: true,
-		},
-		{
-			name: "failed upgrade resumes when target version changes",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version: "2.5.1",
-				},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					CurrentVersion: "2.4.0",
-					Initialized:    true,
-					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion:    "2.5.0",
-						FromVersion:      "2.4.0",
-						CurrentPartition: 1,
-						Failure: &openbaov1alpha1.ControllerErrorStatus{
-							Reason:  upgrade.ReasonUpgradeFailed,
-							Message: "step-down timeout",
-						},
-					},
-				},
-			},
-			wantUpgradeNeeded: false,
-			wantResumeUpgrade: true,
-		},
-		{
-			name: "first reconcile - current version empty",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version: "2.4.0",
-				},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					CurrentVersion: "",
-					Initialized:    true,
-				},
-			},
-			wantUpgradeNeeded: false,
-			wantResumeUpgrade: false,
-		},
-		{
-			name: "downgrade scenario still detects as upgrade needed",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version: "2.3.0",
-				},
-				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					CurrentVersion: "2.4.0",
-					Initialized:    true,
-				},
-			},
-			wantUpgradeNeeded: true, // Detection doesn't block; validation does
-			wantResumeUpgrade: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := &Manager{}
-
-			var acknowledgements upgrade.RequestAcknowledgements
-			gotUpgradeNeeded, gotResumeUpgrade := m.detectUpgradeState(testLogger(), tt.cluster, &acknowledgements)
-
-			if gotUpgradeNeeded != tt.wantUpgradeNeeded {
-				t.Errorf("detectUpgradeState() upgradeNeeded = %v, want %v", gotUpgradeNeeded, tt.wantUpgradeNeeded)
-			}
-			if gotResumeUpgrade != tt.wantResumeUpgrade {
-				t.Errorf("detectUpgradeState() resumeUpgrade = %v, want %v", gotResumeUpgrade, tt.wantResumeUpgrade)
-			}
-			if tt.name == "stale retry request is ignored when no failed upgrade is waiting" {
-				if acknowledgements.Retry != "retry-1" {
-					t.Fatalf("retry acknowledgement = %q, want retry-1", acknowledgements.Retry)
-				}
-			}
-		})
-	}
-}
-
 func TestValidateUpgrade_BlocksInvalidVersionSelection(t *testing.T) {
 	t.Parallel()
 
@@ -1088,70 +889,84 @@ func TestReconcile_HaltsDuringBreakGlassWithoutAck(t *testing.T) {
 func TestReconcile_ReleasesStaleUpgradeLockWhenUpgradeIsIdle(t *testing.T) {
 	t.Parallel()
 
-	scheme := newScheme()
-	now := metav1.Now()
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "default",
-		},
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version:  "2.4.0",
-			Replicas: 3,
-		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			Initialized:    true,
-			CurrentVersion: "2.4.0",
-			OperationLock: &openbaov1alpha1.OperationLockStatus{
-				Operation:  openbaov1alpha1.ClusterOperationUpgrade,
-				Holder:     upgradecore.UpgradeOperationLockHolder,
-				Message:    "stale upgrade lock",
-				AcquiredAt: &now,
-				RenewedAt:  &now,
-			},
-		},
-	}
+	for _, waitingForRetry := range []bool{false, true} {
+		t.Run(strconv.FormatBool(waitingForRetry), func(t *testing.T) {
+			scheme := newScheme()
+			now := metav1.Now()
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Version:  "2.4.0",
+					Replicas: 3,
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					Initialized:    true,
+					CurrentVersion: "2.4.0",
+					OperationLock: &openbaov1alpha1.OperationLockStatus{
+						Operation:  openbaov1alpha1.ClusterOperationUpgrade,
+						Holder:     upgradecore.UpgradeOperationLockHolder,
+						Message:    "stale upgrade lock",
+						AcquiredAt: &now,
+						RenewedAt:  &now,
+					},
+				},
+			}
 
-	var patchPayloads []string
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
-		WithObjects(cluster).
-		WithInterceptorFuncs(interceptor.Funcs{
-			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
-				if subResourceName == "status" {
-					payload, err := patch.Data(obj)
-					if err != nil {
-						return err
-					}
-					patchPayloads = append(patchPayloads, string(payload))
+			if waitingForRetry {
+				cluster.Status.Upgrade = &openbaov1alpha1.UpgradeProgress{
+					TargetVersion: cluster.Spec.Version,
+					Failure:       &openbaov1alpha1.ControllerErrorStatus{Reason: upgrade.ReasonUpgradeFailed},
 				}
-				return c.Status().Patch(ctx, obj, patch, opts...)
-			},
-		}).
-		Build()
-	mgr := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, nil, "")
-	mgr.WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
+			}
 
-	result, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
-	if err != nil {
-		t.Fatalf("Reconcile() error = %v, want nil", err)
-	}
-	if result != (upgrade.ReconcileResult{}) {
-		t.Fatalf("Reconcile() result = %+v, want empty result", result)
-	}
+			var patchPayloads []string
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+				WithObjects(cluster).
+				WithInterceptorFuncs(interceptor.Funcs{
+					SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+						if subResourceName == "status" {
+							payload, err := patch.Data(obj)
+							if err != nil {
+								return err
+							}
+							patchPayloads = append(patchPayloads, string(payload))
+						}
+						return c.Status().Patch(ctx, obj, patch, opts...)
+					},
+				}).
+				Build()
+			mgr := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, nil, "")
+			mgr.WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
-	if len(patchPayloads) != 1 {
-		t.Fatalf("expected one optimistic lock clear patch, got %d payloads", len(patchPayloads))
-	}
-	if !strings.Contains(patchPayloads[0], `"operationLock":null`) {
-		t.Fatalf("expected patch to explicitly clear operationLock, got %s", patchPayloads[0])
-	}
-	if !strings.Contains(patchPayloads[0], `"resourceVersion":`) {
-		t.Fatalf("expected patch to include a resourceVersion precondition, got %s", patchPayloads[0])
-	}
-	if cluster.Status.OperationLock != nil {
-		t.Fatalf("expected in-memory operation lock to be released, got %+v", cluster.Status.OperationLock)
+			result, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
+			if err != nil {
+				t.Fatalf("Reconcile() error = %v, want nil", err)
+			}
+			if result != (upgrade.ReconcileResult{}) {
+				t.Fatalf("Reconcile() result = %+v, want empty result", result)
+			}
+
+			if len(patchPayloads) != 1 {
+				t.Fatalf("expected one optimistic lock clear patch, got %d payloads", len(patchPayloads))
+			}
+			if !strings.Contains(patchPayloads[0], `"operationLock":null`) {
+				t.Fatalf("expected patch to explicitly clear operationLock, got %s", patchPayloads[0])
+			}
+			if !strings.Contains(patchPayloads[0], `"resourceVersion":`) {
+				t.Fatalf("expected patch to include a resourceVersion precondition, got %s", patchPayloads[0])
+			}
+			if cluster.Status.OperationLock != nil {
+				t.Fatalf("expected in-memory operation lock to be released, got %+v", cluster.Status.OperationLock)
+			}
+			if waitingForRetry && !upgrade.UpgradeFailed(cluster.Status.Upgrade) {
+				t.Fatal("waiting for retry must preserve failed upgrade progress")
+			}
+		})
 	}
 }
 
@@ -1361,112 +1176,6 @@ func TestReconcile_ReleasesUpgradeLockOnValidationFailureBeforeStart(t *testing.
 	}
 }
 
-// TestUpgradeStateTransitions tests the logical state transitions during an upgrade.
-// This is a table-driven test following the testing strategy.
-func TestUpgradeStateTransitions(t *testing.T) {
-	tests := []struct {
-		name              string
-		initialStatus     openbaov1alpha1.OpenBaoClusterStatus
-		specVersion       string
-		wantUpgradeNeeded bool
-		wantResume        bool
-		description       string
-	}{
-		{
-			name: "Running -> Upgrading (new upgrade)",
-			initialStatus: openbaov1alpha1.OpenBaoClusterStatus{
-				Phase:          openbaov1alpha1.ClusterPhaseRunning,
-				CurrentVersion: "2.4.0",
-				Initialized:    true,
-			},
-			specVersion:       "2.5.0",
-			wantUpgradeNeeded: true,
-			wantResume:        false,
-			description:       "A running cluster detects version change and needs upgrade",
-		},
-		{
-			name: "Upgrading -> Upgrading (resume)",
-			initialStatus: openbaov1alpha1.OpenBaoClusterStatus{
-				Phase:          openbaov1alpha1.ClusterPhaseUpgrading,
-				CurrentVersion: "2.4.0",
-				Initialized:    true,
-				Upgrade: &openbaov1alpha1.UpgradeProgress{
-					TargetVersion:    "2.5.0",
-					FromVersion:      "2.4.0",
-					CurrentPartition: 2,
-					CompletedPods:    []int32{2},
-				},
-			},
-			specVersion:       "2.5.0",
-			wantUpgradeNeeded: false,
-			wantResume:        true,
-			description:       "An in-progress upgrade should resume",
-		},
-		{
-			name: "Running -> Running (no change)",
-			initialStatus: openbaov1alpha1.OpenBaoClusterStatus{
-				Phase:          openbaov1alpha1.ClusterPhaseRunning,
-				CurrentVersion: "2.5.0",
-				Initialized:    true,
-			},
-			specVersion:       "2.5.0",
-			wantUpgradeNeeded: false,
-			wantResume:        false,
-			description:       "No upgrade needed when versions match",
-		},
-		{
-			name: "Initializing -> skip (not initialized)",
-			initialStatus: openbaov1alpha1.OpenBaoClusterStatus{
-				Phase:          openbaov1alpha1.ClusterPhaseInitializing,
-				CurrentVersion: "",
-				Initialized:    false,
-			},
-			specVersion:       "2.4.0",
-			wantUpgradeNeeded: false,
-			wantResume:        false,
-			description:       "Cluster not initialized; skip upgrade detection",
-		},
-		{
-			name: "First version set (empty current version)",
-			initialStatus: openbaov1alpha1.OpenBaoClusterStatus{
-				Phase:          openbaov1alpha1.ClusterPhaseRunning,
-				CurrentVersion: "",
-				Initialized:    true,
-			},
-			specVersion:       "2.4.0",
-			wantUpgradeNeeded: false,
-			wantResume:        false,
-			description:       "First reconcile after init; sets version, no upgrade",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cluster := &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-cluster",
-					Namespace: "default",
-				},
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Version:  tt.specVersion,
-					Replicas: 3,
-				},
-				Status: tt.initialStatus,
-			}
-
-			m := &Manager{}
-			gotUpgrade, gotResume := m.detectUpgradeState(testLogger(), cluster, &upgrade.RequestAcknowledgements{})
-
-			if gotUpgrade != tt.wantUpgradeNeeded {
-				t.Errorf("%s: upgradeNeeded = %v, want %v", tt.description, gotUpgrade, tt.wantUpgradeNeeded)
-			}
-			if gotResume != tt.wantResume {
-				t.Errorf("%s: resume = %v, want %v", tt.description, gotResume, tt.wantResume)
-			}
-		})
-	}
-}
-
 // TestUpgradeProgressTracking tests that upgrade progress is tracked correctly.
 func TestUpgradeProgressTracking(t *testing.T) {
 	tests := []struct {
@@ -1590,24 +1299,18 @@ func TestVersionMismatchDuringUpgrade(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status := &openbaov1alpha1.OpenBaoClusterStatus{
-				Upgrade: &openbaov1alpha1.UpgradeProgress{
-					TargetVersion: tt.upgradeTarget,
-					FromVersion:   "2.4.0",
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{Version: tt.specVersion},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					Upgrade: &openbaov1alpha1.UpgradeProgress{TargetVersion: tt.upgradeTarget, FromVersion: "2.4.0"},
 				},
 			}
-
-			shouldClear := tt.specVersion != tt.upgradeTarget
-			if shouldClear != tt.shouldClearState {
-				t.Errorf("shouldClearState = %v, want %v", shouldClear, tt.shouldClearState)
+			decision := decideUpgrade(cluster)
+			if err := (&Manager{}).applyUpgradeDecision(t.Context(), logr.Discard(), cluster, decision); err != nil {
+				t.Fatal(err)
 			}
-
-			// If we should clear, verify the clear function works
-			if tt.shouldClearState {
-				upgradecore.ClearUpgrade(status)
-				if status.Upgrade != nil {
-					t.Error("expected Upgrade to be cleared")
-				}
+			if (cluster.Status.Upgrade == nil) != tt.shouldClearState {
+				t.Fatalf("Upgrade=%+v, want cleared=%t", cluster.Status.Upgrade, tt.shouldClearState)
 			}
 		})
 	}

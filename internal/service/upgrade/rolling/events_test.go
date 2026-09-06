@@ -207,12 +207,9 @@ func TestPrepareFailedUpgradeRetry_EmitsRetryEvents(t *testing.T) {
 		adminOpsMutator: testAdminOpsMutator(k8sClient),
 	}
 
-	resumed, err := manager.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster)
+	err := manager.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster, upgrade.RetryRequestValue(cluster))
 	if err != nil {
 		t.Fatalf("prepareFailedUpgradeRetry() error = %v", err)
-	}
-	if !resumed {
-		t.Fatal("resumed = false, want true")
 	}
 
 	expectEventContains(t, recorder, "Normal", upgrade.ReasonRollingRetryRequested)

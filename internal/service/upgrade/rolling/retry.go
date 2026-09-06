@@ -20,24 +20,10 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
-func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	if cluster == nil || cluster.Status.Upgrade == nil {
-		return false, nil
-	}
-
-	if !upgrade.UpgradeFailed(cluster.Status.Upgrade) {
-		return false, nil
-	}
-
-	if cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion {
-		return false, nil
-	}
-
-	retryRequest := upgrade.RetryRequestValue(cluster)
-	if !upgrade.RetryRequestPending(cluster) {
-		return false, nil
-	}
-
+// prepareFailedUpgradeRetry executes a retry selected by decideUpgrade.
+// Lock acquisition only refreshes lock status, so the decision and captured
+// request still describe the same observed upgrade when preparation starts.
+func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, retryRequest string) error {
 	logger.Info("Preparing retry for failed rolling upgrade",
 		"retryRequest", retryRequest,
 		"targetVersion", cluster.Status.Upgrade.TargetVersion,
@@ -45,21 +31,21 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 	m.emitNormalEvent(cluster, upgrade.ReasonRollingRetryRequested, "Rolling upgrade retry requested for target version %s", cluster.Status.Upgrade.TargetVersion)
 
 	if err := m.cleanupStepDownJobForRetry(ctx, logger, cluster); err != nil {
-		return false, err
+		return err
 	}
 	if err := m.resetRolloutPodsForRetry(ctx, logger, cluster); err != nil {
-		return false, err
+		return err
 	}
 
 	if err := m.patchRetryStatusSSA(ctx, cluster, retryRequest); err != nil {
-		return false, fmt.Errorf("failed to clear failed upgrade state for retry: %w", err)
+		return fmt.Errorf("failed to clear failed upgrade state for retry: %w", err)
 	}
 	if cluster.Status.Upgrade == nil {
-		return false, nil
+		return nil
 	}
 	logger.Info("Cleared failed rolling upgrade state and resumed upgrade")
 	m.emitNormalEvent(cluster, upgrade.ReasonRollingRetryAccepted, "Rolling upgrade retry accepted for target version %s", cluster.Status.Upgrade.TargetVersion)
-	return true, nil
+	return nil
 }
 
 func (m *Manager) patchRetryStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, retryRequest string) error {
