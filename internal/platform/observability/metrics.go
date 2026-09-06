@@ -8,6 +8,14 @@ import (
 )
 
 var (
+	clusterMetricPhases = [...]openbaov1alpha1.ClusterPhase{
+		openbaov1alpha1.ClusterPhaseInitializing,
+		openbaov1alpha1.ClusterPhaseRunning,
+		openbaov1alpha1.ClusterPhaseUpgrading,
+		openbaov1alpha1.ClusterPhaseBackingUp,
+		openbaov1alpha1.ClusterPhaseFailed,
+	}
+
 	reconcileDurationHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "openbao",
@@ -218,13 +226,24 @@ func (m *ClusterMetrics) SetReadReplicaCounts(desiredReplicas, readyReplicas, re
 		Set(float64(healthyReplicas))
 }
 
-// SetPhase records the current phase for the cluster. The gauge is set to 1
-// for the provided phase. Other historical phase series will naturally age
-// out in Prometheus retention.
+// SetPhase records 1 for the current phase and 0 for other known phases.
+// Only known phase labels are exported. An empty or unrecognized phase leaves
+// all phase gauges at 0.
 func (m *ClusterMetrics) SetPhase(phase openbaov1alpha1.ClusterPhase) {
-	clusterPhaseGauge.
-		WithLabelValues(m.namespace, m.name, string(phase)).
-		Set(1.0)
+	known := false
+	for _, knownPhase := range clusterMetricPhases {
+		if knownPhase == phase {
+			known = true
+		}
+		clusterPhaseGauge.
+			WithLabelValues(m.namespace, m.name, string(knownPhase)).
+			Set(0)
+	}
+	if known {
+		clusterPhaseGauge.
+			WithLabelValues(m.namespace, m.name, string(phase)).
+			Set(1)
+	}
 }
 
 // Clear removes all per-cluster metrics for this cluster. This should be
@@ -242,13 +261,7 @@ func (m *ClusterMetrics) Clear() {
 		DeleteLabelValues(m.namespace, m.name)
 
 	// Clear all known phases for this cluster.
-	for _, phase := range []openbaov1alpha1.ClusterPhase{
-		openbaov1alpha1.ClusterPhaseInitializing,
-		openbaov1alpha1.ClusterPhaseRunning,
-		openbaov1alpha1.ClusterPhaseUpgrading,
-		openbaov1alpha1.ClusterPhaseBackingUp,
-		openbaov1alpha1.ClusterPhaseFailed,
-	} {
+	for _, phase := range clusterMetricPhases {
 		clusterPhaseGauge.
 			DeleteLabelValues(m.namespace, m.name, string(phase))
 	}

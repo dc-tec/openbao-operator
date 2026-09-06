@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/stretchr/testify/require"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
@@ -19,14 +21,124 @@ func TestReconcileMetrics_NoPanic(t *testing.T) {
 	m.IncrementError("Error")
 }
 
-func TestClusterMetrics_NoPanic(t *testing.T) {
-	m := NewClusterMetrics("ns", "name")
+func TestClusterMetrics_SetPhase(t *testing.T) {
+	tests := []struct {
+		name   string
+		phases []openbaov1alpha1.ClusterPhase
+	}{
+		{
+			name: "phase transitions",
+			phases: []openbaov1alpha1.ClusterPhase{
+				openbaov1alpha1.ClusterPhaseInitializing,
+				openbaov1alpha1.ClusterPhaseRunning,
+				openbaov1alpha1.ClusterPhaseUpgrading,
+				openbaov1alpha1.ClusterPhaseBackingUp,
+				openbaov1alpha1.ClusterPhaseFailed,
+				openbaov1alpha1.ClusterPhaseRunning,
+			},
+		},
+		{
+			name: "repeated phase",
+			phases: []openbaov1alpha1.ClusterPhase{
+				openbaov1alpha1.ClusterPhaseRunning,
+				openbaov1alpha1.ClusterPhaseRunning,
+			},
+		},
+		{
+			name: "empty phase",
+			phases: []openbaov1alpha1.ClusterPhase{
+				"",
+				openbaov1alpha1.ClusterPhaseRunning,
+				"",
+				openbaov1alpha1.ClusterPhaseInitializing,
+			},
+		},
+		{
+			name: "unrecognized phase",
+			phases: []openbaov1alpha1.ClusterPhase{
+				openbaov1alpha1.ClusterPhaseRunning,
+				"Unrecognized",
+				openbaov1alpha1.ClusterPhaseInitializing,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			namespace, name := "ns", t.Name()
+			t.Cleanup(NewClusterMetrics(namespace, name).Clear)
+			for _, phase := range tt.phases {
+				// Reconciliation creates a new helper for each update.
+				NewClusterMetrics(namespace, name).SetPhase(phase)
+				want := map[openbaov1alpha1.ClusterPhase]float64{
+					openbaov1alpha1.ClusterPhaseInitializing: 0,
+					openbaov1alpha1.ClusterPhaseRunning:      0,
+					openbaov1alpha1.ClusterPhaseUpgrading:    0,
+					openbaov1alpha1.ClusterPhaseBackingUp:    0,
+					openbaov1alpha1.ClusterPhaseFailed:       0,
+				}
+				if _, known := want[phase]; known {
+					want[phase] = 1
+				}
+				got := gatherClusterPhases(t, namespace, name)
+				for knownPhase, value := range want {
+					require.Equal(t, value, got[knownPhase], "active phase %q, exported phase %q", phase, knownPhase)
+				}
+				for exportedPhase := range got {
+					require.Contains(t, want, exportedPhase, "only known phase labels are exported")
+				}
+			}
+		})
+	}
+}
 
-	m.SetReadyReplicas(3)
-	m.SetReadReplicaCounts(2, 2, 2, 2)
-	m.SetPhase(openbaov1alpha1.ClusterPhaseInitializing)
-	m.SetPhase(openbaov1alpha1.ClusterPhaseRunning)
-	m.Clear()
+func TestClusterMetrics_PhaseIsolationAndClear(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		namespace string
+		cluster   string
+	}{
+		{name: "same namespace", namespace: "ns", cluster: "other"},
+		{name: "same name", namespace: "other-ns", cluster: "cluster"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewClusterMetrics("ns", "cluster")
+			other := NewClusterMetrics(tt.namespace, tt.cluster)
+			t.Cleanup(m.Clear)
+			t.Cleanup(other.Clear)
+			other.SetPhase(openbaov1alpha1.ClusterPhaseBackingUp)
+			otherBefore := gatherClusterPhases(t, tt.namespace, tt.cluster)
+
+			m.SetPhase(openbaov1alpha1.ClusterPhaseInitializing)
+			m.SetPhase(openbaov1alpha1.ClusterPhaseRunning)
+			require.Equal(t, otherBefore, gatherClusterPhases(t, tt.namespace, tt.cluster))
+
+			m.Clear()
+			m.Clear()
+			require.Empty(t, gatherClusterPhases(t, "ns", "cluster"))
+			require.Equal(t, otherBefore, gatherClusterPhases(t, tt.namespace, tt.cluster))
+		})
+	}
+}
+
+func gatherClusterPhases(t *testing.T, namespace, name string) map[openbaov1alpha1.ClusterPhase]float64 {
+	t.Helper()
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(clusterPhaseGauge)
+	families, err := registry.Gather()
+	require.NoError(t, err)
+	phases := make(map[openbaov1alpha1.ClusterPhase]float64)
+	for _, family := range families {
+		for _, metric := range family.GetMetric() {
+			labels := make(map[string]string)
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			if labels["namespace"] == namespace && labels["name"] == name {
+				phases[openbaov1alpha1.ClusterPhase(labels["phase"])] = metric.GetGauge().GetValue()
+			}
+		}
+	}
+	return phases
 }
 
 func TestReconcileMetrics_EmitsSeries(t *testing.T) {
