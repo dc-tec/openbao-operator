@@ -79,7 +79,7 @@ func Run(ctx context.Context, args []string) error {
 		return fmt.Errorf("unable to register provisioner controllers: %w", err)
 	}
 
-	if err := addManagerHealthChecks(mgr); err != nil {
+	if err := addManagerHealthChecks(ctx, mgr); err != nil {
 		return fmt.Errorf("unable to configure manager probes: %w", err)
 	}
 

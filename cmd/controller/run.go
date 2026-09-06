@@ -98,7 +98,7 @@ func Run(ctx context.Context, args []string) error {
 		return fmt.Errorf("unable to register controllers: %w", err)
 	}
 
-	if err := addManagerHealthChecks(mgr); err != nil {
+	if err := addManagerHealthChecks(ctx, mgr, singleTenantMode); err != nil {
 		return fmt.Errorf("unable to configure manager probes: %w", err)
 	}
 

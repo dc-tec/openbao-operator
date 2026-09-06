@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/raft"
@@ -17,6 +21,7 @@ import (
 	openbaoclustercontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
@@ -166,13 +171,14 @@ func setupControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) error 
 	return nil
 }
 
-func addManagerHealthChecks(mgr ctrl.Manager) error {
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		return err
+func addManagerHealthChecks(ctx context.Context, mgr ctrl.Manager, singleTenantMode bool) error {
+	// Match the watches in OpenBaoCluster and OpenBaoRestore SetupWithManager.
+	watchedObjects := []client.Object{&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}}
+	if singleTenantMode {
+		watchedObjects = append(watchedObjects,
+			&appsv1.StatefulSet{}, &corev1.Service{}, &corev1.ConfigMap{},
+			&corev1.Secret{}, &batchv1.Job{}, &corev1.ServiceAccount{},
+		)
 	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		return err
-	}
-
-	return nil
+	return entrypoint.AddManagerHealthChecks(ctx, mgr, watchedObjects...)
 }

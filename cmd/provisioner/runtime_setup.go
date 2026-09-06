@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
 	provisionercontroller "github.com/dc-tec/openbao-operator/internal/controller/provisioner"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
@@ -73,13 +73,8 @@ func setupControllers(mgr ctrl.Manager, runtime provisionerProcessRuntime) error
 	return nil
 }
 
-func addManagerHealthChecks(mgr ctrl.Manager) error {
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		return err
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		return err
-	}
-
-	return nil
+func addManagerHealthChecks(ctx context.Context, mgr ctrl.Manager) error {
+	return entrypoint.AddManagerHealthChecks(ctx, mgr,
+		&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoTenant{}, &openbaov1alpha1.OpenBaoRestore{},
+	)
 }
