@@ -2,9 +2,10 @@ package provisioner
 
 import (
 	"flag"
+	"fmt"
+	"io"
 	"time"
 
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -13,6 +14,8 @@ import (
 )
 
 type runConfig struct {
+	kubeconfig              string
+	logOptions              zap.Options
 	metricsAddr             string
 	enableLeaderElection    bool
 	probeAddr               string
@@ -22,26 +25,33 @@ type runConfig struct {
 	admissionCanary         bool
 }
 
-func parseRunConfig() (runConfig, error) {
+func parseRunConfig(args []string, output io.Writer) (runConfig, error) {
 	cfg := runConfig{}
+	fs := flag.NewFlagSet("provisioner", flag.ContinueOnError)
+	fs.SetOutput(output)
+	fs.StringVar(&cfg.kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 
 	entrypoint.BindManagerFlags(
-		flag.CommandLine,
+		fs,
 		&cfg.metricsAddr,
 		&cfg.probeAddr,
 		&cfg.enableLeaderElection,
 		&cfg.secureMetrics,
 	)
-	entrypoint.BindAdmissionFlags(flag.CommandLine, &cfg.admissionEnforcement, &cfg.admissionStartupTimeout)
-	flag.BoolVar(&cfg.admissionCanary, "admission-canary", false,
+	entrypoint.BindAdmissionFlags(fs, &cfg.admissionEnforcement, &cfg.admissionStartupTimeout)
+	fs.BoolVar(&cfg.admissionCanary, "admission-canary", false,
 		"If set, perform an admission canary (dry-run) that must be denied "+
 			"by the Provisioner RBAC ValidatingAdmissionPolicy. "+
 			"This provides stronger assurance that enforcement is active.")
 
-	opts := zap.Options{Development: false}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	cfg.logOptions = zap.Options{Development: false}
+	cfg.logOptions.BindFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return runConfig{}, err
+	}
+	if fs.NArg() != 0 {
+		return runConfig{}, fmt.Errorf("unexpected positional argument %q", fs.Arg(0))
+	}
 
 	admissionEnforcement, err := entrypoint.NormalizeAdmissionEnforcement(cfg.admissionEnforcement)
 	if err != nil {

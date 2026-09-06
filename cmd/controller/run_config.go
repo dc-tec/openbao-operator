@@ -3,11 +3,11 @@ package controller
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
+	"io"
 	"os"
-	"strings"
 	"time"
 
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -18,6 +18,8 @@ import (
 )
 
 type runConfig struct {
+	kubeconfig               string
+	logOptions               zap.Options
 	metricsAddr              string
 	metricsCertPath          string
 	metricsCertName          string
@@ -36,49 +38,60 @@ type runConfig struct {
 	admissionStartupTimeout  time.Duration
 }
 
-func parseRunConfig() (runConfig, error) {
+func parseRunConfig(args []string, output io.Writer) (runConfig, error) {
 	cfg := runConfig{}
+	fs := flag.NewFlagSet("controller", flag.ContinueOnError)
+	fs.SetOutput(output)
+	fs.StringVar(&cfg.kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 
 	entrypoint.BindManagerFlags(
-		flag.CommandLine,
+		fs,
 		&cfg.metricsAddr,
 		&cfg.probeAddr,
 		&cfg.enableLeaderElection,
 		&cfg.secureMetrics,
 	)
-	flag.StringVar(&cfg.metricsCertPath, "metrics-cert-path", "",
+	fs.StringVar(&cfg.metricsCertPath, "metrics-cert-path", "",
 		"The directory that contains the metrics server certificate.")
-	flag.StringVar(
+	fs.StringVar(
 		&cfg.metricsCertName,
 		"metrics-cert-name",
 		"tls.crt",
 		"The name of the metrics server certificate file.",
 	)
-	flag.StringVar(&cfg.metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
-	flag.BoolVar(&cfg.enableHTTP2, "enable-http2", false,
+	fs.StringVar(&cfg.metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
+	fs.BoolVar(&cfg.enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics server")
-	flag.StringVar(&cfg.platform, "platform", constants.PlatformAuto,
+	fs.StringVar(&cfg.platform, "platform", constants.PlatformAuto,
 		"The target platform (auto, kubernetes, openshift). Defaults to auto. "+
 			"This flag is deprecated and will be removed in a future release. "+
 			"Use the OPERATOR_PLATFORM environment variable instead.")
 
-	flag.Float64Var(&cfg.clientQPS, "openbao-client-qps", 50.0,
+	fs.Float64Var(&cfg.clientQPS, "openbao-client-qps", 50.0,
 		"The queries per second (QPS) limit for OpenBao API clients.")
-	flag.IntVar(&cfg.clientBurst, "openbao-client-burst", 100,
+	fs.IntVar(&cfg.clientBurst, "openbao-client-burst", 100,
 		"The burst limit for OpenBao API clients.")
-	flag.IntVar(&cfg.clientCBFailureThreshold, "openbao-client-cb-failure-threshold", 50,
+	fs.IntVar(&cfg.clientCBFailureThreshold, "openbao-client-cb-failure-threshold", 50,
 		"The number of consecutive failures before opening the circuit breaker.")
-	flag.DurationVar(&cfg.clientCBOpenDuration, "openbao-client-cb-open-duration", 30*time.Second,
+	fs.DurationVar(&cfg.clientCBOpenDuration, "openbao-client-cb-open-duration", 30*time.Second,
 		"The duration the circuit breaker remains open before testing the connection.")
 
-	entrypoint.BindAdmissionFlags(flag.CommandLine, &cfg.admissionEnforcement, &cfg.admissionStartupTimeout)
+	entrypoint.BindAdmissionFlags(fs, &cfg.admissionEnforcement, &cfg.admissionStartupTimeout)
 
-	opts := zap.Options{Development: false}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	cfg.logOptions = zap.Options{Development: false}
+	cfg.logOptions.BindFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return runConfig{}, err
+	}
+	if fs.NArg() != 0 {
+		return runConfig{}, fmt.Errorf("unexpected positional argument %q", fs.Arg(0))
+	}
 
-	cfg.platform = strings.ToLower(strings.TrimSpace(cfg.platform))
+	platform, err := configuredPlatform(cfg.platform, os.Getenv("OPERATOR_PLATFORM"))
+	if err != nil {
+		return runConfig{}, err
+	}
+	cfg.platform = platform
 
 	jwtAuthStrategy, err := portopenbao.NormalizeJWTAuthStrategy(os.Getenv(constants.EnvOpenBaoJWTAuthStrategy))
 	if err != nil {

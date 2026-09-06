@@ -17,6 +17,8 @@ limitations under the License.
 package controller
 
 import (
+	"context"
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -27,6 +29,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
@@ -53,19 +56,21 @@ func init() {
 // The Controller is responsible for reconciling OpenBaoCluster resources,
 // managing StatefulSets, and executing upgrades.
 // args are the command-line arguments (typically os.Args[2:] after the command name).
-func Run(args []string) {
-	oldArgs := os.Args
-	os.Args = append([]string{oldArgs[0]}, args...)
-	defer func() { os.Args = oldArgs }()
-
-	cfg, err := parseRunConfig()
+func Run(ctx context.Context, args []string) error {
+	cfg, err := parseRunConfig(args, os.Stderr)
 	if err != nil {
-		setupLog.Error(err, entrypoint.AdmissionEnforcementExpectedMsg)
-		os.Exit(2)
+		return &entrypoint.UsageError{Err: err}
 	}
 
-	config := ctrl.GetConfigOrDie()
-	platform := resolvePlatform(config, cfg.platform)
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&cfg.logOptions)))
+	config, err := entrypoint.LoadConfig(cfg.kubeconfig)
+	if err != nil {
+		return fmt.Errorf("load Kubernetes configuration: %w", err)
+	}
+	platform, err := resolvePlatform(ctx, config, cfg.platform)
+	if err != nil {
+		return err
+	}
 	setupLog.Info("Target platform configured", "platform", platform)
 
 	watchNamespace := watchNamespaceFromEnv()
@@ -81,29 +86,25 @@ func Run(args []string) {
 	)
 	mgr, err := ctrl.NewManager(config, mgrOpts)
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		return fmt.Errorf("unable to start manager: %w", err)
 	}
 
-	processRuntime, err := buildControllerProcessRuntime(mgr, cfg, platform, singleTenantMode)
+	processRuntime, err := buildControllerProcessRuntime(ctx, mgr, cfg, platform, singleTenantMode)
 	if err != nil {
-		setupLog.Error(err, "unable to initialize controller runtime")
-		os.Exit(1)
+		return fmt.Errorf("unable to initialize controller runtime: %w", err)
 	}
 
 	if err := setupControllers(mgr, processRuntime); err != nil {
-		setupLog.Error(err, "unable to register controllers")
-		os.Exit(1)
+		return fmt.Errorf("unable to register controllers: %w", err)
 	}
 
 	if err := addManagerHealthChecks(mgr); err != nil {
-		setupLog.Error(err, "unable to configure manager probes")
-		os.Exit(1)
+		return fmt.Errorf("unable to configure manager probes: %w", err)
 	}
 
 	setupLog.Info("starting controller manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+	if err := mgr.Start(ctx); err != nil {
+		return fmt.Errorf("problem running manager: %w", err)
 	}
+	return nil
 }

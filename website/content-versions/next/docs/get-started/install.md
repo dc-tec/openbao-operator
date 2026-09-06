@@ -9,6 +9,7 @@ verifiedBy:
   - hack/ci/generate-channel-manifests.sh
   - charts/openbao-operator/values.yaml
   - config/default/kustomization.yaml
+  - cmd/controller/startup_helpers.go
 ---
 
 Next tracks unreleased behavior on `main`. Use the edge channel for an executable evaluation install, or build from
@@ -124,6 +125,18 @@ helm template openbao-operator charts/openbao-operator \
 
 Review the controller and Provisioner ServiceAccounts, RoleBinding subjects, admission-policy identities, projected
 token audience, images, and namespaces before applying the render.
+
+## Select the target platform
+
+The chart defaults to `platform=auto`. The controller checks the API groups during startup and selects OpenShift
+when `security.openshift.io` is present. A failed discovery request or a request that exceeds 10 seconds blocks startup.
+Check API server connectivity and discovery permissions before restarting the controller.
+
+To bypass discovery, set the chart value to `platform=kubernetes` or `platform=openshift`. OpenShift mode omits fixed
+`runAsUser` and `fsGroup` IDs so the Security Context Constraint can assign namespace-scoped IDs.
+
+The chart sets `OPERATOR_PLATFORM`. This environment variable takes precedence over the deprecated `--platform`
+controller flag. Accepted values are `auto`, `kubernetes`, and `openshift`; other values block startup.
 
 ## Refresh an edge installation
 

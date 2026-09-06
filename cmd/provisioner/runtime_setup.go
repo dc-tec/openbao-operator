@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"context"
 	"fmt"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -9,6 +10,7 @@ import (
 	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
 	provisionercontroller "github.com/dc-tec/openbao-operator/internal/controller/provisioner"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
 )
 
 type provisionerProcessRuntime struct {
@@ -17,7 +19,9 @@ type provisionerProcessRuntime struct {
 	admissionTracker  *admission.Tracker
 }
 
-func buildProvisionerProcessRuntime(mgr ctrl.Manager, cfg runConfig) (provisionerProcessRuntime, error) {
+func buildProvisionerProcessRuntime(
+	ctx context.Context, mgr ctrl.Manager, cfg runConfig,
+) (provisionerProcessRuntime, error) {
 	provisionerRuntime, err := appprovisioner.NewProvisioner(appprovisioner.ProvisionerDependencies{
 		Client: mgr.GetClient(),
 		Logger: setupLog.WithName("provisioner"),
@@ -26,10 +30,21 @@ func buildProvisionerProcessRuntime(mgr ctrl.Manager, cfg runConfig) (provisione
 		return provisionerProcessRuntime{}, fmt.Errorf("unable to create provisioner runtime: %w", err)
 	}
 
+	admissionTracker, err := initializeAdmissionTracker(ctx, mgr.GetAPIReader(), cfg)
+	if err != nil {
+		return provisionerProcessRuntime{}, err
+	}
+	if cfg.admissionCanary && cfg.admissionEnforcement == entrypoint.AdmissionEnforcementFail &&
+		!admission.UnsafeAdmissionDisabled() {
+		if err := verifyAdmissionCanary(ctx, mgr.GetConfig()); err != nil {
+			return provisionerProcessRuntime{}, err
+		}
+	}
+
 	return provisionerProcessRuntime{
 		provisioner:       provisionerRuntime,
 		operatorNamespace: operatorNamespaceFromEnv(),
-		admissionTracker:  initializeAdmissionTracker(mgr, cfg),
+		admissionTracker:  admissionTracker,
 	}, nil
 }
 

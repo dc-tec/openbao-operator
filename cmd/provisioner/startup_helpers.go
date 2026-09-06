@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -42,9 +43,11 @@ func newManagerOptions(
 	}
 }
 
-func initializeAdmissionTracker(mgr ctrl.Manager, cfg runConfig) *admission.Tracker {
+func initializeAdmissionTracker(
+	ctx context.Context, reader client.Reader, cfg runConfig,
+) (*admission.Tracker, error) {
 	admissionTracker := admission.NewTracker(
-		mgr.GetAPIReader(),
+		reader,
 		admission.DefaultDependencies(),
 		admission.DefaultNamePrefixes(),
 		30*time.Second,
@@ -60,15 +63,15 @@ func initializeAdmissionTracker(mgr ctrl.Manager, cfg runConfig) *admission.Trac
 		})
 		admission.SetAdmissionDependenciesReady(true)
 		admissionTracker.MarkReadyForUnsafeMode()
-		return admissionTracker
+		return admissionTracker, nil
 	}
 
 	switch cfg.admissionEnforcement {
 	case entrypoint.AdmissionEnforcementFail:
 		setupLog.Info("Waiting for admission policy dependencies", "timeout", cfg.admissionStartupTimeout)
 		status, err := admission.WaitForDependencies(
-			context.Background(),
-			mgr.GetAPIReader(),
+			ctx,
+			reader,
 			admission.DefaultDependencies(),
 			admission.DefaultNamePrefixes(),
 			cfg.admissionStartupTimeout,
@@ -90,7 +93,8 @@ func initializeAdmissionTracker(mgr ctrl.Manager, cfg runConfig) *admission.Trac
 				"summary",
 				status.SummaryMessage(),
 			)
-			os.Exit(1)
+			return nil, fmt.Errorf("admission policy dependencies not ready (%s): %w",
+				status.SummaryMessage(), err)
 		}
 		admissionTracker.Set(status)
 		setupLog.Info("Admission policy dependencies ready")
@@ -99,16 +103,13 @@ func initializeAdmissionTracker(mgr ctrl.Manager, cfg runConfig) *admission.Trac
 			"admission_enforcement": cfg.admissionEnforcement,
 		})
 
-		if cfg.admissionCanary {
-			verifyAdmissionCanary(mgr)
-		}
 	default:
-		checkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		status := admission.Status{}
 		checkedStatus, err := admission.CheckDependencies(
 			checkCtx,
-			mgr.GetAPIReader(),
+			reader,
 			admission.DefaultDependencies(),
 			admission.DefaultNamePrefixes(),
 		)
@@ -135,35 +136,34 @@ func initializeAdmissionTracker(mgr ctrl.Manager, cfg runConfig) *admission.Trac
 		}
 	}
 
-	return admissionTracker
+	return admissionTracker, nil
 }
 
-func verifyAdmissionCanary(mgr ctrl.Manager) {
-	clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
+func verifyAdmissionCanary(ctx context.Context, config *rest.Config) error {
+	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		logging.LogAuditEvent(setupLog, logging.EventAdmissionCanaryFailed, map[string]string{
 			"component": "provisioner",
 			"reason":    "clientset_creation_failed",
 		})
-		setupLog.Error(err, "Failed to create Kubernetes clientset for admission canary; refusing to start")
-		os.Exit(1)
+		return fmt.Errorf("create Kubernetes clientset for admission canary: %w", err)
 	}
 
-	canaryCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	canaryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := admission.VerifyProvisionerRBACEnforcement(canaryCtx, clientset, "default"); err != nil {
 		logging.LogAuditEvent(setupLog, logging.EventAdmissionCanaryFailed, map[string]string{
 			"component": "provisioner",
 			"reason":    "policy_not_enforced",
 		})
-		setupLog.Error(err, "Admission canary failed; refusing to start")
-		os.Exit(1)
+		return fmt.Errorf("admission canary failed: %w", err)
 	}
 
 	setupLog.Info("Admission canary succeeded")
 	logging.LogAuditEvent(setupLog, logging.EventAdmissionCanaryPassed, map[string]string{
 		"component": "provisioner",
 	})
+	return nil
 }
 
 func operatorNamespaceFromEnv() string {
