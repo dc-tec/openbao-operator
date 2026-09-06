@@ -12,6 +12,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // calculateRevision computes a deterministic revision hash from relevant spec fields.
@@ -41,7 +42,7 @@ func (m *Manager) transitionToPhase(logger logr.Logger, cluster *openbaov1alpha1
 }
 
 // executeStateMachine runs the blue/green upgrade state machine.
-func (m *Manager) executeStateMachine(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (recon.Result, error) {
+func (m *Manager) executeStateMachine(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, acknowledgements *upgrade.RequestAcknowledgements) (recon.Result, error) {
 	phase := cluster.Status.BlueGreen.Phase
 
 	logger = logger.WithValues("phase", phase)
@@ -74,7 +75,11 @@ func (m *Manager) executeStateMachine(ctx context.Context, logger logr.Logger, c
 	if err != nil {
 		return recon.Result{}, err
 	}
-	return m.applyOutcome(ctx, logger, cluster, outcome)
+	result, err := m.applyOutcome(ctx, logger, cluster, outcome)
+	if err == nil {
+		acknowledgements.Merge(outcome.acknowledgements)
+	}
+	return result, err
 }
 
 func (m *Manager) applyOutcome(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, outcome phaseOutcome) (recon.Result, error) {

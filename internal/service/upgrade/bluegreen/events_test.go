@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {
@@ -82,8 +83,11 @@ func TestHandlePhaseSyncing_EmitsManualHoldAndPromotionEvents(t *testing.T) {
 		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhasePromoting {
 			t.Fatalf("handlePhaseSyncing() outcome = %+v, want advance to promoting", outcome)
 		}
-		if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledPromote != "2026-03-10T12:00:00Z" {
-			t.Fatalf("LastHandledPromote = %+v, want request to be recorded", cluster.Status.UpgradeRequests)
+		if outcome.acknowledgements.Promote != "2026-03-10T12:00:00Z" {
+			t.Fatalf("promote acknowledgement = %q, want request token", outcome.acknowledgements.Promote)
+		}
+		if cluster.Status.UpgradeRequests != nil {
+			t.Fatal("promotion decision changed observed request status")
 		}
 
 		expectEventContains(t, recorder, "Normal", ReasonBlueGreenPromotionApproved)
@@ -121,7 +125,8 @@ func TestHandleManualRollbackRequest_EmitsRollbackStartedEvent(t *testing.T) {
 	recorder := events.NewFakeRecorder(10)
 	manager := &Manager{recorder: recorder}
 
-	handled, result, err := manager.handleManualRollbackRequest(context.Background(), logr.Discard(), cluster)
+	var acknowledgements upgrade.RequestAcknowledgements
+	handled, result, err := manager.handleManualRollbackRequest(context.Background(), logr.Discard(), cluster, &acknowledgements)
 	if err != nil {
 		t.Fatalf("handleManualRollbackRequest() error = %v", err)
 	}
@@ -131,8 +136,11 @@ func TestHandleManualRollbackRequest_EmitsRollbackStartedEvent(t *testing.T) {
 	if result.RequeueAfter <= 0 {
 		t.Fatalf("result = %+v, want positive requeue", result)
 	}
-	if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledRollback != "2026-03-10T12:05:00Z" {
-		t.Fatalf("LastHandledRollback = %+v, want request to be recorded", cluster.Status.UpgradeRequests)
+	if acknowledgements.Rollback != "2026-03-10T12:05:00Z" {
+		t.Fatalf("rollback acknowledgement = %q, want request token", acknowledgements.Rollback)
+	}
+	if cluster.Status.UpgradeRequests != nil {
+		t.Fatal("rollback decision changed observed request status")
 	}
 
 	expectEventContains(t, recorder, "Warning", ReasonRollbackStarted)
@@ -148,15 +156,19 @@ func TestHandleManualRollbackRequest_IgnoresStaleRequestWhenIdle(t *testing.T) {
 	}
 	manager := &Manager{}
 
-	handled, result, err := manager.handleManualRollbackRequest(context.Background(), logr.Discard(), cluster)
+	var acknowledgements upgrade.RequestAcknowledgements
+	handled, result, err := manager.handleManualRollbackRequest(context.Background(), logr.Discard(), cluster, &acknowledgements)
 	if err != nil {
 		t.Fatalf("handleManualRollbackRequest() error = %v", err)
 	}
 	if handled {
 		t.Fatalf("handled = true, want false with result %+v", result)
 	}
-	if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledRollback != "2026-03-10T12:15:00Z" {
-		t.Fatalf("LastHandledRollback = %+v, want request to be recorded", cluster.Status.UpgradeRequests)
+	if acknowledgements.Rollback != "2026-03-10T12:15:00Z" {
+		t.Fatalf("rollback acknowledgement = %q, want request token", acknowledgements.Rollback)
+	}
+	if cluster.Status.UpgradeRequests != nil {
+		t.Fatal("ignored rollback request changed observed request status")
 	}
 }
 

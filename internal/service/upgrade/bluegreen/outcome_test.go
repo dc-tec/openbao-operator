@@ -11,6 +11,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 func TestPhaseOutcomeValidate_TableDriven(t *testing.T) {
@@ -253,7 +254,7 @@ func TestExecuteStateMachine_UnknownPhaseRejected(t *testing.T) {
 	before := cluster.DeepCopy()
 
 	mgr := &Manager{}
-	_, err := mgr.executeStateMachine(context.Background(), logr.Discard(), cluster, "")
+	_, err := mgr.executeStateMachine(context.Background(), logr.Discard(), cluster, "", &upgrade.RequestAcknowledgements{})
 	if err == nil {
 		t.Fatalf("executeStateMachine() error=nil, want unknown phase error")
 	}

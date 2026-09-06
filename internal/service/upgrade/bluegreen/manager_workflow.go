@@ -11,7 +11,7 @@ import (
 )
 
 // reconcileBlueGreen is the internal reconcile method that handles blue/green upgrades.
-func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string) (result recon.Result, err error) {
+func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, acknowledgements *upgrade.RequestAcknowledgements) (result recon.Result, err error) {
 	if !m.shouldReconcileBlueGreen(logger, cluster) {
 		return recon.Result{}, nil
 	}
@@ -34,7 +34,7 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 
 	defer m.finalizeBlueGreenMetrics(metrics, strategy, cluster, initialPhase, initialRollbackSet)
 
-	if result, done, err := m.prepareBlueGreenReconcile(ctx, logger, cluster); done || err != nil {
+	if result, done, err := m.prepareBlueGreenReconcile(ctx, logger, cluster, acknowledgements); done || err != nil {
 		return result, err
 	}
 
@@ -42,6 +42,6 @@ func (m *Manager) reconcileBlueGreen(ctx context.Context, logger logr.Logger, cl
 		"currentVersion", cluster.Status.CurrentVersion,
 		"specVersion", cluster.Spec.Version)
 
-	result, err = m.executeStateMachine(ctx, logger, cluster, verifiedImageDigest)
+	result, err = m.executeStateMachine(ctx, logger, cluster, verifiedImageDigest, acknowledgements)
 	return result, err
 }

@@ -532,8 +532,8 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhasePromoting {
 			t.Fatalf("handlePhaseSyncing() outcome = %+v, want advance to Promoting", outcome)
 		}
-		if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledPromote != "2026-03-10T12:00:00Z" {
-			t.Fatalf("LastHandledPromote = %+v, want request to be recorded", cluster.Status.UpgradeRequests)
+		if outcome.acknowledgements.Promote != "2026-03-10T12:00:00Z" {
+			t.Fatalf("promote acknowledgement = %q, want request token", outcome.acknowledgements.Promote)
 		}
 	})
 
@@ -585,7 +585,7 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 			Build()
 		manager := &Manager{client: client, reader: client, scheme: scheme}
 
-		result, err := manager.executeStateMachine(context.Background(), logr.Discard(), cluster, "")
+		result, err := manager.executeStateMachine(context.Background(), logr.Discard(), cluster, "", &upgrade.RequestAcknowledgements{})
 		if err != nil {
 			t.Fatalf("executeStateMachine() error = %v", err)
 		}

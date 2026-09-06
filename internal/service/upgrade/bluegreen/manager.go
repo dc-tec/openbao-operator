@@ -117,7 +117,12 @@ func requeueAfter(duration time.Duration) recon.Result {
 // Note: Image verification for the Blue StatefulSet is handled by the infra reconciler which runs before this.
 // For Green resources (StatefulSet and snapshot Jobs), we verify and pin digests here to ensure the
 // target images are validated when ImageVerification is enabled.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (outcome upgrade.ReconcileResult, err error) {
+	outcome.Result, err = m.reconcile(ctx, logger, cluster, &outcome.Acknowledgements)
+	return outcome, err
+}
+
+func (m *Manager) reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, acknowledgements *upgrade.RequestAcknowledgements) (recon.Result, error) {
 	updateStrategy := string(upgrade.EffectiveStrategy(cluster))
 	logger.Info("Manager reconciling",
 		"updateStrategy", updateStrategy,
@@ -134,9 +139,9 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return result, nil
 	}
 
-	if handled, result, err := m.handleManualRollbackRequest(ctx, logger, cluster); handled || err != nil {
+	if handled, result, err := m.handleManualRollbackRequest(ctx, logger, cluster, acknowledgements); handled || err != nil {
 		return result, err
 	}
 
-	return m.reconcileBlueGreen(ctx, logger, cluster, verifiedImageDigest)
+	return m.reconcileBlueGreen(ctx, logger, cluster, verifiedImageDigest, acknowledgements)
 }

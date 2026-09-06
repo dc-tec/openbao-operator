@@ -48,7 +48,11 @@ func TestDetectUpgradeStateRetryProperties(t *testing.T) {
 
 		wantUpgradeNeeded, wantResumeUpgrade, wantHandledRetry := expectedDetectUpgradeState(cluster)
 
-		gotUpgradeNeeded, gotResumeUpgrade := (&Manager{}).detectUpgradeState(logr.Discard(), cluster)
+		var acknowledgements upgrade.RequestAcknowledgements
+		gotUpgradeNeeded, gotResumeUpgrade := (&Manager{}).detectUpgradeState(logr.Discard(), cluster, &acknowledgements)
+		if cluster.Status.UpgradeRequests.LastHandledRetry != lastHandledRetry {
+			t.Fatal("detectUpgradeState changed the observed retry acknowledgement")
+		}
 
 		if gotUpgradeNeeded != wantUpgradeNeeded {
 			t.Fatalf("upgradeNeeded = %t, want %t for cluster=%+v", gotUpgradeNeeded, wantUpgradeNeeded, cluster)
@@ -59,6 +63,9 @@ func TestDetectUpgradeStateRetryProperties(t *testing.T) {
 		gotHandledRetry := ""
 		if cluster.Status.UpgradeRequests != nil {
 			gotHandledRetry = cluster.Status.UpgradeRequests.LastHandledRetry
+		}
+		if acknowledgements.Retry != "" {
+			gotHandledRetry = acknowledgements.Retry
 		}
 		if gotHandledRetry != wantHandledRetry {
 			t.Fatalf("LastHandledRetry = %q, want %q for retryRequest=%q upgrade=%+v",

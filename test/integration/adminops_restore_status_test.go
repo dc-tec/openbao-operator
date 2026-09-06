@@ -19,6 +19,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	"github.com/dc-tec/openbao-operator/internal/port/adminops"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 func TestAdminOpsFinalPatchPreservesConcurrentRestore(t *testing.T) {
@@ -91,7 +92,7 @@ func TestAdminOpsFinalPatchPreservesConcurrentRestore(t *testing.T) {
 						return err
 					},
 				})
-				require.NoError(t, openbaocluster.PatchAdminOpsOwnedFieldsWithReader(ctx, k8sClient, writer, logr.Discard(), original, desired, "adminops-error"))
+				require.NoError(t, openbaocluster.PatchAdminOpsOwnedFieldsWithReader(ctx, k8sClient, writer, logr.Discard(), original, desired, upgrade.RequestAcknowledgements{}, "adminops-error"))
 
 				stored := &openbaov1alpha1.OpenBaoCluster{}
 				require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), stored))

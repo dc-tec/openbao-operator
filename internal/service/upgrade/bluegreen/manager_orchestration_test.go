@@ -287,7 +287,7 @@ func TestManager_ReconcileBlueGreen_BlocksUnsupportedTargetVersion(t *testing.T)
 				Build()
 			mgr := &Manager{client: client, scheme: scheme}
 
-			_, err := mgr.reconcileBlueGreen(context.Background(), logr.Discard(), cluster, "")
+			_, err := mgr.reconcileBlueGreen(context.Background(), logr.Discard(), cluster, "", &upgrade.RequestAcknowledgements{})
 			if err == nil || !strings.Contains(err.Error(), tt.wantErrSubstr) {
 				t.Fatalf("reconcileBlueGreen() error = %v, want contains %q", err, tt.wantErrSubstr)
 			}

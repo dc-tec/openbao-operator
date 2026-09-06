@@ -89,12 +89,13 @@ func (m *Manager) decideSyncPromotion(logger logr.Logger, cluster *openbaov1alph
 
 	if upgrade.PromoteRequestPending(cluster) {
 		promoteRequest := upgrade.PromoteRequestValue(cluster)
-		upgrade.MarkPromoteRequestHandled(&cluster.Status, promoteRequest)
 		logger.Info("Promotion request accepted for held blue/green upgrade",
 			"promoteRequest", promoteRequest,
 			"promoteRequestField", upgrade.RequestPromoteFieldPath)
 		m.emitNormalEvent(cluster, ReasonBlueGreenPromotionApproved, "Promotion approved for Green revision %s", cluster.Status.BlueGreen.GreenRevision)
-		return advance(openbaov1alpha1.PhasePromoting), nil
+		outcome := advance(openbaov1alpha1.PhasePromoting)
+		outcome.acknowledgements.Promote = promoteRequest
+		return outcome, nil
 	}
 
 	logger.Info("Blue/green upgrade is waiting for manual approval",

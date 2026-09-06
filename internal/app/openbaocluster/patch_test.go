@@ -19,6 +19,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 func TestPatchStatusOwnedFields_PreservesPointerClearsInApplyPayload(t *testing.T) {
@@ -116,7 +117,7 @@ func TestPatchAdminOpsOwnedFields_PatchesAdminOpsFieldsWithoutBackup(t *testing.
 		}).
 		Build()
 
-	if err := PatchAdminOpsOwnedFieldsWithReader(context.Background(), k8sClient, k8sClient, logr.Discard(), original, desired, "test"); err != nil {
+	if err := PatchAdminOpsOwnedFieldsWithReader(context.Background(), k8sClient, k8sClient, logr.Discard(), original, desired, upgrade.RequestAcknowledgements{Promote: "req-1"}, "test"); err != nil {
 		t.Fatalf("PatchAdminOpsOwnedFieldsWithReader() error = %v", err)
 	}
 
@@ -177,15 +178,22 @@ func TestPatchAdminOpsOwnedFields_IgnoresManagerOwnedChanges(t *testing.T) {
 		{name: "restore-clear", mutate: func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 			status.Restore = nil
 		}},
+		{name: "observed-request", mutate: func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+			status.UpgradeRequests.LastHandledPromote = "observed"
+		}},
+		{name: "observed-request-clear", mutate: func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+			status.UpgradeRequests = nil
+		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "adminops-manager-owned", Namespace: "default"},
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
-					Backup:  &openbaov1alpha1.BackupStatus{LastFailureReason: "existing-backup-state"},
-					Upgrade: &openbaov1alpha1.UpgradeProgress{TargetVersion: "2.6.2", CurrentPartition: 2},
-					Restore: &openbaov1alpha1.ClusterRestoreStatus{Name: "restore", UID: "existing-restore"},
+					Backup:          &openbaov1alpha1.BackupStatus{LastFailureReason: "existing-backup-state"},
+					Upgrade:         &openbaov1alpha1.UpgradeProgress{TargetVersion: "2.6.2", CurrentPartition: 2},
+					Restore:         &openbaov1alpha1.ClusterRestoreStatus{Name: "restore", UID: "existing-restore"},
+					UpgradeRequests: &openbaov1alpha1.UpgradeRequestStatus{LastHandledPromote: "initial"},
 				},
 			}
 			original := cluster.DeepCopy()
@@ -201,7 +209,7 @@ func TestPatchAdminOpsOwnedFields_IgnoresManagerOwnedChanges(t *testing.T) {
 					},
 				}).Build()
 
-			require.NoError(t, PatchAdminOpsOwnedFieldsWithReader(t.Context(), c, c, logr.Discard(), original, desired, tt.name))
+			require.NoError(t, PatchAdminOpsOwnedFieldsWithReader(t.Context(), c, c, logr.Discard(), original, desired, upgrade.RequestAcknowledgements{}, tt.name))
 			require.Zero(t, applies, "manager-owned changes must not trigger a final status write")
 			stored := &openbaov1alpha1.OpenBaoCluster{}
 			require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(cluster), stored))

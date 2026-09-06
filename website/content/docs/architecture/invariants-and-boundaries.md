@@ -15,6 +15,8 @@ verifiedBy:
   - internal/app/openbaocluster/adminopsstatus/mutate_test.go
   - test/integration/adminops_status_test.go
   - test/integration/adminops_restore_status_test.go
+  - test/integration/adminops_upgrade_requests_test.go
+  - internal/service/upgrade/acknowledgements.go
   - internal/platform/statusapply/openbaocluster_test.go
 ---
 
@@ -95,10 +97,18 @@ read. It does not substitute the intended state for the observed state. If read-
 though the apply succeeded. The application wrapper updates the caller's AdminOps fields and resource version only
 after a successful read-back; it leaves other fields unchanged.
 
-The final AdminOps patch persists pending changes to accepted upgrade strategy, blue-green state, upgrade requests,
-break-glass state, and AdminOps state. Managers persist backup, rolling-upgrade progress, and restore restart state.
+The final AdminOps patch persists pending changes to accepted upgrade strategy, blue-green state, break-glass state,
+and AdminOps state. Managers persist backup, rolling-upgrade progress, and restore restart state.
 The final patch preserves the latest API values for those manager-owned fields in the complete SSA payload. Changes to
 those fields alone do not trigger a final patch.
+
+Upgrade managers return pending request acknowledgements in `upgrade.ReconcileResult`, separate from observed cluster
+status. The application accumulates these tokens across sub-reconcilers and applies only those acknowledgements in its
+final write, including error and requeue paths. Checkpoint read-back cannot discard pending acknowledgements. A newer
+request in spec remains pending because the write records the captured token, and unrelated acknowledgement fields
+retain their latest API values. Promotion and rollback acknowledgements are saved with their resulting blue-green
+state. Failed rolling retries retain their immediate checkpoint, which clears failure state and acknowledges the retry
+in the same write.
 
 Managers share the `adminops.StatusMutator` contract. The application layer binds it to the API reader and client through
 `adminopsstatus.NewMutator`. Each write selects an ownership policy:
