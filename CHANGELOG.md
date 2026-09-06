@@ -2,6 +2,16 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.5.1](https://github.com/dc-tec/openbao-operator/compare/0.5.0...0.5.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **backup:** preserve trigger before job creation ([#703](https://github.com/dc-tec/openbao-operator/issues/703)) ([ee44f8e](https://github.com/dc-tec/openbao-operator/commit/ee44f8ec8be8faae088cbfd4a7a4a5dc704d54e4))
+* **metrics:** keep cluster phase gauges one-hot ([#716](https://github.com/dc-tec/openbao-operator/issues/716)) ([f4c2e1a](https://github.com/dc-tec/openbao-operator/commit/f4c2e1a132c708cf753f5bb54a5e28b2cc20441c))
+* **startup:** validate platform discovery and return errors ([#717](https://github.com/dc-tec/openbao-operator/issues/717)) ([4197f3c](https://github.com/dc-tec/openbao-operator/commit/4197f3c95005161fe4df593f978a11c232ab4a7c))
+* **status:** preserve restore state in final adminops patch ([#710](https://github.com/dc-tec/openbao-operator/issues/710)) ([e362877](https://github.com/dc-tec/openbao-operator/commit/e362877532582a179a4c91ab15707f0b32946eeb))
+
 ## [0.5.0](https://github.com/dc-tec/openbao-operator/compare/0.4.2...0.5.0) (2026-08-31)
 
 OpenBao Operator 0.5.0 defines a selected compatibility boundary within the
