@@ -7194,10 +7194,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260905-b8c003f1307b
+          value: nightly-20260906-e36287753258
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:46d1f2dde101dc24d7f619e4aec97818b18af4150d2de5c90f6348564417d38e
+        image: ghcr.io/dc-tec/openbao-operator@sha256:b721223e978ad9ad7cc76582da9149c6df0df38c3a78496fa192213db2caf1f6
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7312,8 +7312,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260905-b8c003f1307b
-        image: ghcr.io/dc-tec/openbao-operator@sha256:46d1f2dde101dc24d7f619e4aec97818b18af4150d2de5c90f6348564417d38e
+          value: nightly-20260906-e36287753258
+        image: ghcr.io/dc-tec/openbao-operator@sha256:b721223e978ad9ad7cc76582da9149c6df0df38c3a78496fa192213db2caf1f6
         livenessProbe:
           httpGet:
             path: /healthz
