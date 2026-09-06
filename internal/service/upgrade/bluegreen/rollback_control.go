@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
 // checkAbortConditions checks if the upgrade should be aborted due to Green cluster failures.
@@ -90,10 +90,7 @@ func (m *Manager) triggerRollbackOrAbort(ctx context.Context, logger logr.Logger
 
 // triggerRollback initiates rollback from any phase.
 func (m *Manager) triggerRollback(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, reason string) (recon.Result, error) {
-	now := metav1.Now()
-	cluster.Status.BlueGreen.RollbackReason = reason
-	cluster.Status.BlueGreen.RollbackStartTime = &now
-	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRollingBack
+	core.BeginBlueGreenRollback(cluster.Status.BlueGreen, reason)
 
 	logger.Info("Rollback initiated", "reason", reason)
 	logging.LogAuditEvent(logger, logging.EventRollbackInitiated, map[string]string{

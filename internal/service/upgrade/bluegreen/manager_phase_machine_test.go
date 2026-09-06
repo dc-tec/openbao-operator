@@ -827,8 +827,15 @@ func TestHandlePhaseCleanup_Branches(t *testing.T) {
 		if err != nil {
 			t.Fatalf("handlePhaseCleanup() error = %v", err)
 		}
-		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
-			t.Fatalf("handlePhaseCleanup() outcome = %+v, want short requeue", outcome)
+		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhaseRestoringReadReplicas {
+			t.Fatalf("handlePhaseCleanup() outcome = %+v, want advance to read replica restore", outcome)
+		}
+		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseCleanup {
+			t.Fatal("phase handler advanced before its outcome was applied")
+		}
+		result, err := manager.applyOutcome(t.Context(), logr.Discard(), cluster, outcome)
+		if err != nil || result.RequeueAfter != constants.RequeueShort {
+			t.Fatalf("applyOutcome() = %+v, %v, want short requeue", result, err)
 		}
 		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseRestoringReadReplicas {
 			t.Fatalf("phase = %s, want %s", cluster.Status.BlueGreen.Phase, openbaov1alpha1.PhaseRestoringReadReplicas)

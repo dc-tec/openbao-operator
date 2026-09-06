@@ -35,8 +35,6 @@ func beginSteadyReadReplicaRestore(
 	cluster.Status.BlueGreen.GreenRevision = ""
 	cluster.Status.BlueGreen.ManualPromotionRequired = false
 	maybeResetBlueGreenRollbackState(cluster)
-	cluster.Status.BlueGreen.LastJobFailure = ""
-	cluster.Status.BlueGreen.JobFailureCount = 0
 
 	logger.Info("Blue/green cleanup complete; restoring steady read replicas before finalizing upgrade")
 }
