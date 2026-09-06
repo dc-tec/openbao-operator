@@ -29,6 +29,20 @@ type workflowStep struct {
 	ContinueOnError bool              `yaml:"continue-on-error"`
 }
 
+func TestAPIContractPreservesOperatorUpgradeHarness(t *testing.T) {
+	// The inventory describes an approved migration; its baseline also selects
+	// the operator-upgrade fixtures and must not follow the schema checker baseline.
+	env := []string{
+		"OPERATOR_UPGRADE_E2E_FROM_VERSION=",
+		"OPERATOR_UPGRADE_E2E_TARGET_RELEASE=",
+		"OPERATOR_UPGRADE_E2E_TARGET_VERSION=",
+	}
+	output, err := runCommand(t, repositoryRoot(t), env, "make", "verify-operator-upgrade-e2e")
+	if err != nil {
+		t.Fatalf("API contract changes must preserve the approved operator-upgrade rehearsal: %v\n%s", err, output)
+	}
+}
+
 func TestAPIContractWorkflowDependencies(t *testing.T) {
 	ci := readWorkflow(t, "ci.yml")
 	release := readWorkflow(t, "release.yml")

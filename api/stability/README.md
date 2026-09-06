@@ -4,6 +4,11 @@
 `spec` and `status` path in the three served CRDs. It is a release-planning contract,
 not a declaration that `v1alpha1` is already stable.
 
+Its `baseline: 0.4.2` and `release: 0.5.0` preserve the approved migration's
+provenance. The operator-upgrade E2E harness uses these fields to select its
+release notes and migration fixtures. They do not select the schema checker's
+compatibility baseline, which advances independently after a supported release.
+
 The inventory uses inherited path rules. Every top-level field requires an explicit
 rule, while nested fields inherit the closest matching rule unless a more specific
 decision overrides it. The checker expands those rules against the generated CRD
@@ -98,7 +103,9 @@ go run ./hack/tools/crd_compatibility \
   --baseline-bundle /path/to/released/crds.yaml --release <release>
 ```
 
-Review the recorded digest, update the checker default and inventory baseline,
-then run `make verify-api-contract`. Never replace a released baseline with
-schemas generated from the current checkout. A planned incompatible change
-requires a reviewed migration and compatibility-policy change before integration.
+Review the recorded digest and update the checker default. Preserve the inventory's
+approved migration metadata unless a new migration plan, release notes, and upgrade
+fixtures are reviewed together. Run `make verify-api-contract verify-operator-upgrade-e2e`
+to check both contracts. Never replace a released baseline with schemas generated
+from the current checkout. A planned incompatible change requires a reviewed
+migration and compatibility-policy change before integration.
