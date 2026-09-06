@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	controllermetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -33,6 +34,7 @@ import (
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 )
 
@@ -140,6 +142,72 @@ func TestSetupWithManager_MultiTenantRecreatesDeletedChildrenOnPoll(t *testing.T
 		}
 		return current.UID != originalStatefulSetUID
 	}, 20*time.Second, 200*time.Millisecond, "expected multi-tenant polling to recreate deleted StatefulSet")
+}
+
+func TestSetupWithManager_RemovesReconcileMetricsAfterDeletion(t *testing.T) {
+	ctx := t.Context()
+	const namespace = "metric-cleanup-test"
+	controllers := []string{"openbaocluster-workload", "openbaocluster-adminops", "openbaocluster-status"}
+	liveClient := startOpenBaoClusterManager(t, namespace, true)
+	cluster := newManagerTestCluster(namespace, "metric-cleanup-cluster")
+	cluster.Spec.Paused = true
+	require.NoError(t, liveClient.Create(ctx, cluster))
+	key := client.ObjectKeyFromObject(cluster)
+	waitForClusterFinalizer(t, ctx, liveClient, cluster)
+	for _, controller := range controllers {
+		require.Eventually(t, func() bool {
+			return reconcileMetricCounts(t, key, controller)["duration"] > 0
+		}, 10*time.Second, 100*time.Millisecond, "expected initial reconcile for %s", controller)
+		observability.NewReconcileMetrics(namespace, cluster.Name, controller).IncrementError("BeforeDeletion")
+	}
+
+	require.NoError(t, liveClient.Delete(ctx, cluster))
+	waitForNotFound(t, ctx, liveClient, cluster)
+	for _, controller := range controllers {
+		require.Eventually(t, func() bool {
+			return len(reconcileMetricCounts(t, key, controller)) == 0
+		}, 10*time.Second, 100*time.Millisecond, "expected deletion watch to clear %s", controller)
+	}
+
+	recreated := newManagerTestCluster(namespace, cluster.Name)
+	recreated.Spec.Paused = true
+	require.NoError(t, liveClient.Create(ctx, recreated))
+	require.NotEqual(t, cluster.UID, recreated.UID)
+	t.Cleanup(func() { _ = liveClient.Delete(context.Background(), recreated) })
+	waitForClusterFinalizer(t, ctx, liveClient, recreated)
+	for _, controller := range controllers {
+		require.Eventually(t, func() bool {
+			return reconcileMetricCounts(t, key, controller)["duration"] > 0
+		}, 10*time.Second, 100*time.Millisecond, "expected metrics for recreated owner in %s", controller)
+		require.NotContains(t, reconcileMetricCounts(t, key, controller), "BeforeDeletion")
+	}
+}
+
+func reconcileMetricCounts(t *testing.T, key client.ObjectKey, controller string) map[string]float64 {
+	t.Helper()
+	families, err := controllermetrics.Registry.Gather()
+	require.NoError(t, err)
+	counts := make(map[string]float64)
+	for _, family := range families {
+		if family.GetName() != "openbao_reconcile_duration_seconds" && family.GetName() != "openbao_reconcile_errors_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			labels := make(map[string]string)
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			if labels["namespace"] != key.Namespace || labels["name"] != key.Name || labels["controller"] != controller {
+				continue
+			}
+			if family.GetName() == "openbao_reconcile_duration_seconds" {
+				counts["duration"] = float64(metric.GetHistogram().GetSampleCount())
+			} else {
+				counts[labels["reason"]] = metric.GetCounter().GetValue()
+			}
+		}
+	}
+	return counts
 }
 
 func startOpenBaoClusterManager(t *testing.T, namespace string, singleTenant bool) client.Client {

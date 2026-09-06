@@ -25,6 +25,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -80,6 +81,7 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	restoreResource := &openbaov1alpha1.OpenBaoRestore{}
 	if getErr := r.Get(ctx, req.NamespacedName, restoreResource); getErr != nil {
 		if apierrors.IsNotFound(getErr) {
+			reconcileMetrics.Clear()
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoRestore before admission dependency check: %w", getErr)
@@ -106,6 +108,10 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		recordError(err)
 		return result, err
+	}
+	if !restoreResource.DeletionTimestamp.IsZero() &&
+		!controllerutil.ContainsFinalizer(restoreResource, openbaov1alpha1.OpenBaoRestoreFinalizer) {
+		reconcileMetrics.Clear()
 	}
 
 	return result, nil
