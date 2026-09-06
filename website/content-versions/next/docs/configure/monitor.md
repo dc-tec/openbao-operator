@@ -4,6 +4,7 @@ description: Scrape operator and workload metrics with explicit authentication, 
 eyebrow: Configure · Observe
 weight: 9
 verifiedBy:
+  - internal/platform/entrypoint/health.go
   - charts/openbao-operator/values.yaml
   - charts/openbao-operator/templates/networkpolicy.yaml
   - charts/openbao-operator/templates/metrics
@@ -163,6 +164,26 @@ spec:
 
 The operator renders the listener, a headless metrics Service, and ServiceMonitor relabeling for pod and node names.
 Use a pod selector in `trustedIngressPeers` as well when the monitoring namespace contains unrelated workloads.
+
+## Check manager probes
+
+The controller and Provisioner expose separate process probes:
+
+- `/healthz` checks that the process responds. Admission, OpenBao, KMS, and object-storage outages do not fail liveness.
+- `/readyz` requires synchronized caches for the manager's watched resources and a fresh, ready admission-dependency
+  check. Standby replicas can become ready without acquiring leadership. Readiness does not prove that a controller
+  has completed its first reconciliation or that an OpenBao cluster is available.
+
+Each process checks admission dependencies every 15 seconds with a 10-second request deadline. A result becomes stale
+at 30 seconds. Probe requests inspect maintained state and do not query the Kubernetes API. With the current 12
+admission dependencies, a successful scan uses 24 GET requests when the first configured name prefix matches;
+alternate-prefix lookups add requests. This polling cost applies per manager process, independently of cluster count.
+The existing admission metric remains driven by startup and reconciliation checks, not this private probe snapshot.
+
+In `--admission-enforcement=fail` mode, missing dependencies continue to block startup. In `warn` mode, the manager
+starts but remains not-ready until its admission checks pass. If admission is lost after startup, readiness fails
+while liveness continues to pass. The unsafe admission bypass skips only the admission check; cache synchronization
+is still required. Workload and administrative operations retain their immediate admission checks before mutation.
 
 ## Start with a small signal set
 
