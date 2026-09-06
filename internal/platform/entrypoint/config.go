@@ -21,10 +21,14 @@ func (e *UsageError) Unwrap() error { return e.Err }
 // LoadConfig preserves controller-runtime's configuration precedence without
 // reading the kubeconfig flag registered on the global command line.
 func LoadConfig(kubeconfig string) (*rest.Config, error) {
-	return loadConfig(kubeconfig, rest.InClusterConfig)
+	return loadConfig(kubeconfig, rest.InClusterConfig, clientcmd.NewDefaultClientConfigLoadingRules)
 }
 
-func loadConfig(kubeconfig string, inCluster func() (*rest.Config, error)) (*rest.Config, error) {
+func loadConfig(
+	kubeconfig string,
+	inCluster func() (*rest.Config, error),
+	defaultRules func() *clientcmd.ClientConfigLoadingRules,
+) (*rest.Config, error) {
 	if kubeconfig == "" && os.Getenv(clientcmd.RecommendedConfigPathEnvVar) == "" {
 		if config, err := inCluster(); err == nil {
 			config.QPS = -1
@@ -32,9 +36,10 @@ func loadConfig(kubeconfig string, inCluster func() (*rest.Config, error)) (*res
 		}
 	}
 
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	rules.ExplicitPath = kubeconfig
+	// An explicit path must not trigger default-file migration or inspect home files.
+	rules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig}
 	if kubeconfig == "" {
+		rules = defaultRules()
 		if _, ok := os.LookupEnv("HOME"); !ok {
 			currentUser, err := user.Current()
 			if err != nil {

@@ -41,7 +41,7 @@ func TestLoadConfigPrecedence(t *testing.T) {
 			config, err := loadConfig(tc.explicitPath, func() (*rest.Config, error) {
 				called = true
 				return &rest.Config{Host: "https://in-cluster.invalid"}, nil
-			})
+			}, clientcmd.NewDefaultClientConfigLoadingRules)
 			require.NoError(t, err)
 			require.Equal(t, tc.wantHost, config.Host)
 			require.Equal(t, float32(-1), config.QPS)
@@ -63,4 +63,44 @@ func TestUsageErrorPreservesCause(t *testing.T) {
 	err := &UsageError{Err: cause}
 	require.ErrorIs(t, err, cause)
 	require.Equal(t, cause.Error(), err.Error())
+}
+
+func TestExplicitConfigDoesNotMigrateDefaultFiles(t *testing.T) {
+	for _, blockedDestination := range []bool{false, true} {
+		t.Run(fmt.Sprintf("blocked destination %t", blockedDestination), func(t *testing.T) {
+			dir := t.TempDir()
+			explicit := filepath.Join(dir, "explicit")
+			legacy := filepath.Join(dir, "legacy")
+			destination := filepath.Join(dir, "default")
+			config := clientcmdapi.Config{
+				Clusters:       map[string]*clientcmdapi.Cluster{"test": {Server: "https://explicit.invalid"}},
+				AuthInfos:      map[string]*clientcmdapi.AuthInfo{"test": {}},
+				Contexts:       map[string]*clientcmdapi.Context{"test": {Cluster: "test", AuthInfo: "test"}},
+				CurrentContext: "test",
+			}
+			require.NoError(t, clientcmd.WriteToFile(config, explicit))
+			require.NoError(t, os.WriteFile(legacy, []byte("legacy config"), 0o600))
+			if blockedDestination {
+				parent := filepath.Join(dir, "blocked-parent")
+				require.NoError(t, os.WriteFile(parent, []byte("not a directory"), 0o600))
+				destination = filepath.Join(parent, "default")
+			}
+			loaded, err := loadConfig(explicit, func() (*rest.Config, error) {
+				t.Fatal("explicit config must not consult in-cluster config")
+				return nil, nil
+			}, func() *clientcmd.ClientConfigLoadingRules {
+				return &clientcmd.ClientConfigLoadingRules{
+					MigrationRules: map[string]string{destination: legacy},
+				}
+			})
+			require.NoError(t, err, "default-file migration must not interfere with explicit config")
+			require.Equal(t, "https://explicit.invalid", loaded.Host)
+			if !blockedDestination {
+				require.NoFileExists(t, destination, "explicit config must not migrate default files")
+			}
+			contents, err := os.ReadFile(legacy)
+			require.NoError(t, err)
+			require.Equal(t, "legacy config", string(contents))
+		})
+	}
 }
