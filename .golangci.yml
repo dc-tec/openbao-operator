@@ -26,6 +26,11 @@ linters:
     - unparam
     - unused
   settings:
+    goconst:
+      # Retain the pre-upgrade scope; composite literals include test tables and manifests.
+      exclude-types:
+        - Call
+        - CompositeLit
     errorlint:
       asserts: true
       comparison: true

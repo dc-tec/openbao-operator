@@ -225,18 +225,13 @@ func parseArgs() (args, error) {
 }
 
 func buildReleaseIndex(cfg args) (map[string]any, error) {
-	releaseFiles := []string{
-		cfg.installPath,
-		cfg.crdsPath,
-		cfg.checksumsPath,
-		cfg.checksumsBundlePath,
-	}
-
 	sboms, err := filepath.Glob(cfg.sbomGlob)
 	if err != nil {
 		return nil, fmt.Errorf("glob sboms: %w", err)
 	}
 	sort.Strings(sboms)
+	releaseFiles := make([]string, 0, 4+len(sboms))
+	releaseFiles = append(releaseFiles, cfg.installPath, cfg.crdsPath, cfg.checksumsPath, cfg.checksumsBundlePath)
 	releaseFiles = append(releaseFiles, sboms...)
 
 	checksumsSubjects, err := parseChecksumsFile(cfg.checksumsPath)

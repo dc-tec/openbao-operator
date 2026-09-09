@@ -18,7 +18,7 @@ import (
 const testCertHash = "test-hash-123"
 
 func newTestClientset(pods ...*corev1.Pod) kubernetes.Interface {
-	objects := []runtime.Object{}
+	objects := make([]runtime.Object, 0, len(pods))
 	for _, pod := range pods {
 		objects = append(objects, pod)
 	}

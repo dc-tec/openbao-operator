@@ -192,6 +192,7 @@ func pemPublicKeyFromEC(key jwkKey) (string, error) {
 		return "", fmt.Errorf("failed to decode ec y coordinate: %w", err)
 	}
 
+	//nolint:staticcheck // JWK supplies public coordinates; x509 validates the point before encoding.
 	pubKey := &ecdsa.PublicKey{
 		Curve: curve,
 		X:     new(big.Int).SetBytes(xBytes),

@@ -324,20 +324,20 @@ func newTLSReadinessTestSecrets(t *testing.T) (*corev1.Secret, *corev1.Secret) {
 	}
 
 	return &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "example" + constants.SuffixTLSCA,
-				Namespace: "default",
-			},
-			Data: map[string][]byte{"ca.crt": caPEM},
-		}, &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "example" + constants.SuffixTLSServer,
-				Namespace: "default",
-			},
-			Data: map[string][]byte{
-				"tls.crt": pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverDER}),
-				"tls.key": pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER}),
-				"ca.crt":  caPEM,
-			},
-		}
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example" + constants.SuffixTLSCA,
+			Namespace: "default",
+		},
+		Data: map[string][]byte{"ca.crt": caPEM},
+	}, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example" + constants.SuffixTLSServer,
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"tls.crt": pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverDER}),
+			"tls.key": pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER}),
+			"ca.crt":  caPEM,
+		},
+	}
 }

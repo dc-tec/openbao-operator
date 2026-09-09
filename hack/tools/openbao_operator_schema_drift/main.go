@@ -307,6 +307,7 @@ type pkgIndex struct {
 
 func indexPackageDir(dir string) (*pkgIndex, error) {
 	fset := token.NewFileSet()
+	//nolint:staticcheck // Schema inspection includes source files excluded by build constraints.
 	pkgs, err := parser.ParseDir(fset, dir, func(info fs.FileInfo) bool {
 		name := info.Name()
 		if strings.HasSuffix(name, "_test.go") {
@@ -583,13 +584,13 @@ func writeGitHubSummary(
 
 	var buf bytes.Buffer
 	buf.WriteString("### OpenBao operator schema drift\n\n")
-	buf.WriteString(fmt.Sprintf("- Upstream: `openbao/openbao:%s` (`%s`)\n", openbaoImageTag, upstreamSHA))
-	buf.WriteString(fmt.Sprintf("- Upstream extractable keys: `%d`\n", len(upstreamKeys)))
-	buf.WriteString(fmt.Sprintf("- Operator explicit keys: `%d`\n", len(operatorSchemaKeys)))
-	buf.WriteString(fmt.Sprintf("- Operator default keys: `%d`\n", len(defaultKeys)))
-	buf.WriteString(fmt.Sprintf("- Missing vs typed schema: `%d`\n", len(missingTyped)))
-	buf.WriteString(fmt.Sprintf("- Missing vs default generation: `%d`\n", len(missingDefault)))
-	buf.WriteString(fmt.Sprintf("- Operator extras vs upstream: `%d`\n", len(extras)))
+	fmt.Fprintf(&buf, "- Upstream: `openbao/openbao:%s` (`%s`)\n", openbaoImageTag, upstreamSHA)
+	fmt.Fprintf(&buf, "- Upstream extractable keys: `%d`\n", len(upstreamKeys))
+	fmt.Fprintf(&buf, "- Operator explicit keys: `%d`\n", len(operatorSchemaKeys))
+	fmt.Fprintf(&buf, "- Operator default keys: `%d`\n", len(defaultKeys))
+	fmt.Fprintf(&buf, "- Missing vs typed schema: `%d`\n", len(missingTyped))
+	fmt.Fprintf(&buf, "- Missing vs default generation: `%d`\n", len(missingDefault))
+	fmt.Fprintf(&buf, "- Operator extras vs upstream: `%d`\n", len(extras))
 
 	writeList := func(title string, set map[string]struct{}) {
 		buf.WriteString("\n")
