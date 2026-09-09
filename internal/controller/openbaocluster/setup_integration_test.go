@@ -88,7 +88,7 @@ func TestSetupWithManager_SingleTenantRecreatesDeletedConfigMap(t *testing.T) {
 	originalUID := configMap.UID
 
 	require.NoError(t, liveClient.Delete(ctx, configMap))
-	waitForNotFound(t, ctx, liveClient, configMap)
+	waitForObjectDeletion(t, ctx, liveClient, configMap)
 
 	configMapKey := client.ObjectKey{Namespace: namespace, Name: cluster.Name + constants.SuffixConfigMap}
 	require.Eventually(t, func() bool {
@@ -120,7 +120,7 @@ func TestSetupWithManager_MultiTenantRecreatesDeletedChildrenOnPoll(t *testing.T
 	originalUID := configMap.UID
 
 	require.NoError(t, liveClient.Delete(ctx, configMap))
-	waitForNotFound(t, ctx, liveClient, configMap)
+	waitForObjectDeletion(t, ctx, liveClient, configMap)
 
 	configMapKey := client.ObjectKey{Namespace: namespace, Name: cluster.Name + constants.SuffixConfigMap}
 	require.Eventually(t, func() bool {
@@ -139,7 +139,7 @@ func TestSetupWithManager_MultiTenantRecreatesDeletedChildrenOnPoll(t *testing.T
 	originalStatefulSetUID := statefulSet.UID
 
 	require.NoError(t, liveClient.Delete(ctx, statefulSet))
-	waitForNotFound(t, ctx, liveClient, statefulSet)
+	waitForObjectDeletion(t, ctx, liveClient, statefulSet)
 	require.Eventually(t, func() bool {
 		current := &appsv1.StatefulSet{}
 		if err := liveClient.Get(ctx, statefulSetKey, current); err != nil {
@@ -167,7 +167,7 @@ func TestSetupWithManager_RemovesReconcileMetricsAfterDeletion(t *testing.T) {
 	}
 
 	require.NoError(t, liveClient.Delete(ctx, cluster))
-	waitForNotFound(t, ctx, liveClient, cluster)
+	waitForObjectDeletion(t, ctx, liveClient, cluster)
 	for _, controller := range controllers {
 		require.Eventually(t, func() bool {
 			return len(reconcileMetricCounts(t, key, controller)) == 0
@@ -471,13 +471,16 @@ func waitForManagedConfigMap(t *testing.T, ctx context.Context, c client.Client,
 	return result
 }
 
-func waitForNotFound(t *testing.T, ctx context.Context, c client.Client, obj client.Object) {
+func waitForObjectDeletion(t *testing.T, ctx context.Context, c client.Client, obj client.Object) {
 	t.Helper()
 
 	key := client.ObjectKeyFromObject(obj)
+	deletedUID := obj.GetUID()
+	require.NotEmpty(t, deletedUID, "expected the deleted object's UID")
 	require.Eventually(t, func() bool {
 		current := obj.DeepCopyObject().(client.Object)
 		err := c.Get(ctx, key, current)
-		return apierrors.IsNotFound(err)
-	}, 10*time.Second, 200*time.Millisecond, "expected object %s/%s to be deleted", key.Namespace, key.Name)
+		// A watch can recreate the child before the first read observes NotFound.
+		return apierrors.IsNotFound(err) || (err == nil && current.GetUID() != deletedUID)
+	}, 10*time.Second, 200*time.Millisecond, "expected object %s/%s with UID %s to be deleted", key.Namespace, key.Name, deletedUID)
 }
