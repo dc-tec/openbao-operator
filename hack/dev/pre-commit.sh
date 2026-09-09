@@ -15,7 +15,8 @@ if [[ ${#staged_files[@]} -eq 0 ]]; then
 fi
 
 echo "[pre-commit] Checking staged diff for whitespace errors"
-git diff --cached --check
+# Preserve upstream vendored files verbatim; verify-vendor checks their integrity.
+git diff --cached --check -- . ':!vendor/**'
 
 go_files=()
 for path in "${staged_files[@]}"; do
