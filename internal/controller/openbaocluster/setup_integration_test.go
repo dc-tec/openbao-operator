@@ -13,9 +13,14 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/testr"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -248,6 +253,7 @@ func startOpenBaoClusterManager(t *testing.T, namespace string, singleTenant boo
 
 	mgrOptions := ctrl.Options{
 		Scheme:                 scheme,
+		Logger:                 testr.New(t),
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 		HealthProbeBindAddress: "0",
 	}
@@ -257,6 +263,32 @@ func startOpenBaoClusterManager(t *testing.T, namespace string, singleTenant boo
 		mgrOptions.Cache = cache.Options{
 			DefaultNamespaces: map[string]cache.Config{
 				namespace: {},
+			},
+		}
+	} else {
+		// Match cmd/controller.newManagerOptions: multi-tenant child reads bypass
+		// the shared cache. Cached reads after Apply can otherwise return stale
+		// NotFound errors and accumulate failure backoff during initial setup.
+		mgrOptions.Client.Cache = &client.CacheOptions{
+			DisableFor: []client.Object{
+				&corev1.Secret{},
+				&batchv1.Job{},
+				&appsv1.StatefulSet{},
+				&corev1.Service{},
+				&corev1.ConfigMap{},
+				&corev1.Namespace{},
+				&policyv1.PodDisruptionBudget{},
+				&networkingv1.Ingress{},
+				&networkingv1.NetworkPolicy{},
+				&rbacv1.Role{},
+				&rbacv1.RoleBinding{},
+				&corev1.ServiceAccount{},
+				&corev1.Pod{},
+				&corev1.PersistentVolumeClaim{},
+				&discoveryv1.EndpointSlice{},
+				&gatewayv1.HTTPRoute{},
+				&gatewayv1.TLSRoute{},
+				&gatewayv1.BackendTLSPolicy{},
 			},
 		}
 	}
