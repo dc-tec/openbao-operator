@@ -171,6 +171,10 @@ Start with:
 
 Install the operator from our OCI registry.
 
+If your platform manages or restricts namespace Pod Security labels, configure
+[external label ownership](https://dc-tec.github.io/openbao-operator/docs/get-started/install/#choose-namespace-pod-security-label-ownership)
+before onboarding tenants. This requires `tenancy.namespacePodSecurityLabels.mode=external` in the operator's Helm values.
+
 ```bash
 # 1. Create namespace
 kubectl create namespace openbao-operator-system

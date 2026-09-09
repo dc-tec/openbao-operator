@@ -8,6 +8,10 @@ verifiedBy:
   - .github/workflows/publish-edge.yml
   - hack/ci/generate-channel-manifests.sh
   - charts/openbao-operator/values.yaml
+  - charts/openbao-operator/templates/provisioner/deployment.yaml
+  - charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml
+  - charts/openbao-operator/templates/admission/provisioner-namespace-mutations.yaml
+  - internal/service/provisioner/manager_tenant.go
   - config/default/kustomization.yaml
   - cmd/controller/startup_helpers.go
 ---
@@ -27,6 +31,32 @@ and a pinned release for production. OpenBao Operator 0.5.0 is the current stabl
 - Install `kubectl`. Source deployments also require the repository toolchain and a registry the cluster can pull
   from.
 - Decide the tenancy model. Use the [single-tenant procedure](../single-tenant/) for one watched namespace.
+
+## Choose namespace Pod Security label ownership
+
+In multi-tenant mode, the Provisioner sets the namespace labels `pod-security.kubernetes.io/enforce`,
+`pod-security.kubernetes.io/audit`, and `pod-security.kubernetes.io/warn` to `restricted` by default.
+
+If a platform controller owns these labels or an admission policy restricts their updates, configure external
+ownership before onboarding a namespace. Add this fragment to the operator's Helm values file:
+
+```yaml
+tenancy:
+  namespacePodSecurityLabels:
+    mode: external
+```
+
+This setting applies to all tenant namespaces served by the installation; it is not an `OpenBaoTenant` field.
+The chart removes namespace update and patch permissions from the Provisioner and configures admission to deny its
+namespace updates. Existing labels remain unchanged. The platform team must apply the required Pod Security policy.
+The operator still manages tenant RBAC, Secret allowlists, ResourceQuota, and LimitRange.
+
+Rancher is one example: its webhook requires separate authorization to update Pod Security labels. See
+[Rancher's namespace admission guidance](https://ranchermanager.docs.rancher.com/reference-guides/rancher-webhook#application-fails-to-deploy-due-to-rancher-webhook-blocking-access).
+Other platform controllers and admission policies can impose similar restrictions.
+
+The generated edge installer and default source deployment use `enforce` mode. Helm values do not configure those
+manifests. Use the [local Helm rendering path](#render-the-local-helm-contract) to evaluate external label ownership.
 
 ## Install the latest validated edge build
 
@@ -115,9 +145,13 @@ Use a source deployment when you need a local change or an exact checkout that h
 Use the checked-out chart when you need to evaluate Helm rendering, including the single-tenant or OpenShift paths.
 The edge image and operator version keep helper-image selection aligned with the unreleased build.
 
+Save any overrides in `operator-values.yaml`, including [label ownership](#choose-namespace-pod-security-label-ownership)
+when required. If you do not need overrides, create an empty file with `touch operator-values.yaml`.
+
 {{< command label="inspect" title="Render the local edge chart" >}}
 helm template openbao-operator charts/openbao-operator \
   --namespace openbao-operator-system \
+  --values operator-values.yaml \
   --include-crds \
   --set image.tag=edge \
   --set operatorVersion=edge
@@ -165,6 +199,7 @@ kubectl delete -f "${EDGE_ROOT}/install.yaml"
 | Symptom | Check |
 | --- | --- |
 | Controller starts but Provisioner is absent | Confirm that you did not render `tenancy.mode=single` |
+| Tenant provisioning fails on a namespace label update | Inspect the tenant error and [configure label ownership](#choose-namespace-pod-security-label-ownership) if the platform restricts Pod Security label updates |
 | Pods cannot pull the source image | Push it to a cluster-reachable registry or load it into every local node |
 | Pods run but admission rejects ordinary resources | Inspect policy bindings, rendered identity variables, and API-server ValidatingAdmissionPolicy support |
 | Custom names break reconciliation | Compare every ServiceAccount, RoleBinding subject, admission variable, and JWT bound subject |
