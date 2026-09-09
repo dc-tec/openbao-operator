@@ -298,11 +298,12 @@ func TestHelmTemplateAllowsOperatorMetricsIngress(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			args := []string{
+			args := make([]string, 0, 6+len(tt.args))
+			args = append(args,
 				"--set", "tenancy.mode=multi",
 				"--set", "metrics.port=9443",
 				"--set", "networkPolicy.metricsAllowedNamespaceLabels.metrics=monitoring",
-			}
+			)
 			args = append(args, tt.args...)
 			rendered := string(renderChart(t, args...))
 
@@ -416,14 +417,15 @@ func renderChart(t *testing.T, extraArgs ...string) []byte {
 		t.Fatal("resolve current file path")
 	}
 	chartDir := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", "charts", "openbao-operator"))
-	args := []string{
+	args := make([]string, 0, 6+len(extraArgs))
+	args = append(args,
 		"template",
 		"test",
 		chartDir,
 		"--namespace",
 		"openbao",
 		"--include-crds",
-	}
+	)
 	args = append(args, extraArgs...)
 	cmd := exec.Command("helm", args...)
 	output, err := cmd.CombinedOutput()

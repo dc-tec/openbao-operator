@@ -642,34 +642,30 @@ func writeReportJSON(path string, report housekeepingReport) error {
 func renderSummary(report housekeepingReport) string {
 	var b strings.Builder
 	b.WriteString("## GHCR Housekeeping\n\n")
-	b.WriteString(fmt.Sprintf("- Mode: `%s`\n", report.Run.Mode))
-	b.WriteString(fmt.Sprintf("- Timestamp: `%s`\n", report.Run.TimestampUTC))
-	b.WriteString(fmt.Sprintf("- Owner: `%s` (%s)\n", report.Run.Owner, report.Run.OwnerKind))
-	b.WriteString(fmt.Sprintf("- Max delete per package: `%d`\n", report.Run.MaxDeletePerPackage))
-	b.WriteString(fmt.Sprintf("- Max delete total: `%d`\n\n", report.Run.MaxDeleteTotal))
+	fmt.Fprintf(&b, "- Mode: `%s`\n", report.Run.Mode)
+	fmt.Fprintf(&b, "- Timestamp: `%s`\n", report.Run.TimestampUTC)
+	fmt.Fprintf(&b, "- Owner: `%s` (%s)\n", report.Run.Owner, report.Run.OwnerKind)
+	fmt.Fprintf(&b, "- Max delete per package: `%d`\n", report.Run.MaxDeletePerPackage)
+	fmt.Fprintf(&b, "- Max delete total: `%d`\n\n", report.Run.MaxDeleteTotal)
 	b.WriteString(summaryTableHeader)
 	b.WriteString(
 		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
 	)
 	for _, pkg := range report.Packages {
-		b.WriteString(
-			fmt.Sprintf(
-				"| `%s` | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
-				pkg.Name,
-				pkg.ScannedVersions,
-				pkg.Candidates,
-				pkg.TaggedCandidates,
-				pkg.OrphanCandidates,
-				pkg.Planned,
-				pkg.Deleted,
-				pkg.KeptProtected,
-				pkg.KeptActiveTransient,
-				pkg.KeptGraphReachable,
-				pkg.KeptOrphanGrace,
-				pkg.KeptUnknown,
-				len(pkg.Errors),
-			),
-		)
+		fmt.Fprintf(&b, "| `%s` | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
+			pkg.Name,
+			pkg.ScannedVersions,
+			pkg.Candidates,
+			pkg.TaggedCandidates,
+			pkg.OrphanCandidates,
+			pkg.Planned,
+			pkg.Deleted,
+			pkg.KeptProtected,
+			pkg.KeptActiveTransient,
+			pkg.KeptGraphReachable,
+			pkg.KeptOrphanGrace,
+			pkg.KeptUnknown,
+			len(pkg.Errors))
 	}
 
 	errorCount := 0
@@ -680,7 +676,7 @@ func renderSummary(report housekeepingReport) string {
 		b.WriteString("\n### Errors\n")
 		for _, pkg := range report.Packages {
 			for _, err := range pkg.Errors {
-				b.WriteString(fmt.Sprintf("- `%s`: %s\n", pkg.Name, err))
+				fmt.Fprintf(&b, "- `%s`: %s\n", pkg.Name, err)
 			}
 		}
 	}

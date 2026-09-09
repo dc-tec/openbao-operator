@@ -43,21 +43,15 @@ let
     else
       throw "${name} version mismatch: expected ${expected}, nixpkgs provides ${lib.getVersion package}";
 
-  goPackage =
-    if lib.getVersion pkgs.go == goVersion then
-      pkgs.go
-    else if lib.getVersion pkgs.go == "1.26.5" && goVersion == "1.26.6" then
-      exactPackage "Go" goVersion (
-        pkgs.go.overrideAttrs {
-          version = goVersion;
-          src = pkgs.fetchurl {
-            url = "https://go.dev/dl/go${goVersion}.src.tar.gz";
-            hash = "sha256-oHIcVMaIkBRI13rZs+x+p8R0cwdV/4kTgukuy5P/LLE=";
-          };
-        }
-      )
-    else
-      throw "Go version mismatch: expected ${goVersion}, nixpkgs provides ${lib.getVersion pkgs.go}";
+  goPackage = exactPackage "Go" goVersion (
+    pkgs.go_1_27.overrideAttrs {
+      version = "1.27.1";
+      src = pkgs.fetchurl {
+        url = "https://go.dev/dl/go1.27.1.src.tar.gz";
+        hash = "sha256-TkCKuuEm2Ra2FkYnGT8sVPDjyhMS1pO4bbRfhiqyOLE=";
+      };
+    }
+  );
   spdxSchema22 = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/spdx/spdx-spec/a05c12a2dd4652b1396fd2659f2cd3ea1f37faba/schemas/spdx-schema.json";
     hash = "sha256-yDKNFMM2Iaa+kXVprUwyPTcCIEEu263cN8zx6T48qIo=";
@@ -113,6 +107,20 @@ in
   };
 
   profiles.editor.module = {
+    overlays = [
+      (_: previous: {
+        go-tools = previous.go-tools.overrideAttrs {
+          version = "2026.2.1";
+          src = previous.fetchFromGitHub {
+            owner = "dominikh";
+            repo = "go-tools";
+            tag = "2026.2.1";
+            hash = "sha256-wellofnfLW4lQy68UQyFJfvrKCfrZ/EllLODX1g9taY=";
+          };
+          vendorHash = "sha256-3no4wPqFG0RfSsWB0z8EYxeoZ30t+Zf7ZayzFCLEm2A=";
+        };
+      })
+    ];
     languages.go = {
       enable = true;
       package = goPackage;

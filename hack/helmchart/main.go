@@ -447,7 +447,7 @@ func syncRBAC(opts options) error {
 
 // syncProvisionerRBAC syncs provisioner-related RBAC (multi-tenant mode).
 func syncProvisionerRBAC(opts options) error {
-	var parts []string
+	parts := make([]string, 0, 3)
 
 	// 1. Provisioner minimal ClusterRole
 	provisionerRole, err := readFile(filepath.Join(opts.rbacInputDir, "provisioner_minimal_role.yaml"))

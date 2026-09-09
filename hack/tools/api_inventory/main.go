@@ -391,8 +391,10 @@ func collectSchemaFields(prefix string, schema apiextensionsv1.JSONSchemaProps) 
 }
 
 func collectSchemaNode(path string, schema apiextensionsv1.JSONSchemaProps, required bool) []schemaField {
-	fields := []schemaField{newSchemaField(path, schema, required, false)}
-	return append(fields, collectSchemaFields(path, schema)...)
+	children := collectSchemaFields(path, schema)
+	fields := make([]schemaField, 0, 1+len(children))
+	fields = append(fields, newSchemaField(path, schema, required, false))
+	return append(fields, children...)
 }
 
 func newSchemaField(path string, schema apiextensionsv1.JSONSchemaProps, required, schemaRoot bool) schemaField {

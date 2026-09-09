@@ -111,8 +111,10 @@ func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedInitCo
 // It includes standard variables and conditionally adds GCP credentials path
 // when using GCP Cloud KMS seal.
 func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar {
-	env := []corev1.EnvVar{
-		{
+	sealEnv := newSealWiringProvider(cluster).EnvVars()
+	env := make([]corev1.EnvVar, 0, 6+len(sealEnv))
+	env = append(env,
+		corev1.EnvVar{
 			Name: constants.EnvHostname,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
@@ -120,7 +122,7 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 				},
 			},
 		},
-		{
+		corev1.EnvVar{
 			// Required for OpenBao Kubernetes service registration.
 			Name: constants.EnvBaoK8sPodName,
 			ValueFrom: &corev1.EnvVarSource{
@@ -129,7 +131,7 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 				},
 			},
 		},
-		{
+		corev1.EnvVar{
 			// Required for OpenBao Kubernetes service registration.
 			Name: constants.EnvBaoK8sNamespace,
 			ValueFrom: &corev1.EnvVarSource{
@@ -138,7 +140,7 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 				},
 			},
 		},
-		{
+		corev1.EnvVar{
 			Name: constants.EnvPodIP,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
@@ -146,20 +148,20 @@ func buildContainerEnv(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar 
 				},
 			},
 		},
-		{
+		corev1.EnvVar{
 			Name:  constants.EnvBaoAPIAddr,
 			Value: fmt.Sprintf("https://$(%s):%d", constants.EnvPodIP, constants.PortAPI),
 		},
-		{
+		corev1.EnvVar{
 			// Set umask to 0077 to ensure Raft FSM database files are created
 			// with 0600 permissions (owner read/write only) instead of 0660.
 			// This matches OpenBao's security expectations for sensitive data files.
 			Name:  "UMASK",
 			Value: "0077",
 		},
-	}
+	)
 
-	env = append(env, newSealWiringProvider(cluster).EnvVars()...)
+	env = append(env, sealEnv...)
 
 	return env
 }
