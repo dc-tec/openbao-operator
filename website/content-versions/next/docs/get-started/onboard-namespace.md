@@ -20,6 +20,12 @@ create the namespace or an `OpenBaoCluster`.
 Skip this page only when the operator uses the verified [single-tenant mode](../single-tenant/).
 Review [tenant boundaries](../../security/tenant-boundaries/) when you need the authority model behind this handoff.
 
+{{< callout type="note" title="Check namespace Pod Security label ownership first" >}}
+If your platform manages or restricts Pod Security labels, ask the operator administrator to configure
+[`tenancy.namespacePodSecurityLabels.mode=external`](../install/#choose-namespace-pod-security-label-ownership)
+before you create `OpenBaoTenant`. This operator-wide Helm setting leaves label management to the platform.
+{{< /callout >}}
+
 ## Choose the onboarding owner
 
 | Model | Where to create `OpenBaoTenant` | Allowed customization |
@@ -114,9 +120,6 @@ The default per-container LimitRange is:
 | CPU | 100m | 500m |
 | Memory | 128Mi | 512Mi |
 
-Set `tenancy.namespacePodSecurityLabels.mode=external` when another platform controller owns the Pod Security labels.
-This delegates only label mutation; the operator still manages tenant RBAC, Secret allowlists, quota, and LimitRange.
-
 ## Apply tenant and cluster together
 
 GitOps can apply `OpenBaoTenant` and `OpenBaoCluster` in one synchronization. The cluster controller pauses until
@@ -130,9 +133,21 @@ failure. Watching the tenant status first still gives the clearest rollout signa
 | Security violation | A self-service request targets another namespace | `metadata.namespace` and `spec.targetNamespace` |
 | `status.provisioned` stays false with namespace-not-found | The target namespace does not exist | Namespace name and platform provisioning |
 | Cluster keeps waiting after the tenant is true | The handoff RoleBinding is absent or wrong | `openbao-operator-tenant-rolebinding` and its subject |
-| Namespace label update is unauthorized | Another policy layer owns labels | Set Pod Security label mode to `external` after review |
+| Namespace label update is unauthorized | A platform controller or admission policy restricts Pod Security label updates | Inspect `status.lastError` and follow [external label ownership configuration](../install/#choose-namespace-pod-security-label-ownership) |
 | Custom quota is ignored | The request used self-service | Create the request in the operator namespace through the platform path |
 | Admission dependency errors | Required policies or bindings are not ready | Operator installation and admission-policy status |
+
+For a rejected label update, inspect the tenant's error and conditions:
+
+{{< command label="inspect" title="Inspect tenant provisioning errors" >}}
+kubectl -n <request-namespace> get openbaotenant <name> -o yaml
+{{< /command >}}
+
+If the error identifies a platform restriction on Pod Security label updates, ask the operator administrator to
+re-render the installation with `tenancy.namespacePodSecurityLabels.mode=external` and apply the updated resources.
+Preserve the installation's other values and keep the required namespace policy under platform control. After the
+Provisioner restarts, repeat the tenant verification step above. The `Provisioned` condition must become `True`;
+inspect its message if it remains `False`.
 
 ## Remove or retarget a tenant
 

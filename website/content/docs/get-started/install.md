@@ -8,7 +8,9 @@ verifiedBy:
   - charts/openbao-operator/values.yaml
   - charts/openbao-operator/templates/controller/deployment.yaml
   - charts/openbao-operator/templates/provisioner/deployment.yaml
+  - charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml
   - charts/openbao-operator/templates/admission
+  - internal/service/provisioner/manager_tenant.go
   - config/default/kustomization.yaml
   - config/overlays/custom-identity/kustomization.yaml
   - internal/adapter/config/builder.go
@@ -38,6 +40,32 @@ The core procedure uses Helm in the chart's default multi-tenant mode.
 | OpenShift | Helm with `platform=openshift`, or auto-detection | SCC-compatible workload security context |
 | Local development | Source deployment | Development image and generated resources |
 
+## Choose namespace Pod Security label ownership
+
+In multi-tenant mode, the Provisioner sets the namespace labels `pod-security.kubernetes.io/enforce`,
+`pod-security.kubernetes.io/audit`, and `pod-security.kubernetes.io/warn` to `restricted` by default.
+
+If a platform controller owns these labels or an admission policy restricts their updates, configure external
+ownership before onboarding a namespace. Add this fragment to the operator's Helm values file:
+
+```yaml
+tenancy:
+  namespacePodSecurityLabels:
+    mode: external
+```
+
+This setting applies to all tenant namespaces served by the installation; it is not an `OpenBaoTenant` field.
+The chart removes namespace update and patch permissions from the Provisioner and configures admission to deny its
+namespace updates. Existing labels remain unchanged. The platform team must apply the required Pod Security policy.
+The operator still manages tenant RBAC, Secret allowlists, ResourceQuota, and LimitRange.
+
+Rancher is one example: its webhook requires separate authorization to update Pod Security labels. See
+[Rancher's namespace admission guidance](https://ranchermanager.docs.rancher.com/reference-guides/rancher-webhook#application-fails-to-deploy-due-to-rancher-webhook-blocking-access).
+Other platform controllers and admission policies can impose similar restrictions.
+
+Use the Helm procedure below when you need this setting. The published `install.yaml` uses the default `enforce` mode;
+Helm values do not configure that manifest.
+
 ## Install with Helm
 
 1. Set the release values.
@@ -60,30 +88,40 @@ The core procedure uses Helm in the chart's default multi-tenant mode.
    controlled prerelease or test. The complete pinned reference is
    [`values.yaml`](https://github.com/dc-tec/openbao-operator/blob/0.5.0/charts/openbao-operator/values.yaml).
 
-3. Render the installation before applying it when you use non-default values.
+3. Save your overrides in `operator-values.yaml`, including external label ownership when required.
+
+   If you do not need overrides, create an empty values file:
+
+   {{< command label="configure" title="Prepare the operator values file" >}}
+   touch operator-values.yaml
+   {{< /command >}}
+
+4. Render the installation with the values file.
 
    {{< command label="inspect" title="Render the Helm release" >}}
    helm template "${OPERATOR_RELEASE}" \
      oci://ghcr.io/dc-tec/charts/openbao-operator \
      --version "${CHART_VERSION}" \
-     --namespace "${OPERATOR_NAMESPACE}"
+     --namespace "${OPERATOR_NAMESPACE}" \
+     --values operator-values.yaml
    {{< /command >}}
 
    Check the controller and Provisioner ServiceAccounts, RoleBinding subjects, admission-policy identity variables,
    projected token audience, images, and namespaces.
 
-4. Install the chart.
+5. Install the chart with the same values file.
 
    {{< command label="apply" title="Install OpenBao Operator" >}}
    helm upgrade --install "${OPERATOR_RELEASE}" \
      oci://ghcr.io/dc-tec/charts/openbao-operator \
      --version "${CHART_VERSION}" \
      --namespace "${OPERATOR_NAMESPACE}" \
+     --values operator-values.yaml \
      --create-namespace \
      --wait
    {{< /command >}}
 
-5. Wait for both multi-tenant Deployments.
+6. Wait for both multi-tenant Deployments.
 
    {{< command label="verify" title="Verify the controller and Provisioner" >}}
    kubectl -n "${OPERATOR_NAMESPACE}" rollout status \
@@ -92,7 +130,7 @@ The core procedure uses Helm in the chart's default multi-tenant mode.
      deployment/openbao-operator-provisioner --timeout=2m
    {{< /command >}}
 
-6. Verify the installed APIs and admission policies.
+7. Verify the installed APIs and admission policies.
 
    {{< command label="verify" title="Verify cluster-scoped resources" >}}
    kubectl get crd \
@@ -103,7 +141,7 @@ The core procedure uses Helm in the chart's default multi-tenant mode.
      -l app.kubernetes.io/instance="${OPERATOR_RELEASE}"
    {{< /command >}}
 
-7. Verify the default controller JWT contract.
+8. Verify the default controller JWT contract.
 
    {{< command label="inspect" title="Inspect the controller identity and audience" >}}
    kubectl -n "${OPERATOR_NAMESPACE}" get serviceaccount \
@@ -217,6 +255,7 @@ separate CRD-deletion operation.
 | Symptom | Check |
 | --- | --- |
 | Controller starts but Provisioner is absent | Confirm that the chart did not render `tenancy.mode=single` |
+| Tenant provisioning fails on a namespace label update | Inspect the tenant error and [configure label ownership](#choose-namespace-pod-security-label-ownership) if the platform restricts Pod Security label updates |
 | Pods run but admission rejects ordinary resources | Inspect policy bindings, rendered identity variables, and the API server's ValidatingAdmissionPolicy support |
 | Custom names break reconciliation | Compare every ServiceAccount, RoleBinding subject, admission variable, and JWT bound subject |
 | OpenShift rejects Pod identity fields | Confirm auto-detection or set `platform=openshift`, then review SCC ownership |
