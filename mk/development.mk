@@ -275,8 +275,12 @@ verify-helm: helm-sync verify-helm-values ## Verify Helm chart is up-to-date (do
 helm-lint: ## Lint the Helm chart.
 	@helm lint charts/openbao-operator
 
+.PHONY: verify-edge-chart
+verify-edge-chart: ## Test edge chart contents, reproducibility, and publication guards.
+	@bash hack/ci/test-edge-chart.sh
+
 .PHONY: helm-test
-helm-test: helm-sync helm-lint ## Test the Helm chart without requiring a live cluster.
+helm-test: helm-sync helm-lint verify-edge-chart ## Test the Helm chart without requiring a live cluster.
 	@echo "Testing Helm chart: templating with default values..."
 	@helm template openbao-operator charts/openbao-operator \
 		--namespace openbao-operator-system \

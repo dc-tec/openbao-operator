@@ -1,6 +1,9 @@
 package constants
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestDefaultBackupImage_WithVersion(t *testing.T) {
 	// Set the version using t.Setenv (auto-cleanup, no error checking needed)
@@ -80,6 +83,39 @@ func TestDefaultImage_ErrorsWithoutVersion(t *testing.T) {
 			got, err := tc.fn()
 			if err == nil {
 				t.Errorf("%s() should have returned error when OPERATOR_VERSION is not set, got %v", tc.name, got)
+			}
+		})
+	}
+}
+
+func TestDefaultHelperImageReferenceOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name, imageEnv, repoEnv string
+		fn                      func() (string, error)
+	}{
+		{"init", EnvOperatorInitImage, EnvOperatorInitImageRepo, DefaultInitImage},
+		{"backup", EnvOperatorBackupImage, EnvOperatorBackupImageRepo, DefaultBackupImage},
+		{"upgrade", EnvOperatorUpgradeImage, EnvOperatorUpgradeImageRepo, DefaultUpgradeImage},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := "ghcr.io/example/helper@sha256:" + strings.Repeat("a", 64)
+			t.Setenv(tc.imageEnv, " "+want+" ")
+			t.Setenv(tc.repoEnv, "example.com/other")
+			t.Setenv(EnvOperatorVersion, "edge-0123456789ab")
+			got, err := tc.fn()
+			if err != nil || got != want {
+				t.Fatalf("complete reference = %q, %v; want %q", got, err, want)
+			}
+			t.Setenv(EnvOperatorVersion, "")
+			got, err = tc.fn()
+			if err != nil || got != want {
+				t.Fatalf("complete reference without version = %q, %v; want %q", got, err, want)
+			}
+			t.Setenv(tc.imageEnv, " ")
+			t.Setenv(EnvOperatorVersion, "0.5.0")
+			got, err = tc.fn()
+			if err != nil || got != "example.com/other:0.5.0" {
+				t.Fatalf("repository fallback = %q, %v", got, err)
 			}
 		})
 	}

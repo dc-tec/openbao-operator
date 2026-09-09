@@ -13,6 +13,10 @@ verifiedBy:
   - hack/ci/validate-release-as-request.sh
   - hack/ci/create-release-tag-and-draft.sh
   - hack/ci/prepare-release-chart.sh
+  - hack/ci/publish-edge-chart.sh
+  - .github/workflows/publish-edge.yml
+  - .github/workflows/reusable-channel-hardening.yml
+  - hack/tools/ghcr_housekeeping/policy.json
   - hack/ci/verify-post-release.sh
   - hack/ci/test-release-automation.sh
   - charts/openbao-operator/Chart.yaml
@@ -204,3 +208,31 @@ key independently.
 
 If verification fails or publication state is unexpected, stop and use the
 [publishing incident runbook]({{< relref "/contribute/incident-response.md" >}}).
+
+## Publish edge Helm charts
+
+Successful `main` CI builds and verifies an edge chart with version
+`X.Y.Z-edge.<run-id>.<attempt>.g<commit>`. The shared channel workflow compares independent package builds and installs
+the packaged chart in Kind without image overrides. The edge publisher then pushes those package bytes to
+`ghcr.io/dc-tec/charts-edge/openbao-operator`, signs the OCI digest, and verifies its GitHub attestation. A publisher
+rerun accepts an existing chart version only when its bytes match.
+
+The source chart remains shared with releases. Edge packaging sets the operator version and manager digest, and sets
+`helperImages.init`, `helperImages.backup`, and `helperImages.upgrade`. The controller receives these values as
+`OPERATOR_INIT_IMAGE`, `OPERATOR_BACKUP_IMAGE`, and `OPERATOR_UPGRADE_IMAGE`. These complete
+image references take precedence over the repository/version defaults. A cluster's explicit helper image still takes
+precedence over the operator default.
+
+The edge repository must remain unregistered in Artifact Hub. Do not publish `artifacthub-repo.yml` or an Artifact Hub
+repository registration for it. Stable and release-candidate charts continue to use `ghcr.io/dc-tec/charts/openbao-operator`.
+Nightly chart publication remains a separate future change and must use a separate unregistered repository too.
+
+On the first publication, check that the new GHCR package permits anonymous pulls and inherits the repository's Actions
+access. The edge metadata at `edge/latest/metadata.json` records the chart reference, version, and digest. The same
+candidate's chart archive and checksum are available alongside the manifests on GitHub Pages.
+
+The publisher adds `edge-chart-<chart-version>` tags to all four image manifests. GHCR housekeeping protects these tags
+and their reachable platform manifests and signatures. Published charts and these image sets have no automatic expiry.
+Any future chart cleanup must coordinate chart deletion with removal of the corresponding image retention tags.
+
+Run `make verify-edge-chart` to check package contents, Helm rendering, reproducibility, and publication retry guards.

@@ -77,6 +77,18 @@ spec:
               value: {{ include "openbao-operator.controllerServiceAccountName" . }}
             - name: OPERATOR_VERSION
               value: {{ include "openbao-operator.operatorVersion" . | quote }}
+            {{- if and .Values.helperImages .Values.helperImages.init }}
+            - name: OPERATOR_INIT_IMAGE
+              value: {{ .Values.helperImages.init | quote }}
+            {{- end }}
+            {{- if and .Values.helperImages .Values.helperImages.backup }}
+            - name: OPERATOR_BACKUP_IMAGE
+              value: {{ .Values.helperImages.backup | quote }}
+            {{- end }}
+            {{- if and .Values.helperImages .Values.helperImages.upgrade }}
+            - name: OPERATOR_UPGRADE_IMAGE
+              value: {{ .Values.helperImages.upgrade | quote }}
+            {{- end }}
             - name: OPENBAO_JWT_AUDIENCE
               value: {{ .Values.serviceAccountToken.openBaoAudience | quote }}
             {{- if not .Values.admissionPolicies.enabled }}

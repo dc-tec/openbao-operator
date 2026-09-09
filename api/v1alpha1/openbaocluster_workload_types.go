@@ -153,7 +153,8 @@ type InitContainerConfig struct {
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 	// Image is the container image to use for the init container.
-	// If not specified, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_INIT_IMAGE_REPOSITORY
+	// If not specified, OPERATOR_INIT_IMAGE can supply a complete image reference, including a digest.
+	// Otherwise, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_INIT_IMAGE_REPOSITORY
 	// (default: "ghcr.io/dc-tec/openbao-init") and the tag matches OPERATOR_VERSION.
 	// +optional
 	Image string `json:"image,omitempty"`

@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       chart_version:
-        description: "Chart version read from Chart.yaml"
+        description: "Candidate chart version (unique prerelease for edge; source version for nightly)"
         required: true
         type: string
       build_tag:
@@ -214,15 +214,33 @@ jobs:
           CHART_VERSION: ${{ inputs.chart_version }}
           OWNER: ${{ github.repository_owner }}
           SOURCE_DATE_EPOCH: ${{ inputs.source_date_epoch }}
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ inputs.ref }}
+          MANAGER_IMAGE: ${{ inputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.build.outputs.manager_digest }}
+          CONFIG_INIT_IMAGE: ${{ inputs.config_init_image }}
+          CONFIG_INIT_DIGEST: ${{ needs.build.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_IMAGE: ${{ inputs.backup_executor_image }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.build.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_IMAGE: ${{ inputs.upgrade_executor_image }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.build.outputs.upgrade_executor_digest }}
         run: |
           set -euo pipefail
           work_dir="$(mktemp -d)"
           cp -a source-under-test/charts/openbao-operator "${work_dir}/openbao-operator"
-          CHANGELOG_FILE="${GITHUB_WORKSPACE}/source-under-test/CHANGELOG.md" \
-            CHART_DIR="${work_dir}/openbao-operator" \
-            CHART_VERSION="${CHART_VERSION}" \
-            OWNER="${OWNER}" \
-            bash .github-workflow-src/hack/ci/prepare-release-chart.sh
+          if [[ "${VERSION}" == edge-* ]]; then
+            (
+              cd .github-workflow-src
+              CHART_DIR="${work_dir}/openbao-operator" GOFLAGS=-mod=vendor go run ./hack/tools/edge_chart
+            )
+          else
+            CHANGELOG_FILE="${GITHUB_WORKSPACE}/source-under-test/CHANGELOG.md" \
+              CHART_DIR="${work_dir}/openbao-operator" \
+              CHART_VERSION="${CHART_VERSION}" \
+              OWNER="${OWNER}" \
+              bash .github-workflow-src/hack/ci/prepare-release-chart.sh
+          fi
+          helm lint "${work_dir}/openbao-operator"
           find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
           helm package "${work_dir}/openbao-operator" -d dist/primary
           test -f "dist/primary/openbao-operator-${CHART_VERSION}.tgz"
@@ -232,15 +250,33 @@ jobs:
           CHART_VERSION: ${{ inputs.chart_version }}
           OWNER: ${{ github.repository_owner }}
           SOURCE_DATE_EPOCH: ${{ inputs.source_date_epoch }}
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ inputs.ref }}
+          MANAGER_IMAGE: ${{ inputs.manager_image }}
+          MANAGER_DIGEST: ${{ needs.rebuild.outputs.manager_digest }}
+          CONFIG_INIT_IMAGE: ${{ inputs.config_init_image }}
+          CONFIG_INIT_DIGEST: ${{ needs.rebuild.outputs.config_init_digest }}
+          BACKUP_EXECUTOR_IMAGE: ${{ inputs.backup_executor_image }}
+          BACKUP_EXECUTOR_DIGEST: ${{ needs.rebuild.outputs.backup_executor_digest }}
+          UPGRADE_EXECUTOR_IMAGE: ${{ inputs.upgrade_executor_image }}
+          UPGRADE_EXECUTOR_DIGEST: ${{ needs.rebuild.outputs.upgrade_executor_digest }}
         run: |
           set -euo pipefail
           work_dir="$(mktemp -d)"
           cp -a source-under-test/charts/openbao-operator "${work_dir}/openbao-operator"
-          CHANGELOG_FILE="${GITHUB_WORKSPACE}/source-under-test/CHANGELOG.md" \
-            CHART_DIR="${work_dir}/openbao-operator" \
-            CHART_VERSION="${CHART_VERSION}" \
-            OWNER="${OWNER}" \
-            bash .github-workflow-src/hack/ci/prepare-release-chart.sh
+          if [[ "${VERSION}" == edge-* ]]; then
+            (
+              cd .github-workflow-src
+              CHART_DIR="${work_dir}/openbao-operator" GOFLAGS=-mod=vendor go run ./hack/tools/edge_chart
+            )
+          else
+            CHANGELOG_FILE="${GITHUB_WORKSPACE}/source-under-test/CHANGELOG.md" \
+              CHART_DIR="${work_dir}/openbao-operator" \
+              CHART_VERSION="${CHART_VERSION}" \
+              OWNER="${OWNER}" \
+              bash .github-workflow-src/hack/ci/prepare-release-chart.sh
+          fi
+          helm lint "${work_dir}/openbao-operator"
           find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
           helm package "${work_dir}/openbao-operator" -d dist/rebuild
           test -f "dist/rebuild/openbao-operator-${CHART_VERSION}.tgz"
@@ -349,15 +385,24 @@ jobs:
             dist/rebuild/sbom-openbao-upgrade.spdx.json
 
       - name: Generate deterministic checksums
+        env:
+          VERSION: ${{ inputs.version }}
+          CHART_VERSION: ${{ inputs.chart_version }}
         run: |
           set -euo pipefail
           (
             cd dist/primary
             sha256sum install.yaml crds.yaml > checksums.txt
+            if [[ "${VERSION}" == edge-* ]]; then
+              sha256sum "openbao-operator-${CHART_VERSION}.tgz" >> checksums.txt
+            fi
           )
           (
             cd dist/rebuild
             sha256sum install.yaml crds.yaml > checksums.txt
+            if [[ "${VERSION}" == edge-* ]]; then
+              sha256sum "openbao-operator-${CHART_VERSION}.tgz" >> checksums.txt
+            fi
           )
 
       - name: Verify byte reproducibility
@@ -397,3 +442,37 @@ jobs:
             dist/primary/sbom-openbao-backup.spdx.json
             dist/primary/sbom-openbao-upgrade.spdx.json
           retention-days: 7
+
+  helm-edge-smoke:
+    name: Install Packaged Edge Chart
+    if: startsWith(inputs.version, 'edge-')
+    runs-on: *runner
+    timeout-minutes: 15
+    needs: [verify-byte-reproducibility, verify-provenance]
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout workflow helper sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+
+      - name: Setup Helm
+        uses: ./.github/actions/setup-helm
+
+      - name: Setup Kubernetes CLI tools
+        uses: ./.github/actions/setup-kubernetes-tools
+        with:
+          install-dir: bin/
+
+      - name: Download verified chart
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.byte_artifact_name }}
+          path: dist/edge-chart
+
+      - name: Install candidate chart without image overrides
+        env:
+          HELM_E2E_CHART: ${{ github.workspace }}/dist/edge-chart/openbao-operator-${{ inputs.chart_version }}.tgz
+        run: bash hack/ci/helm-e2e-smoke.sh

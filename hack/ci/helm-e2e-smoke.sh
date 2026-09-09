@@ -19,6 +19,7 @@ DOCKER_BIN="${DOCKER:-docker}"
 CLUSTER_NAME="${HELM_E2E_KIND_CLUSTER:-openbao-operator-helm-e2e}"
 NAMESPACE="${HELM_E2E_NAMESPACE:-openbao-operator-system}"
 KEEP_CLUSTER="${HELM_E2E_KEEP_CLUSTER:-false}"
+CHART_PACKAGE="${HELM_E2E_CHART:-}"
 
 # Use a stable local tag; override if you want to test a specific image.
 OPERATOR_IMAGE="${HELM_E2E_OPERATOR_IMAGE:-example.com/openbao-operator:helm-e2e}"
@@ -40,7 +41,11 @@ if ! command -v "${DOCKER_BIN}" >/dev/null 2>&1; then
   exit 1
 fi
 
+KUBECONFIG_PATH="$(mktemp -t openbao-operator-helm-e2e-kubeconfig.XXXXXX)"
+export KUBECONFIG="${KUBECONFIG_PATH}"
+
 cleanup() {
+  rm -f "${KUBECONFIG_PATH}"
   if [[ "${KEEP_CLUSTER}" == "true" ]]; then
     echo "HELM_E2E_KEEP_CLUSTER=true: keeping Kind cluster ${CLUSTER_NAME}" >&2
     return
@@ -56,30 +61,27 @@ else
   "${KIND_BIN}" create cluster --name "${CLUSTER_NAME}" >/dev/null
 fi
 
-KUBECONFIG_PATH="$(mktemp -t openbao-operator-helm-e2e-kubeconfig.XXXXXX)"
-trap 'rm -f "${KUBECONFIG_PATH}"' RETURN
-export KUBECONFIG="${KUBECONFIG_PATH}"
 ${KIND_BIN} export kubeconfig --name "${CLUSTER_NAME}" --kubeconfig "${KUBECONFIG_PATH}" >/dev/null
 
-echo "Syncing Helm chart from config/..." >&2
-cd "${ROOT_DIR}"
-make helm-sync >/dev/null
+chart="${CHART_PACKAGE}"
+image_args=()
+if [[ -z "${chart}" ]]; then
+  echo "Syncing Helm chart from config/..." >&2
+  cd "${ROOT_DIR}"
+  make helm-sync >/dev/null
+  chart="${ROOT_DIR}/charts/openbao-operator"
 
-echo "Building operator image ${OPERATOR_IMAGE}..." >&2
-make docker-build IMG="${OPERATOR_IMAGE}" >/dev/null
-
-echo "Loading operator image into Kind..." >&2
-${KIND_BIN} load docker-image --name "${CLUSTER_NAME}" "${OPERATOR_IMAGE}" >/dev/null
-
-repo="${OPERATOR_IMAGE%:*}"
-tag="${OPERATOR_IMAGE##*:}"
+  echo "Building operator image ${OPERATOR_IMAGE}..." >&2
+  make docker-build IMG="${OPERATOR_IMAGE}" >/dev/null
+  ${KIND_BIN} load docker-image --name "${CLUSTER_NAME}" "${OPERATOR_IMAGE}" >/dev/null
+  image_args=(--set "image.repository=${OPERATOR_IMAGE%:*}" --set "image.tag=${OPERATOR_IMAGE##*:}")
+fi
 
 echo "Installing Helm chart into namespace ${NAMESPACE}..." >&2
-${HELM_BIN} upgrade --install openbao-operator "${ROOT_DIR}/charts/openbao-operator" \
+${HELM_BIN} upgrade --install openbao-operator "${chart}" \
   --namespace "${NAMESPACE}" \
   --create-namespace \
-  --set "image.repository=${repo}" \
-  --set "image.tag=${tag}" \
+  "${image_args[@]}" \
   --wait \
   --timeout 5m >/dev/null
 

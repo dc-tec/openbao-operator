@@ -6,6 +6,11 @@
   },
   "rules": [
     {
+      "name": "edge-chart-image",
+      "pattern": "^edge-chart-[0-9]+\\.[0-9]+\\.[0-9]+-edge\\.[0-9]+\\.[0-9]+\\.g[0-9a-f]{12}$",
+      "action": "keep"
+    },
+    {
       "name": "semver",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-.+].*)?$",
       "action": "keep"

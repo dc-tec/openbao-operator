@@ -24,6 +24,16 @@ image:
   # -- Image pull policy
   pullPolicy: IfNotPresent
 
+# -- Complete default helper image references. Empty values use repository and operatorVersion defaults.
+# -- Edge packages set these references to the candidate digests. Cluster-level image overrides take precedence.
+helperImages:
+  # -- Config init image reference
+  init: ""
+  # -- Backup and restore executor image reference
+  backup: ""
+  # -- Upgrade executor image reference
+  upgrade: ""
+
 # -- Image pull secrets for operator images
 imagePullSecrets: []
 # - name: my-registry-secret

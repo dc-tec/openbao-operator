@@ -55,7 +55,8 @@ type BackupSchedule struct {
 	// +optional
 	Retention *BackupRetention `json:"retention,omitempty"`
 	// Image is the container image to use for backup operations.
-	// If not specified, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_BACKUP_IMAGE_REPOSITORY
+	// If not specified, OPERATOR_BACKUP_IMAGE can supply a complete image reference, including a digest.
+	// Otherwise, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_BACKUP_IMAGE_REPOSITORY
 	// (default: "ghcr.io/dc-tec/openbao-backup") and the tag matches OPERATOR_VERSION.
 	// This allows users to override the image for air-gapped environments or custom registries.
 	// +optional
@@ -195,7 +196,8 @@ type UpgradeConfig struct {
 	// cluster orchestration actions). The executor runs inside the tenant namespace and
 	// authenticates to OpenBao using a projected ServiceAccount token (JWT auth).
 	//
-	// If not specified, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_UPGRADE_IMAGE_REPOSITORY
+	// If not specified, OPERATOR_UPGRADE_IMAGE can supply a complete image reference, including a digest.
+	// Otherwise, defaults to "<repo>:X.Y.Z" where <repo> is derived from OPERATOR_UPGRADE_IMAGE_REPOSITORY
 	// (default: "ghcr.io/dc-tec/openbao-upgrade") and the tag matches OPERATOR_VERSION.
 	// +optional
 	Image string `json:"image,omitempty"`

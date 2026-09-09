@@ -34,6 +34,9 @@ GOFLAGS="${GOFLAGS:--mod=vendor}" go run ./hack/tools/provenance_index \
   -owner "${OWNER}" \
   -channel "${CHANNEL}" \
   -version "${VERSION}" \
+  -chart-ref "${CHART_REF:-}" \
+  -chart-version "${CHART_VERSION:-}" \
+  -chart-digest "${CHART_DIGEST:-}" \
   -commit "${SHA}" \
   -run-id "${RUN_ID}" \
   -run-attempt "${RUN_ATTEMPT:-}" \

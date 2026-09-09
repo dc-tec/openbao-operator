@@ -155,9 +155,11 @@ jobs:
           retention-days: 5
 
   promote:
-    name: Promote Edge Tags
+    name: Promote Edge Tags and Chart
     runs-on: *runner
     needs: load-candidate
+    outputs:
+      chart_digest: ${{ steps.chart.outputs.chart_digest }}
     permissions:
       contents: read
       packages: write
@@ -262,6 +264,45 @@ jobs:
           verify_signed "${BACKUP_EXECUTOR_IMAGE}@${BACKUP_EXECUTOR_DIGEST}"
           verify_signed "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
+      - name: Setup Helm
+        uses: ./.github-workflow-src/.github/actions/setup-helm
+
+      - name: Login to GHCR for Helm
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "${GHCR_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Publish verified edge chart
+        id: chart
+        env:
+          OWNER: ${{ github.repository_owner }}
+          CHART_VERSION: ${{ needs.load-candidate.outputs.chart_version }}
+        run: bash .github-workflow-src/hack/ci/publish-edge-chart.sh
+
+      - name: Sign edge chart by digest
+        env:
+          OWNER: ${{ github.repository_owner }}
+          CHART_DIGEST: ${{ steps.chart.outputs.chart_digest }}
+        run: cosign sign --yes --new-bundle-format=true "ghcr.io/${OWNER}/charts-edge/openbao-operator@${CHART_DIGEST}"
+
+      - name: Attest edge chart provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/charts-edge/openbao-operator
+          subject-digest: ${{ steps.chart.outputs.chart_digest }}
+          push-to-registry: true
+
+      - name: Verify edge chart signature
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+          CHART_DIGEST: ${{ steps.chart.outputs.chart_digest }}
+        run: |
+          cosign verify --new-bundle-format=true \
+            --certificate-identity "https://github.com/${REPO}/.github/workflows/publish-edge.yml@refs/heads/main" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "ghcr.io/${OWNER}/charts-edge/openbao-operator@${CHART_DIGEST}" >/dev/null
+
       - name: Attest edge checksums provenance (GitHub)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -288,7 +329,7 @@ jobs:
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             dist/checksums.txt >/dev/null
 
-      - name: Verify edge checksums attestation
+      - name: Verify edge chart and checksums attestations
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -296,7 +337,9 @@ jobs:
           SOURCE_REF: ${{ needs.load-candidate.outputs.source_ref }}
           OWNER: ${{ github.repository_owner }}
           SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/publish-edge.yml
-          VERIFY_CHART: "false"
+          VERIFY_CHART: "true"
+          CHART_IMAGE: ghcr.io/${{ github.repository_owner }}/charts-edge/openbao-operator
+          CHART_DIGEST: ${{ steps.chart.outputs.chart_digest }}
         run: bash .github-workflow-src/hack/ci/verify-release-artifact-attestations.sh
 
       - name: Setup Go (for provenance tooling)
@@ -318,6 +361,9 @@ jobs:
           SOURCE_REF: ${{ needs.load-candidate.outputs.source_ref }}
           SOURCE_DATE_EPOCH: ${{ needs.load-candidate.outputs.source_date_epoch }}
           CHECKSUMS_SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/publish-edge.yml
+          CHART_REF: ghcr.io/${{ github.repository_owner }}/charts-edge/openbao-operator
+          CHART_VERSION: ${{ needs.load-candidate.outputs.chart_version }}
+          CHART_DIGEST: ${{ steps.chart.outputs.chart_digest }}
           MANAGER_IMAGE: ${{ needs.load-candidate.outputs.manager_image }}
           MANAGER_DIGEST: ${{ needs.load-candidate.outputs.manager_digest }}
           CONFIG_INIT_IMAGE: ${{ needs.load-candidate.outputs.config_init_image }}
@@ -348,6 +394,7 @@ jobs:
             dist/checksums.txt
             dist/checksums.txt.bundle
             dist/provenance-index.json
+            dist/openbao-operator-${{ needs.load-candidate.outputs.chart_version }}.tgz
           retention-days: 5
 
   publish-pages:
@@ -363,6 +410,9 @@ jobs:
       SHA: ${{ needs.load-candidate.outputs.sha }}
       SHORT_SHA: ${{ needs.load-candidate.outputs.short_sha }}
       VERSION: ${{ needs.load-candidate.outputs.version }}
+      CHART_VERSION: ${{ needs.load-candidate.outputs.chart_version }}
+      CHART_DIGEST: ${{ needs.promote.outputs.chart_digest }}
+      CHART_REF: ghcr.io/${{ github.repository_owner }}/charts-edge/openbao-operator
       MANAGER_IMAGE: ${{ needs.load-candidate.outputs.manager_image }}
       CONFIG_INIT_IMAGE: ${{ needs.load-candidate.outputs.config_init_image }}
       BACKUP_EXECUTOR_IMAGE: ${{ needs.load-candidate.outputs.backup_executor_image }}
@@ -410,6 +460,11 @@ jobs:
               "sha": os.environ["SHA"],
               "short_sha": os.environ["SHORT_SHA"],
               "generated_at": os.environ.get("GENERATED_AT"),
+              "chart": {
+                  "ref": os.environ["CHART_REF"],
+                  "version": os.environ["CHART_VERSION"],
+                  "digest": os.environ["CHART_DIGEST"],
+              },
               "artifacts": {
                   "install_yaml": "install.yaml",
                   "crds_yaml": "crds.yaml",
@@ -435,6 +490,7 @@ jobs:
             cp dist/checksums.txt.bundle "${dest}/checksums.txt.bundle"
             cp dist/provenance-index.json "${dest}/provenance-index.json"
             cp dist/metadata.json "${dest}/metadata.json"
+            cp "dist/openbao-operator-${CHART_VERSION}.tgz" "${dest}/"
           done
 
           cat > "${edge_root}/index.html" <<'HTML'
@@ -461,7 +517,10 @@ jobs:
                 <li><a href="latest/provenance-index.json">latest/provenance-index.json</a></li>
                 <li><a href="latest/metadata.json">latest/metadata.json</a></li>
               </ul>
-              <p>To install: <code>kubectl apply -f latest/install.yaml</code></p>
+              <p>Helm charts: <code>oci://ghcr.io/dc-tec/charts-edge/openbao-operator</code>.
+                Use the chart version or digest in <a href="latest/metadata.json">metadata.json</a>.</p>
+              <p>See the <a href="../next/docs/get-started/install/">edge installation instructions</a>.</p>
+              <p>To install the manifest: <code>kubectl apply -f latest/install.yaml</code></p>
             </body>
           </html>
           HTML
@@ -474,12 +533,14 @@ jobs:
             "edge/${SHORT_SHA}/checksums.txt.bundle" \
             "edge/${SHORT_SHA}/provenance-index.json" \
             "edge/${SHORT_SHA}/metadata.json" \
+            "edge/${SHORT_SHA}/openbao-operator-${CHART_VERSION}.tgz" \
             "edge/latest/install.yaml" \
             "edge/latest/crds.yaml" \
             "edge/latest/checksums.txt" \
             "edge/latest/checksums.txt.bundle" \
             "edge/latest/provenance-index.json" \
             "edge/latest/metadata.json" \
+            "edge/latest/openbao-operator-${CHART_VERSION}.tgz" \
             "edge/index.html"
 
           if git diff --cached --quiet; then
