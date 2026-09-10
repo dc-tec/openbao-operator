@@ -31,29 +31,36 @@ type GVKResolver interface {
 //   - client.Client.Apply(ctx, applyConfig, opts...)
 //   - client.Client.Status().Apply(ctx, applyConfig, opts...)
 func ToApplyConfiguration(obj client.Object, resolver GVKResolver) (runtime.ApplyConfiguration, error) {
+	config, _, err := ToApplyConfigurationWithResponse(obj, resolver)
+	return config, err
+}
+
+// ToApplyConfigurationWithResponse also returns the object into which Apply
+// decodes the server response. Read it only after a successful Apply call.
+func ToApplyConfigurationWithResponse(obj client.Object, resolver GVKResolver) (runtime.ApplyConfiguration, *unstructured.Unstructured, error) {
 	if obj == nil {
-		return nil, fmt.Errorf("object cannot be nil")
+		return nil, nil, fmt.Errorf("object cannot be nil")
 	}
 
 	// Convert to unstructured for Apply
 	u, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert object to unstructured: %w", err)
+		return nil, nil, fmt.Errorf("failed to convert object to unstructured: %w", err)
 	}
 
 	unstructuredObj := &unstructured.Unstructured{Object: u}
 	gvk := obj.GetObjectKind().GroupVersionKind()
 	if gvk.Empty() {
 		if resolver == nil {
-			return nil, fmt.Errorf("resolver is required when object GVK is empty")
+			return nil, nil, fmt.Errorf("resolver is required when object GVK is empty")
 		}
 		var err error
 		gvk, err = resolver.GroupVersionKindFor(obj)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get GVK for object: %w", err)
+			return nil, nil, fmt.Errorf("failed to get GVK for object: %w", err)
 		}
 	}
 	unstructuredObj.SetGroupVersionKind(gvk)
 
-	return client.ApplyConfigurationFromUnstructured(unstructuredObj), nil
+	return client.ApplyConfigurationFromUnstructured(unstructuredObj), unstructuredObj, nil
 }

@@ -29,12 +29,15 @@ func ApplyOwned(ctx context.Context, c client.Client, scheme *runtime.Scheme, ow
 	if err := PrepareOwned(obj, resolvedOwner, scheme); err != nil {
 		return err
 	}
-	applyConfig, err := kube.ToApplyConfiguration(obj, c)
+	applyConfig, response, err := kube.ToApplyConfigurationWithResponse(obj, c)
 	if err != nil {
 		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
 	}
 	if err := ApplyConfiguration(ctx, c, obj, applyConfig); err != nil {
 		return err
+	}
+	if hasAppliedOwnerProof(response, resolvedOwner) {
+		return nil
 	}
 	return EnsureOwnedResourceProofStamped(ctx, c, scheme, resolvedOwner, obj)
 }
@@ -92,12 +95,15 @@ func EnsureOwnedResourceManageable(ctx context.Context, c client.Client, owner c
 	return nil
 }
 
-func ApplyUnowned(ctx context.Context, c client.Client, obj client.Object) error {
-	applyConfig, err := kube.ToApplyConfiguration(obj, c)
+func ApplyUnowned(ctx context.Context, c client.Client, obj client.Object) (client.Object, error) {
+	applyConfig, response, err := kube.ToApplyConfigurationWithResponse(obj, c)
 	if err != nil {
-		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
+		return nil, fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
 	}
-	return ApplyConfiguration(ctx, c, obj, applyConfig)
+	if err := ApplyConfiguration(ctx, c, obj, applyConfig); err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 func ApplyRetained(ctx context.Context, c client.Client, owner client.Object, obj client.Object) error {
@@ -114,10 +120,21 @@ func ApplyRetained(ctx context.Context, c client.Client, owner client.Object, ob
 	if err := EnsureOwnedResourceManageable(ctx, c, resolvedOwner, obj); err != nil {
 		return err
 	}
-	if err := ApplyUnowned(ctx, c, obj); err != nil {
+	response, err := ApplyUnowned(ctx, c, obj)
+	if err != nil {
 		return err
 	}
+	if hasAppliedOwnerProof(response, resolvedOwner) {
+		return nil
+	}
 	return EnsureRetainedResourceProofStamped(ctx, c, resolvedOwner, obj)
+}
+
+// Require server identity as well as owner proof before trusting the apply result.
+// Clients that do not return a complete response retain the read-and-repair path.
+func hasAppliedOwnerProof(response client.Object, owner client.Object) bool {
+	return response.GetUID() != "" && response.GetResourceVersion() != "" &&
+		resourceownership.HasOwnerProof(response, owner)
 }
 
 func PrepareOwned(obj client.Object, owner client.Object, scheme *runtime.Scheme) error {
