@@ -3,6 +3,9 @@ package openbao
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // AutopilotConfig represents the configuration for Raft Autopilot.
@@ -13,6 +16,45 @@ type AutopilotConfig struct {
 	LastContactThreshold           string `json:"last_contact_threshold,omitempty"`
 	MaxTrailingLogs                int    `json:"max_trailing_logs,omitempty"`
 	ServerStabilizationTime        string `json:"server_stabilization_time,omitempty"`
+}
+
+// Matches reports whether current agrees with the fields sent by the desired
+// configuration. Zero integers and empty durations retain their omitempty meaning.
+func (desired AutopilotConfig) Matches(current AutopilotConfig) bool {
+	return desired.CleanupDeadServers == current.CleanupDeadServers &&
+		(desired.MinQuorum == 0 || desired.MinQuorum == current.MinQuorum) &&
+		(desired.MaxTrailingLogs == 0 || desired.MaxTrailingLogs == current.MaxTrailingLogs) &&
+		managedDurationMatches(desired.DeadServerLastContactThreshold, current.DeadServerLastContactThreshold) &&
+		managedDurationMatches(desired.LastContactThreshold, current.LastContactThreshold) &&
+		managedDurationMatches(desired.ServerStabilizationTime, current.ServerStabilizationTime)
+}
+
+func managedDurationMatches(desired, current string) bool {
+	if desired == "" {
+		return true
+	}
+	desiredDuration, valid := parseAutopilotDuration(desired)
+	currentDuration, currentErr := time.ParseDuration(current)
+	// OpenBao's TypeDurationSecond fields truncate the supplied duration to seconds.
+	return valid && currentErr == nil && desiredDuration.Truncate(time.Second) == currentDuration
+}
+
+// OpenBao accepts Go durations, integer seconds, and integer days.
+func parseAutopilotDuration(value string) (time.Duration, bool) {
+	unit := time.Second
+	number := value
+	if strings.HasSuffix(value, "d") {
+		unit = 24 * time.Hour
+		number = strings.TrimSuffix(value, "d")
+	}
+	if n, err := strconv.ParseInt(number, 10, 64); err == nil {
+		if n < 0 || n > int64((1<<63-1)/unit) {
+			return 0, false
+		}
+		return time.Duration(n) * unit, true
+	}
+	duration, err := time.ParseDuration(value)
+	return duration, err == nil && duration >= 0
 }
 
 // AutopilotConfigurer configures Raft Autopilot state on an authenticated OpenBao client.
