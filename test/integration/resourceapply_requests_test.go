@@ -61,7 +61,7 @@ func TestResourceApplyRequestCounts(t *testing.T) {
 						}
 					}
 					t.Logf("requests: %v", counts)
-					require.Equal(t, map[string]float64{"get": 2, "apply": 1}, counts)
+					require.Equal(t, map[string]float64{"get": 1, "apply": 1}, counts)
 					live := &corev1.ConfigMap{}
 					require.NoError(t, actor.Get(ctx, client.ObjectKeyFromObject(desired), live))
 					require.True(t, resourceownership.HasOwnerProof(live, owner))
