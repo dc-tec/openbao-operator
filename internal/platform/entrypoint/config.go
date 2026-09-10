@@ -8,6 +8,8 @@ import (
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 )
 
 // UsageError identifies invalid command-line or environment configuration.
@@ -21,7 +23,12 @@ func (e *UsageError) Unwrap() error { return e.Err }
 // LoadConfig preserves controller-runtime's configuration precedence without
 // reading the kubeconfig flag registered on the global command line.
 func LoadConfig(kubeconfig string) (*rest.Config, error) {
-	return loadConfig(kubeconfig, rest.InClusterConfig, clientcmd.NewDefaultClientConfigLoadingRules)
+	config, err := loadConfig(kubeconfig, rest.InClusterConfig, clientcmd.NewDefaultClientConfigLoadingRules)
+	if err != nil {
+		return nil, err
+	}
+	config.Wrap(observability.WrapKubernetesTransport)
+	return config, nil
 }
 
 func loadConfig(
