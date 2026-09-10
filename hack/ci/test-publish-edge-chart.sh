@@ -18,6 +18,7 @@ set -euo pipefail
 printf 'helm %s\n' "$*" >> "${TEST_LOG}"
 case "$1" in
   pull)
+    reference="$2"
     if [[ "${TEST_PULL_FAILURE:-}" != "" ]]; then
       echo "${TEST_PULL_FAILURE}" >&2
       exit 1
@@ -26,8 +27,24 @@ case "$1" in
       echo 'chart: not found' >&2
       exit 1
     fi
+    filename="$(basename "${TEST_PACKAGE}")"
+    if [[ "${reference}" == *@sha256:* ]]; then
+      # Helm derives the archive filename from the OCI reference, including its digest.
+      filename="${reference##*/}"
+      filename="${filename%:*}-${filename##*:}.tgz"
+    fi
     while [[ "$1" != --destination ]]; do shift; done
-    cp "${TEST_REGISTRY}" "$2/$(basename "${TEST_PACKAGE}")"
+    if [[ "${reference}" == *@sha256:* ]]; then
+      case "${TEST_DIGEST_PULL_RESULT:-valid}" in
+        missing) exit 0 ;;
+        multiple) cp "${TEST_REGISTRY}" "$2/extra.tgz" ;;
+        different)
+          printf 'different digest archive\n' > "$2/${filename}"
+          exit 0
+          ;;
+      esac
+    fi
+    cp "${TEST_REGISTRY}" "$2/${filename}"
     ;;
   push)
     [[ "$3" == oci://ghcr.io/dc-tec/charts-edge ]]
@@ -60,6 +77,26 @@ if grep -Eq 'helm push|docker buildx imagetools create' "${TEST_LOG}"; then
   echo 'publisher rerun mutated an existing candidate' >&2
   exit 1
 fi
+
+# A successful version pull must not mask a missing, ambiguous, or mismatched digest archive.
+for result in missing multiple different; do
+  : > "${GITHUB_OUTPUT}"
+  : > "${TEST_LOG}"
+  if TEST_DIGEST_PULL_RESULT="${result}" bash "${ROOT_DIR}/hack/ci/publish-edge-chart.sh" >"${work_dir}/publish.err" 2>&1; then
+    echo "publisher accepted a ${result} digest archive on rerun" >&2
+    exit 1
+  fi
+  case "${result}" in
+    missing) grep -q 'expected exactly one chart archive from digest pull, found 0' "${work_dir}/publish.err" ;;
+    multiple) grep -q 'expected exactly one chart archive from digest pull, found 2' "${work_dir}/publish.err" ;;
+    different) grep -q 'differ' "${work_dir}/publish.err" ;;
+  esac
+  test ! -s "${GITHUB_OUTPUT}"
+  if grep -Eq 'helm push|docker buildx imagetools create' "${TEST_LOG}"; then
+    echo 'failed publisher rerun mutated an existing candidate' >&2
+    exit 1
+  fi
+done
 
 if CHART_VERSION=0.5.0 bash "${ROOT_DIR}/hack/ci/publish-edge-chart.sh" >/dev/null 2>&1; then
   echo 'publisher accepted a release chart version' >&2

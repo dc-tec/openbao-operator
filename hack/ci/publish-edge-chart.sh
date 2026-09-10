@@ -46,6 +46,16 @@ fi
 chart_digest="$(docker buildx imagetools inspect "${chart_ref}:${CHART_VERSION}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
 [[ "${chart_digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'invalid chart digest' >&2; exit 1; }
 # Check that the OCI artifact contains the verified package, including after a first publication.
-helm pull "oci://${chart_ref}@${chart_digest}" --destination "${work_dir}"
-cmp "${chart_package}" "${work_dir}/${chart_name}"
+# Isolate the digest pull so a prior version pull cannot satisfy the comparison.
+digest_dir="${work_dir}/digest"
+mkdir "${digest_dir}"
+helm pull "oci://${chart_ref}@${chart_digest}" --destination "${digest_dir}"
+# Helm derives the archive filename from the digest reference, not the chart version.
+shopt -s nullglob
+digest_archives=("${digest_dir}"/*.tgz)
+if [[ "${#digest_archives[@]}" -ne 1 ]]; then
+  echo "expected exactly one chart archive from digest pull, found ${#digest_archives[@]}" >&2
+  exit 1
+fi
+cmp "${chart_package}" "${digest_archives[0]}"
 echo "chart_digest=${chart_digest}" >> "${GITHUB_OUTPUT}"
