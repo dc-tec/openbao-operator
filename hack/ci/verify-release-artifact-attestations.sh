@@ -13,6 +13,7 @@ CERT_OIDC_ISSUER="${CERT_OIDC_ISSUER:-https://token.actions.githubusercontent.co
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-10}"
 RETRY_SECONDS="${RETRY_SECONDS:-6}"
 VERIFY_CHART="${VERIFY_CHART:-auto}"
+CHART_IMAGE="${CHART_IMAGE:-ghcr.io/${OWNER}/charts/openbao-operator}"
 
 if [[ ! -f "${CHECKSUMS_PATH}" ]]; then
   echo "checksums file not found: ${CHECKSUMS_PATH}" >&2
@@ -77,6 +78,6 @@ verify_file_subject() {
 
 if [[ "${VERIFY_CHART}" == "true" ]]; then
   : "${CHART_DIGEST:?CHART_DIGEST is required when VERIFY_CHART=true}"
-  verify_oci_subject "ghcr.io/${OWNER}/charts/openbao-operator@${CHART_DIGEST}"
+  verify_oci_subject "${CHART_IMAGE}@${CHART_DIGEST}"
 fi
 verify_file_subject "${CHECKSUMS_PATH}"

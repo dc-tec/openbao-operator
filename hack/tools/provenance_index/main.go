@@ -34,6 +34,8 @@ type args struct {
 
 	// release mode
 	chartDigest                 string
+	chartRef                    string
+	chartVersion                string
 	releaseSourceRef            string
 	claim                       string
 	reusableBuildSignerWorkflow string
@@ -116,7 +118,9 @@ func parseArgs() (args, error) {
 	flag.StringVar(&cfg.upgradeExecutorDigest, "upgrade-executor-digest", "", "upgrade image digest")
 
 	// release mode
-	flag.StringVar(&cfg.chartDigest, "chart-digest", "", "chart digest (release mode)")
+	flag.StringVar(&cfg.chartDigest, "chart-digest", "", "chart digest")
+	flag.StringVar(&cfg.chartRef, "chart-ref", "", "chart repository (channel mode)")
+	flag.StringVar(&cfg.chartVersion, "chart-version", "", "chart version (channel mode)")
 	flag.StringVar(&cfg.releaseSourceRef, "release-source-ref", "", "release source ref (release mode)")
 	flag.StringVar(
 		&cfg.claim,
@@ -369,6 +373,21 @@ func buildChannelIndex(cfg args) (map[string]any, error) {
 			"signature_bundle_path":   cfg.checksumsBundlePath,
 			"signature_bundle_digest": checksumsBundleDigest,
 		},
+	}
+
+	if cfg.chartDigest != "" {
+		if cfg.chartRef == "" || cfg.chartVersion == "" {
+			return nil, errors.New("chart reference and version are required with a channel chart digest")
+		}
+		index["chart"] = map[string]any{
+			"ref":                         cfg.chartRef,
+			"version":                     cfg.chartVersion,
+			"digest":                      cfg.chartDigest,
+			"oci_subject":                 cfg.chartRef + "@" + cfg.chartDigest,
+			"attestation_api":             apiAttestationURI(cfg.repo, cfg.chartDigest),
+			"attestation_signer_workflow": cfg.checksumsSignerWorkflow,
+			"signing_identity":            "https://github.com/" + cfg.checksumsSignerWorkflow + "@" + cfg.sourceRef,
+		}
 	}
 
 	return index, nil

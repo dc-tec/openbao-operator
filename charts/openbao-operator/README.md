@@ -68,6 +68,15 @@ helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-oper
   --values values.yaml
 ```
 
+### Pin default helper images
+
+Set `helperImages.init`, `helperImages.backup`, and `helperImages.upgrade` to complete image references when the
+installation must pin default helpers by digest. Empty values use the configured repository and operator version.
+Image fields on an `OpenBaoCluster` or `OpenBaoRestore` still take precedence over these defaults.
+
+Edge packages populate these values and the manager digest from the verified candidate. See the
+[edge installation instructions](https://dc-tec.github.io/openbao-operator/next/docs/get-started/install/).
+
 ## Upgrade
 
 ```bash

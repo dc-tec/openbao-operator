@@ -720,3 +720,19 @@ func TestGitHubClientDeleteHandlesNotFoundAsSuccess(t *testing.T) {
 		t.Fatalf("DeletePackageVersion(404) error = %v, want nil", err)
 	}
 }
+
+func TestPublishedEdgeChartImagesRemainProtected(t *testing.T) {
+	cfg, rules, err := loadPolicy("policy.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	version := packageVersion{
+		ID: 1, UpdatedAt: now.AddDate(-1, 0, 0),
+		Tags: []string{"edge-chart-0.5.0-edge.123.1.gaaaaaaaaaaaa", "edge-aaaaaaaaaaaa"},
+	}
+	eval := evaluateVersion(version, rules, cfg.ProtectUnknown, now)
+	if !eval.Protected || eval.Candidate || eval.Unknown {
+		t.Fatalf("published edge chart image must be protected: %+v", eval)
+	}
+}

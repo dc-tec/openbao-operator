@@ -8,7 +8,7 @@ import (
 
 // DefaultBackupImage returns the default backup executor image.
 // If the cluster specifies an image, it should be used instead.
-// The tag is derived from OPERATOR_VERSION env var.
+// A complete image override takes precedence over the repository and OPERATOR_VERSION tag.
 // Default repositories
 const (
 	// DefaultOpenBaoImageRepository is the default image repository used for OpenBao.
@@ -20,23 +20,23 @@ const (
 
 // DefaultBackupImage returns the default backup executor image.
 // If the cluster specifies an image, it should be used instead.
-// The tag is derived from OPERATOR_VERSION env var.
+// A complete image override takes precedence over the repository and OPERATOR_VERSION tag.
 func DefaultBackupImage() (string, error) {
-	return defaultImage(EnvOperatorBackupImageRepo, DefaultBackupImageRepository, "backup")
+	return defaultImage(EnvOperatorBackupImage, EnvOperatorBackupImageRepo, DefaultBackupImageRepository, "backup")
 }
 
 // DefaultUpgradeImage returns the default upgrade executor image.
 // If the cluster specifies an image, it should be used instead.
-// The tag is derived from OPERATOR_VERSION env var.
+// A complete image override takes precedence over the repository and OPERATOR_VERSION tag.
 func DefaultUpgradeImage() (string, error) {
-	return defaultImage(EnvOperatorUpgradeImageRepo, DefaultUpgradeImageRepository, "upgrade")
+	return defaultImage(EnvOperatorUpgradeImage, EnvOperatorUpgradeImageRepo, DefaultUpgradeImageRepository, "upgrade")
 }
 
 // DefaultInitImage returns the default init container image.
 // If the cluster specifies an image, it should be used instead.
-// The tag is derived from OPERATOR_VERSION env var.
+// A complete image override takes precedence over the repository and OPERATOR_VERSION tag.
 func DefaultInitImage() (string, error) {
-	return defaultImage(EnvOperatorInitImageRepo, DefaultInitImageRepository, "initContainer")
+	return defaultImage(EnvOperatorInitImage, EnvOperatorInitImageRepo, DefaultInitImageRepository, "initContainer")
 }
 
 // GetOpenBaoImage constructs the OpenBao image reference.
@@ -52,9 +52,11 @@ func GetOpenBaoImage(specVersion string) string {
 	return fmt.Sprintf("%s:%s", repo, strings.TrimSpace(specVersion))
 }
 
-// defaultImage constructs an image reference from an env var override or default repo,
-// combined with the operator version tag.
-func defaultImage(envVar, defaultRepo, fieldPath string) (string, error) {
+// defaultImage prefers a complete image reference, then combines the repository and operator version.
+func defaultImage(imageEnv, envVar, defaultRepo, fieldPath string) (string, error) {
+	if image := strings.TrimSpace(os.Getenv(imageEnv)); image != "" {
+		return image, nil
+	}
 	repo := strings.TrimSpace(os.Getenv(envVar))
 	if repo == "" {
 		repo = defaultRepo

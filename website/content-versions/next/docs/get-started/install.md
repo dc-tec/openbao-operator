@@ -7,6 +7,9 @@ verifiedBy:
   - .github/workflows/ci.yml
   - .github/workflows/publish-edge.yml
   - hack/ci/generate-channel-manifests.sh
+  - hack/ci/publish-edge-chart.sh
+  - hack/tools/edge_chart
+  - internal/platform/constants/images.go
   - charts/openbao-operator/values.yaml
   - charts/openbao-operator/templates/provisioner/deployment.yaml
   - charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml
@@ -20,7 +23,7 @@ Next tracks unreleased behavior on `main`. Use the edge channel for an executabl
 source when you are developing the operator. Do not treat either path as a stable production contract.
 
 {{< callout type="warning" title="Use stable documentation for production" >}}
-The edge channel is mutable and advances after successful `main` validation. Use the current stable documentation
+The edge channel advances after successful `main` validation. Each chart version identifies one verified candidate. Use the current stable documentation
 and a pinned release for production. OpenBao Operator 0.5.0 is the current stable release.
 {{< /callout >}}
 
@@ -28,8 +31,8 @@ and a pinned release for production. OpenBao Operator 0.5.0 is the current stabl
 
 - Confirm that the cluster meets the [Next compatibility requirements](../../reference/compatibility/).
 - Use an identity that can create cluster-scoped CRDs, RBAC, and ValidatingAdmissionPolicies.
-- Install `kubectl`. Source deployments also require the repository toolchain and a registry the cluster can pull
-  from.
+- Install `kubectl`, Helm, `curl`, `jq`, and Cosign. Source deployments also require the repository toolchain and a
+  registry the cluster can pull from.
 - Decide the tenancy model. Use the [single-tenant procedure](../single-tenant/) for one watched namespace.
 
 ## Choose namespace Pod Security label ownership
@@ -56,9 +59,87 @@ Rancher is one example: its webhook requires separate authorization to update Po
 Other platform controllers and admission policies can impose similar restrictions.
 
 The generated edge installer and default source deployment use `enforce` mode. Helm values do not configure those
-manifests. Use the [local Helm rendering path](#render-the-local-helm-contract) to evaluate external label ownership.
+manifests. Use the edge Helm chart or [local Helm rendering](#render-the-local-helm-contract) for external label ownership.
 
-## Install the latest validated edge build
+## Install an edge chart
+
+Edge charts use `oci://ghcr.io/dc-tec/charts-edge/openbao-operator`. This repository is not registered in Artifact Hub.
+Each package contains the CRDs, RBAC, and admission policies from the candidate commit and pins the controller,
+Provisioner, and default helper images to the verified image digests. OpenBao server images remain cluster configuration.
+
+Use this procedure for a new Helm installation or an existing edge Helm release. It does not adopt an installation
+created with the generated manifest. Store your Helm overrides in `operator-values.yaml`; use an empty mapping (`{}`)
+if you do not need overrides.
+
+1. Download the current channel metadata and inspect the candidate.
+
+   {{< command label="inspect" title="Select an edge candidate" >}}
+   curl --fail --silent --show-error \
+     https://dc-tec.github.io/openbao-operator/edge/latest/metadata.json \
+     --output edge-metadata.json
+   jq '{sha, chart, images}' edge-metadata.json
+   export EDGE_CHART=oci://ghcr.io/dc-tec/charts-edge/openbao-operator
+   export EDGE_CHART_DIGEST="$(jq -er '.chart.digest' edge-metadata.json)"
+   {{< /command >}}
+
+   The chart version has the form `X.Y.Z-edge.<CI-run-id>.<attempt>.g<commit>`. Retain the metadata with your evaluation
+   configuration. Pin the chart digest in GitOps so a new merge does not change the selected candidate.
+
+2. Verify the chart publisher identity.
+
+   {{< command label="verify" title="Verify the edge chart signature" >}}
+   cosign verify --new-bundle-format=true \
+     --certificate-identity \
+       https://github.com/dc-tec/openbao-operator/.github/workflows/publish-edge.yml@refs/heads/main \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+     "${EDGE_CHART#oci://}@${EDGE_CHART_DIGEST}"
+   {{< /command >}}
+
+   Cosign must report successful verification. The channel's `provenance-index.json` also records the chart digest
+   and GitHub attestation identity.
+
+3. Apply the CRDs from the selected chart before installing or upgrading the controller.
+
+   {{< command label="apply" title="Apply the matching edge CRDs" >}}
+   helm show crds "${EDGE_CHART}@${EDGE_CHART_DIGEST}" > edge-crds.yaml
+   kubectl apply --server-side --field-manager=openbao-operator-crds -f edge-crds.yaml
+   {{< /command >}}
+
+   Helm does not upgrade existing CRDs. Review any field ownership conflict before changing the existing CRD manager.
+   An older controller or Helm rollback does not restore a previous CRD schema.
+
+4. Install the selected chart and reapply your current overrides.
+
+   {{< command label="apply" title="Install the pinned edge chart" >}}
+   helm upgrade --install openbao-operator "${EDGE_CHART}@${EDGE_CHART_DIGEST}" \
+     --namespace openbao-operator-system \
+     --create-namespace \
+     --reset-values \
+     --values operator-values.yaml \
+     --wait --timeout 5m
+   {{< /command >}}
+
+   Use `--reset-values` on edge upgrades so the new package supplies its image pins. Reapply intentional custom values
+   from the values file. Avoid `--reuse-values`, which can retain image defaults from the previous candidate.
+   Overriding `image` or `helperImages`, or setting helper image environment variables through `controller.extraEnv`,
+   can replace the package's candidate image selection.
+
+5. Verify both deployments in multi-tenant mode.
+
+   {{< command label="verify" title="Verify the edge Helm installation" >}}
+   kubectl -n openbao-operator-system rollout status deployment/openbao-operator-controller --timeout=2m
+   kubectl -n openbao-operator-system rollout status deployment/openbao-operator-provisioner --timeout=2m
+   kubectl -n openbao-operator-system get deployments \
+     -o 'custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image'
+   {{< /command >}}
+
+   Both deployments must use the manager digest in `edge-metadata.json`. Single-tenant mode runs only the controller.
+   Continue with [namespace onboarding](../onboard-namespace/).
+
+Published edge charts and their referenced images have no automatic expiry under the current retention policy.
+They remain evaluation artifacts with no production support commitment. Nightly Helm charts are not published yet.
+
+## Install the generated edge manifest
 
 The edge publisher promotes images and generates manifests from the same successful `main` commit. Inspect the channel
 metadata before applying it so you know the exact commit and image digests under evaluation.

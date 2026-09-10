@@ -99,6 +99,11 @@ const (
 	EnvOperatorBackupImageRepo  = "OPERATOR_BACKUP_IMAGE_REPOSITORY"
 	EnvOperatorUpgradeImageRepo = "OPERATOR_UPGRADE_IMAGE_REPOSITORY"
 	EnvOperatorInitImageRepo    = "OPERATOR_INIT_IMAGE_REPOSITORY"
+
+	// Complete helper image references take precedence over repository/version defaults.
+	EnvOperatorBackupImage  = "OPERATOR_BACKUP_IMAGE"
+	EnvOperatorUpgradeImage = "OPERATOR_UPGRADE_IMAGE"
+	EnvOperatorInitImage    = "OPERATOR_INIT_IMAGE"
 )
 
 // Default image repositories.

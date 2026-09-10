@@ -59,6 +59,22 @@
         "pullPolicy"
       ]
     },
+    "helperImages": {
+      "type": "object",
+      "description": "Complete default helper image references",
+      "additionalProperties": false,
+      "properties": {
+        "init": {
+          "type": "string"
+        },
+        "backup": {
+          "type": "string"
+        },
+        "upgrade": {
+          "type": "string"
+        }
+      }
+    },
     "imagePullSecrets": {
       "type": "array",
       "description": "Image pull secrets for operator images",

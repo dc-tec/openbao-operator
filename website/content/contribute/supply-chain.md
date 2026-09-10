@@ -21,7 +21,8 @@ Build immutable artifacts, verify their provenance and reproducibility, then pro
 | Channel | Trust posture | Published surface |
 | --- | --- | --- |
 | Pull-request CI | Validation only; no publication | Test and policy evidence |
-| Edge and nightly | Provenance and byte-reproducibility gates | Channel manifests, checksums, and provenance metadata |
+| Edge | Provenance, reproducibility, and packaged-chart installation gates | Images, OCI chart, manifests, checksums, and provenance metadata |
+| Nightly | Provenance and byte-reproducibility gates | Images, channel manifests, checksums, and provenance metadata |
 | Prerelease and stable | Provenance, reproducibility, signing, and release evidence | Images, chart, manifests, CRDs, checksums, SBOMs, notes, and attestations |
 
 Use vendored Go dependencies, pinned workflow actions and build inputs, deterministic artifact generation, identity-constrained signing, and retained release evidence. A reproducibility failure indicates changed or nondeterministic inputs; diagnose it before publication.
@@ -52,9 +53,10 @@ GitHub dependency review catches newly introduced package vulnerabilities. The v
 
 ## Keep distribution claims narrow
 
-The supported public distribution path is the OCI Helm chart in GHCR, indexed by Artifact Hub, plus GitHub Release assets. OLM bundle assets remain repository-tested preparation material; public OperatorHub publication is not a current support contract.
+Releases use the OCI Helm chart in GHCR, indexed by Artifact Hub, plus GitHub Release assets. Edge charts use a separate
+`charts-edge/openbao-operator` OCI repository that remains unregistered in Artifact Hub. OLM bundle assets remain repository-tested preparation material; public OperatorHub publication is not a current support contract.
 
-Installer manifests under `dist/` are generated channel artifacts, not hand-maintained source. Artifact Hub metadata must describe the chart, changes, images, CRDs, maintainers, links, prerelease state, and security-update state. Repository ownership metadata is published separately for the OCI chart location.
+Installer manifests under `dist/` are generated channel artifacts, not hand-maintained source. Artifact Hub metadata for release charts must describe the chart, changes, images, CRDs, maintainers, links, prerelease state, and security-update state. Repository ownership metadata is published separately for the OCI chart location.
 
 ## Escalate trust failures
 

@@ -147,7 +147,7 @@ jobs:
             grep -qE -f "$1" <<< "${changed}"
           }
 
-          if changed_matches '^(charts/openbao-operator/|config/(crd|policy|rbac)/|hack/helm(chart|values)/|hack/dev/tool-versions\.env$)'; then
+          if changed_matches '^(charts/openbao-operator/|config/(crd|policy|rbac)/|hack/helm(chart|values)/|hack/tools/edge_chart/|hack/ci/(test-edge-chart|test-publish-edge-chart|publish-edge-chart|helm-e2e-smoke)\.sh$|hack/dev/tool-versions\.env$)'; then
             echo "chart=true" >> "${GITHUB_OUTPUT}"
           else
             echo "chart=false" >> "${GITHUB_OUTPUT}"
@@ -654,6 +654,9 @@ jobs:
 
       - name: Template
         run: helm template openbao-operator charts/openbao-operator --namespace openbao-operator-system --include-crds > /dev/null
+
+      - name: Test edge chart packaging
+        run: make verify-edge-chart
 
       - name: Verify OpenShift templating (SCC-compatible)
         run: bash hack/ci/verify-openshift-helm.sh
@@ -1339,6 +1342,9 @@ jobs:
             exit 1
           fi
 
+          chart_base="${chart_version%%[-+]*}"
+          chart_version="${chart_base}-edge.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}.g${short_sha}"
+
           owner="${GITHUB_REPOSITORY_OWNER}"
           {
             echo "sha=${sha}"
@@ -1456,12 +1462,15 @@ jobs:
           PY
 
       - name: Validate edge candidate bundle contents
+        env:
+          CHART_VERSION: ${{ needs.prepare-edge-candidate.outputs.chart_version }}
         run: |
           set -euo pipefail
           for path in \
             dist/candidate/install.yaml \
             dist/candidate/crds.yaml \
             dist/candidate/checksums.txt \
+            "dist/candidate/openbao-operator-${CHART_VERSION}.tgz" \
             dist/candidate/metadata.json; do
             test -f "${path}" || { echo "missing required edge candidate file: ${path}" >&2; exit 1; }
           done
