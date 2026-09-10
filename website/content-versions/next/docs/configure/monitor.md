@@ -15,6 +15,7 @@ verifiedBy:
   - internal/controller/openbaocluster/split_reconcilers.go
   - internal/platform/constants/timing.go
   - internal/platform/observability/metrics.go
+  - internal/platform/observability/kubernetes.go
   - internal/service/networking/metrics.go
   - internal/service/networking/services.go
 ---
@@ -191,6 +192,7 @@ is still required. Workload and administrative operations retain their immediate
 | --- | --- |
 | Availability | `openbao_cluster_ready_replicas` and `Available` or `Degraded` conditions |
 | Reconciliation | `openbao_reconcile_errors_total` and `openbao_reconcile_duration_seconds` |
+| Kubernetes API requests | `openbao_kube_client_requests_total` |
 | Backup | `openbao_backup_last_success_timestamp` and backup readiness or failure state |
 | Upgrade | `openbao_upgrade_in_progress`, failure, rollback, and duration metrics |
 | Read pool | `openbao_cluster_read_replicas_desired`, `_ready`, `_registered`, and `_healthy` |
@@ -205,3 +207,23 @@ or tamper-resistance boundary.
 
 Finally, verify the Service, ServiceMonitor or VMServiceScrape, Prometheus target state, certificate validation, token
 scope, NetworkPolicy path, and a representative query from each surface.
+
+## Attribute Kubernetes API requests
+
+Use `openbao_kube_client_requests_total` to compare request rates before and after an operator change:
+
+```promql
+sum by (verb, resource, subresource, result) (
+  rate(openbao_kube_client_requests_total[5m])
+)
+```
+
+The counter records HTTP attempts, including retries. It excludes reads served from the client cache.
+The `verb` label distinguishes `apply` from other `patch` requests, as well as `get`, `list`, `watch`, `create`,
+`update`, and `delete`. Discovery and unsupported operations use `other`.
+The `resource` and `subresource` labels use fixed allowlists; unknown values use `other`, and absent subresources use
+`none`. Labels exclude object names, namespaces, URLs, and error text. The `result` label is `success`, `conflict`,
+`not_found`, `forbidden`, or `error`.
+
+Count requests separately from storage writes. A successful APPLY can leave the stored object unchanged.
+Use the request counter to measure API traffic and processing demand; it does not measure etcd writes.
