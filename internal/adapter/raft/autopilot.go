@@ -30,6 +30,7 @@ const (
 
 type Client interface {
 	portopenbao.AutopilotConfigurer
+	ReadRaftAutopilotConfig(ctx context.Context) (*portopenbao.AutopilotConfig, error)
 	ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftConfigurationResponse, error)
 	ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftAutopilotStateResponse, error)
 	RemoveRaftPeer(ctx context.Context, serverID string) error
@@ -130,26 +131,7 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 		}
 	}
 
-	logger.V(1).Info("Reconciling Raft Autopilot configuration",
-		"cluster", cluster.Name,
-		"cleanup_dead_servers", desiredConfig.CleanupDeadServers,
-		"dead_server_last_contact_threshold", desiredConfig.DeadServerLastContactThreshold,
-		"min_quorum", desiredConfig.MinQuorum,
-		"server_stabilization_time", desiredConfig.ServerStabilizationTime,
-	)
-
-	autopilotCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	if err := client.ConfigureRaftAutopilot(autopilotCtx, desiredConfig); err != nil {
-		logger.V(1).Info("Raft Autopilot configuration not ready; will retry on next reconcile", "error", err)
-		return operatorerrors.WrapTransientConnection(
-			fmt.Errorf("failed to configure Raft Autopilot: %w", err),
-		)
-	}
-
-	logger.V(1).Info("Raft Autopilot configuration reconciled successfully")
-	return nil
+	return m.configureAutopilotWithClient(ctx, logger, client, cluster)
 }
 
 // PrepareScaleDown stages a single safe scale-down step by reconciling the
@@ -391,6 +373,19 @@ func (m *Manager) configureAutopilotWithClient(ctx context.Context, logger logr.
 
 	autopilotCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
+	currentConfig, err := client.ReadRaftAutopilotConfig(autopilotCtx)
+	if err != nil {
+		return operatorerrors.WrapTransientConnection(
+			fmt.Errorf("failed to read Raft Autopilot configuration: %w", err),
+		)
+	}
+	if currentConfig == nil {
+		return operatorerrors.WrapTransientConnection(fmt.Errorf("raft Autopilot configuration is missing"))
+	}
+	if desiredConfig.Matches(*currentConfig) {
+		return nil
+	}
 
 	if err := client.ConfigureRaftAutopilot(autopilotCtx, desiredConfig); err != nil {
 		logger.V(1).Info("Raft Autopilot configuration not ready; will retry on next reconcile", "error", err)

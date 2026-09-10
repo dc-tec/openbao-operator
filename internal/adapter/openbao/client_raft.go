@@ -164,6 +164,37 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftA
 	return &envelope.RaftAutopilotStateResponse, nil
 }
 
+// ReadRaftAutopilotConfig reads the effective Raft Autopilot configuration.
+func (c *Client) ReadRaftAutopilotConfig(ctx context.Context) (*portopenbao.AutopilotConfig, error) {
+	if err := c.requireAuth("raft autopilot configuration read"); err != nil {
+		return nil, err
+	}
+	req, err := c.newRequest(ctx, http.MethodGet, apiPathRaftAutopilotConfig, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create autopilot config read request: %w", err)
+	}
+	if err := c.authorize(req); err != nil {
+		return nil, fmt.Errorf("failed to authorize autopilot config read request: %w", err)
+	}
+	statusCode, body, err := c.doAndReadAll(req, nil, "failed to execute autopilot config read request")
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, portopenbao.NewAPIError("autopilot config read request failed", statusCode, body)
+	}
+	var envelope struct {
+		Data *portopenbao.AutopilotConfig `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse autopilot config response: %w", err)
+	}
+	if envelope.Data == nil {
+		return nil, fmt.Errorf("autopilot config response is missing data")
+	}
+	return envelope.Data, nil
+}
+
 // ConfigureRaftAutopilot sets the Raft Autopilot configuration.
 func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.AutopilotConfig) error {
 	if err := c.requireAuth("raft autopilot configuration"); err != nil {
