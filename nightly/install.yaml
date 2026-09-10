@@ -3569,11 +3569,8 @@ spec:
                       Eligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes
                       whose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their
                       CSIDriver instance. Other volumes are always re-labelled recursively.
-                      "MountOption" value is allowed only when SELinuxMount feature gate is enabled.
 
-                      If not specified and SELinuxMount feature gate is enabled, "MountOption" is used.
-                      If not specified and SELinuxMount feature gate is disabled, "MountOption" is used for ReadWriteOncePod volumes
-                      and "Recursive" for all other volumes.
+                      If not specified, "MountOption" is used.
 
                       This field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.
 
@@ -7194,10 +7191,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260908-5a838b1494ff
+          value: nightly-20260910-6e96773c325e
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:98176cb688ddfa272e0bab4fe53d359d58a2ca38792bcc064553aea4d9ae3f10
+        image: ghcr.io/dc-tec/openbao-operator@sha256:e4b5536e1be185afca5ac43ae4ab6146c1ad9f2dbf036dc82d5bc1f2ee46f881
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7312,8 +7309,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260908-5a838b1494ff
-        image: ghcr.io/dc-tec/openbao-operator@sha256:98176cb688ddfa272e0bab4fe53d359d58a2ca38792bcc064553aea4d9ae3f10
+          value: nightly-20260910-6e96773c325e
+        image: ghcr.io/dc-tec/openbao-operator@sha256:e4b5536e1be185afca5ac43ae4ab6146c1ad9f2dbf036dc82d5bc1f2ee46f881
         livenessProbe:
           httpGet:
             path: /healthz
