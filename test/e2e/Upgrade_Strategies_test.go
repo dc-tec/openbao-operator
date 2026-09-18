@@ -1381,6 +1381,25 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.Upgrade.TargetVersion).To(Equal(targetVersion))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+			By("Waiting for the first target to run the broken image before expiring its readiness deadline")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(recoveryCluster), updated)).To(Succeed())
+				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
+				g.Expect(updated.Status.Upgrade.Failure).To(BeNil())
+				g.Expect(updated.Status.Upgrade.CompletedPods).To(BeEmpty())
+				g.Expect(updated.Status.Upgrade.CurrentPartition).To(Equal(updated.Spec.Replicas))
+				pod := &corev1.Pod{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Namespace: tenantNamespace, Name: fmt.Sprintf("%s-%d", recoveryCluster.Name, updated.Spec.Replicas-1),
+				}, pod)).To(Succeed())
+				g.Expect(pod.DeletionTimestamp).To(BeNil())
+				g.Expect(pod.Spec.Containers).NotTo(BeEmpty())
+				g.Expect(pod.Spec.Containers[0].Image).To(Equal(brokenTarget))
+				g.Expect(pod.Status.ContainerStatuses).NotTo(BeEmpty())
+				g.Expect(pod.Status.ContainerStatuses[0].Ready).To(BeFalse())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
 			By("Forcing the real timeout/retry path without waiting ten minutes")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}

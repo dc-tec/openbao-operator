@@ -88,6 +88,13 @@ func (m *Manager) checkPodRevisionUpdated(
 		return false, fmt.Errorf("failed to get StatefulSet while checking pod revision: %w", err)
 	}
 
+	// The revision still describes the previous template until the StatefulSet
+	// controller observes this generation. It cannot prove rollout completion.
+	if sts.Status.ObservedGeneration < sts.Generation {
+		logger.V(1).Info("StatefulSet generation not observed yet; waiting")
+		return false, nil
+	}
+
 	targetRevision := strings.TrimSpace(sts.Status.UpdateRevision)
 	if targetRevision == "" {
 		logger.V(1).Info("StatefulSet update revision not set yet; waiting")
@@ -107,9 +114,13 @@ func (m *Manager) checkPodRevisionUpdated(
 		return false, fmt.Errorf("failed to get pod %s while checking revision: %w", podName, err)
 	}
 
+	if pod.DeletionTimestamp != nil {
+		return false, nil
+	}
+
 	podRevision := strings.TrimSpace(pod.Labels[appsv1.StatefulSetRevisionLabel])
 	podImage := strings.TrimSpace(baoContainerImage(pod.Spec.Containers))
-	if podRevision != targetRevision {
+	if podRevision != targetRevision || (desiredImage != "" && podImage != desiredImage) {
 		// If the pod no longer matches the StatefulSet template, waiting alone can stall
 		// forever after a failed retry because the StatefulSet controller does not replace
 		// an already-existing stale pod on its own. Force a fresh recreate instead.
@@ -161,7 +172,7 @@ func (m *Manager) waitForPodReady(ctx context.Context, logger logr.Logger, clust
 		return false, fmt.Errorf("failed to get pod %s: %w", podName, err)
 	}
 
-	if isPodReady(pod) {
+	if pod.DeletionTimestamp == nil && isPodReady(pod) {
 		logger.Info("Pod is ready", "pod", podName)
 		return true, nil
 	}

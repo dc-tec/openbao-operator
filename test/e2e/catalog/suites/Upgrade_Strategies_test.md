@@ -190,6 +190,7 @@ Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `recovery`, `e2e-an
 Recorded checkpoints:
 - Triggering a rolling upgrade with a bad non-semver image tag
 - Waiting for the rolling upgrade to initialize
+- Waiting for the first target to run the broken image before expiring its readiness deadline
 - Forcing the real timeout/retry path without waiting ten minutes
 - Injecting a stale deterministic step-down job for the retry cleanup path
 - Restoring the target image and requesting a rolling retry
