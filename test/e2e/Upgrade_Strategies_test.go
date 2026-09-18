@@ -410,6 +410,8 @@ func dumpBlueGreenUpgradeDiagnostics(namespace, clusterName string) {
 	dumpKubectlOutput("get", "statefulset", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "yaml")
 	dumpKubectlOutput("get", "pods", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "wide")
 	dumpKubectlOutput("get", "jobs", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "yaml")
+	dumpKubectlOutput("get", "persistentvolumeclaims", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "wide")
+	dumpKubectlOutput("logs", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "--all-containers=true", "--prefix=true", "--tail=100")
 	dumpKubectlOutput("get", "events", "-n", namespace, "--sort-by=.lastTimestamp")
 	dumpKubectlOutput("logs", "deployment/openbao-operator-controller", "-n", operatorNamespace, "--tail=400")
 }
@@ -2163,6 +2165,25 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				oldJobs[action] = jobName
 			}
 
+			By("Recording Blue and Green data claims before rollback")
+			blueStatefulSetName := gatedCluster.Name
+			if blueRevision != "" {
+				blueStatefulSetName += "-" + blueRevision
+			}
+			blueClaims := make(map[string]types.UID)
+			greenClaims := make(map[string]types.UID)
+			for ordinal := int32(0); ordinal < gatedCluster.Spec.Replicas; ordinal++ {
+				for name, claims := range map[string]map[string]types.UID{
+					fmt.Sprintf("data-%s-%d", blueStatefulSetName, ordinal):                 blueClaims,
+					fmt.Sprintf("data-%s-%s-%d", gatedCluster.Name, greenRevision, ordinal): greenClaims,
+				} {
+					claim := &corev1.PersistentVolumeClaim{}
+					Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)).To(Succeed())
+					Expect(claim.Status.Phase).To(Equal(corev1.ClaimBound))
+					claims[name] = claim.UID
+				}
+			}
+
 			By("Requesting rollback to the original version")
 			rollbackToken := time.Now().UTC().Format(time.RFC3339Nano)
 			Eventually(func(g Gomega) {
@@ -2189,6 +2210,19 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.BlueGreen.OperationID).To(BeEmpty())
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying rollback retires Green data claims and preserves Blue data claims")
+			for name := range greenClaims {
+				claim := &corev1.PersistentVolumeClaim{}
+				err := admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)
+				Expect(apierrors.IsNotFound(err)).To(BeTrue(), "discarded Green claim %s must be gone before rollback completes: %v", name, err)
+			}
+			for name, uid := range blueClaims {
+				claim := &corev1.PersistentVolumeClaim{}
+				Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)).To(Succeed())
+				Expect(claim.UID).To(Equal(uid))
+				Expect(claim.DeletionTimestamp).To(BeNil())
+			}
 
 			By("Requesting the same target again while completed Jobs remain")
 			Eventually(func(g Gomega) {
@@ -2226,6 +2260,20 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					g.Expect(jobSucceeded(newJob)).To(BeTrue())
 				}
 			}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the retry uses fresh Green data claims while Blue claims remain unchanged")
+			for name, uid := range greenClaims {
+				claim := &corev1.PersistentVolumeClaim{}
+				Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)).To(Succeed())
+				Expect(claim.UID).NotTo(Equal(uid), "retry must not reuse removed Green peer data")
+				Expect(claim.Status.Phase).To(Equal(corev1.ClaimBound))
+			}
+			for name, uid := range blueClaims {
+				claim := &corev1.PersistentVolumeClaim{}
+				Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)).To(Succeed())
+				Expect(claim.UID).To(Equal(uid))
+				Expect(claim.DeletionTimestamp).To(BeNil())
+			}
 
 			By("Verifying native Raft membership includes all new Green non-voters before promotion")
 			Eventually(func(g Gomega) {

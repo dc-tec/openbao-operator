@@ -38,10 +38,13 @@ Recorded checkpoints:
 - Waiting for Syncing hold with the hook completed successfully
 - Consistently holding in Syncing while no promote request is set
 - Recording completed executor Jobs before rollback
+- Recording Blue and Green data claims before rollback
 - Requesting rollback to the original version
 - Waiting for rollback to finish before requesting another upgrade
+- Verifying rollback retires Green data claims and preserves Blue data claims
 - Requesting the same target again while completed Jobs remain
 - Verifying the new attempt completes fresh join and sync Jobs while old Jobs remain
+- Verifying the retry uses fresh Green data claims while Blue claims remain unchanged
 - Verifying native Raft membership includes all new Green non-voters before promotion
 - Approving promotion via spec.upgrade.requests.promote
 - Verifying the upgrade resumes and completes cleanly

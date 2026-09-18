@@ -898,7 +898,11 @@ func TestHandlePhaseRollbackCleanup_FinalizesRollback(t *testing.T) {
 			Namespace: cluster.Namespace,
 		},
 	}
+	greenStatefulSet.OwnerReferences = job.OwnerReferences
+	greenStatefulSet.Annotations = job.Annotations
+	greenStatefulSet.Spec.Template.Labels = map[string]string{constants.LabelOpenBaoRevision: "green"}
 	manager := &Manager{
+		clusterOps: &clusterOpsStub{ok: true, podName: "example-blue-0"},
 		client: fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
@@ -910,6 +914,13 @@ func TestHandlePhaseRollbackCleanup_FinalizesRollback(t *testing.T) {
 	outcome, err := manager.handlePhaseRollbackCleanup(context.Background(), logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("handlePhaseRollbackCleanup() error = %v", err)
+	}
+	if outcome.kind != phaseOutcomeRequeueAfter {
+		t.Fatalf("expected StatefulSet deletion to requeue, got %+v", outcome)
+	}
+	outcome, err = manager.handlePhaseRollbackCleanup(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if outcome.kind != phaseOutcomeDone {
 		t.Fatalf("handlePhaseRollbackCleanup() outcome = %+v, want done", outcome)
