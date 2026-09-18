@@ -160,6 +160,26 @@ func runBackupFirstUpgradeCase(
 			Expect(scaleControllerDeployment(ctx, admin, operatorNamespace, originalControllerReplicas)).To(Succeed())
 		}
 	})
+	// Register after controller restoration so failure evidence is captured
+	// before cleanup restarts reconciliation or removes the backup workload.
+	DeferCleanup(func() {
+		if !CurrentSpecReport().Failed() {
+			return
+		}
+		dumpBlueGreenUpgradeDiagnostics(cluster.Namespace, cluster.Name)
+		pods := &corev1.PodList{}
+		if err := admin.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
+			constants.LabelOpenBaoCluster:   cluster.Name,
+			constants.LabelOpenBaoComponent: backup.ComponentBackup,
+		}); err != nil {
+			_, _ = fmt.Fprintf(GinkgoWriter, "Failed to list backup Pods for diagnostics: %v\n", err)
+			return
+		}
+		for _, pod := range pods.Items {
+			dumpKubectlOutput("describe", "pod", pod.Name, "-n", pod.Namespace)
+			dumpKubectlOutput("logs", pod.Name, "-n", pod.Namespace, "--all-containers=true", "--tail=200")
+		}
+	})
 	Expect(scaleControllerDeployment(ctx, admin, operatorNamespace, 0)).To(Succeed())
 
 	By("requesting the upgrade while the backup owns the operation lock")
@@ -175,7 +195,8 @@ func runBackupFirstUpgradeCase(
 
 	By("replacing the held Job with the same Job configured to complete")
 	Expect(runAsController(func(controllerClient client.Client) error {
-		return controllerClient.Delete(ctx, heldJob)
+		// Kubernetes can otherwise orphan the invalid-image Pod when the Job is deleted.
+		return controllerClient.Delete(ctx, heldJob, client.PropagationPolicy(metav1.DeletePropagationForeground))
 	})).To(Succeed())
 	Eventually(func() bool {
 		err := admin.Get(ctx, types.NamespacedName{Name: heldJob.Name, Namespace: heldJob.Namespace}, &batchv1.Job{})
