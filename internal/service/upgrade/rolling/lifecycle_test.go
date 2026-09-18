@@ -95,7 +95,7 @@ func TestWaitForFinalizationConverged_WaitsForStatefulSetConvergence(t *testing.
 
 	partition := int32(0)
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"},
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 		},
@@ -147,7 +147,7 @@ func TestWaitForFinalizationConverged_SucceedsWhenStatefulSetPodsAndHealthConver
 
 	partition := int32(0)
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"},
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 		},
@@ -245,7 +245,7 @@ func TestWaitForFinalizationConverged_RepairsStalePartitionWhenStatusIsAlreadyCo
 
 	partition := int32(3)
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"},
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 		},

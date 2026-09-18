@@ -516,7 +516,7 @@ func TestPerformPodByPodUpgrade_ResumesWhenTargetAlreadyRolledOut(t *testing.T) 
 	}
 
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"},
 			Name:      name,
 			Namespace: ns,
 		},
@@ -639,7 +639,7 @@ func TestWaitForPodRevisionUpdated_WaitsUntilRevisionMatches(t *testing.T) {
 	}
 
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"},
 			Name:      name,
 			Namespace: ns,
 		},
@@ -696,7 +696,7 @@ func TestWaitForPodRevisionUpdated_SucceedsWhenRevisionMatches(t *testing.T) {
 	}
 
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"},
 			Name:      name,
 			Namespace: ns,
 		},
@@ -750,7 +750,7 @@ func TestWaitForPodRevisionUpdated_DeletesStalePodWhenImageMismatchesTemplate(t 
 	}
 
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"},
 			Name:      name,
 			Namespace: ns,
 		},
@@ -831,7 +831,7 @@ func TestTargetPodAlreadyRolledOut_DoesNotDeletePodBeforePartitionAdvance(t *tes
 	}
 
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"}, Name: name, Namespace: ns},
 		Spec: appsv1.StatefulSetSpec{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{

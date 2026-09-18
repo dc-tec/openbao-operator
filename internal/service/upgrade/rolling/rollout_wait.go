@@ -3,6 +3,7 @@ package rolling
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -13,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
@@ -31,13 +33,16 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 		return fmt.Errorf("failed to get StatefulSet: %w", err)
 	}
 
+	if !statefulSetTemplateCurrent(sts, cluster) {
+		return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("StatefulSet template has not observed cluster generation %d", cluster.Generation))
+	}
 	newSts := sts.DeepCopy()
 	newSts.Spec.UpdateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
 	newSts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
 		Partition: &partition,
 	}
 
-	if err := m.client.Patch(ctx, newSts, client.MergeFrom(sts)); err != nil {
+	if err := m.client.Patch(ctx, newSts, client.MergeFromWithOptions(sts, client.MergeFromWithOptimisticLock{})); err != nil {
 		return fmt.Errorf("failed to update StatefulSet partition: %w", err)
 	}
 
@@ -88,10 +93,11 @@ func (m *Manager) checkPodRevisionUpdated(
 		return false, fmt.Errorf("failed to get StatefulSet while checking pod revision: %w", err)
 	}
 
-	// The revision still describes the previous template until the StatefulSet
-	// controller observes this generation. It cannot prove rollout completion.
-	if sts.Status.ObservedGeneration < sts.Generation {
-		logger.V(1).Info("StatefulSet generation not observed yet; waiting")
+	// Both controllers must have observed the desired configuration. A fully
+	// observed old template can still match an old Ready Pod before infra applies
+	// the new template, and cannot prove this upgrade completed.
+	if !statefulSetTemplateCurrent(sts, cluster) {
+		logger.V(1).Info("Desired StatefulSet template not observed yet; waiting")
 		return false, nil
 	}
 
@@ -222,4 +228,11 @@ func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, clu
 
 	logger.V(1).Info("Waiting for OpenBao to become healthy", "pod", podName)
 	return false, nil // Requeue
+}
+
+// statefulSetTemplateCurrent binds the rendered template to the desired cluster
+// generation without comparing an image tag with its verified digest.
+func statefulSetTemplateCurrent(sts *appsv1.StatefulSet, cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return sts.Annotations[constants.AnnotationClusterGeneration] == strconv.FormatInt(cluster.Generation, 10) &&
+		sts.Status.ObservedGeneration >= sts.Generation
 }

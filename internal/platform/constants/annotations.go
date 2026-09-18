@@ -6,6 +6,8 @@ const (
 	AnnotationTriggerBackup = "openbao.org/trigger-backup"
 	// AnnotationConfigHash is the annotation key used to track ConfigMap/Secret changes.
 	AnnotationConfigHash = "openbao.org/config-hash"
+	// AnnotationClusterGeneration records the OpenBaoCluster generation used to render a StatefulSet.
+	AnnotationClusterGeneration = "openbao.org/cluster-generation"
 	// AnnotationMaintenance is the annotation key used to put a cluster into maintenance mode.
 	AnnotationMaintenance = "openbao.org/maintenance"
 	// AnnotationMaintenanceAllowed is the annotation key used to check if maintenance is allowed.

@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -56,6 +57,29 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 		t.Fatalf("expected StatefulSet to be SSA-applied by fieldManager openbao-operator")
 	}
 
+	if got := sts.Annotations[constants.AnnotationClusterGeneration]; got != strconv.FormatInt(cluster.Generation, 10) {
+		t.Fatalf("wrong initial source generation: %q", got)
+	}
+	// Infra and AdminOps can see the new cluster spec before the old StatefulSet
+	// changes. The marker must stay old until the new template is SSA-applied.
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster); err != nil {
+		t.Fatal(err)
+	}
+	oldGeneration := cluster.Generation
+	cluster.Spec.Image = "openbao/openbao:2.6.2"
+	if err := k8sClient.Update(ctx, cluster); err != nil {
+		t.Fatal(err)
+	}
+	if cluster.Generation <= oldGeneration {
+		t.Fatal("spec update did not advance cluster generation")
+	}
+	if err := k8sClient.Get(ctx, stsKey, sts); err != nil {
+		t.Fatal(err)
+	}
+	if got := sts.Annotations[constants.AnnotationClusterGeneration]; got != strconv.FormatInt(oldGeneration, 10) {
+		t.Fatalf("unapplied template must retain old generation: %q", got)
+	}
+
 	// Simulate drift/other-actor writes:
 	// - Add an external annotation (should be preserved by SSA).
 	// - Set a RollingUpdate partition (UpgradeManager-managed; infra must not reset it).
@@ -100,6 +124,9 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 		t.Fatalf("get StatefulSet after reconcile: %v", err)
 	}
 
+	if got := updated.Annotations[constants.AnnotationClusterGeneration]; got != strconv.FormatInt(cluster.Generation, 10) {
+		t.Fatalf("applied template lacks current generation: %q", got)
+	}
 	if updated.Annotations["example.com/external-annotation"] != testTrueString {
 		t.Fatalf("expected external annotation to be preserved, got %#v", updated.Annotations)
 	}
