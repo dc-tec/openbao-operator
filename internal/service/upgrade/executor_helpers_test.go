@@ -381,6 +381,22 @@ func TestRaftServerMatchesRevision(t *testing.T) {
 			replicas:  0,
 			wantMatch: false,
 		},
+		{
+			name: "recovered unrevisioned peer", nodeID: "uid-openbao-1",
+			address: "openbao-1.openbao.default.svc:8201", cluster: "openbao", replicas: 3, wantMatch: true,
+		},
+		{
+			name: "numeric green revision is not unrevisioned blue", nodeID: "uid-openbao-1b8e6f3bc15eee28-0",
+			address: "openbao-1b8e6f3bc15eee28-0.openbao.default.svc:8201", cluster: "openbao", replicas: 3,
+		},
+		{
+			name: "ordinal prefix is not a peer", nodeID: "uid-openbao-green-10",
+			address: "https://openbao-green-10.openbao.default.svc:8201", cluster: "openbao", revision: "green", replicas: 3,
+		},
+		{
+			name: "URL path is not a peer", address: "https://other.default.svc:8201/openbao-green-1",
+			cluster: "openbao", revision: "green", replicas: 3,
+		},
 	}
 
 	for _, tt := range tests {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 
@@ -293,9 +294,16 @@ func RevisionPodName(clusterName string, revision string, ordinal int32) string 
 
 // RaftServerMatchesRevision reports whether a server belongs to the given revision.
 func RaftServerMatchesRevision(nodeID string, address string, clusterName string, revision string, replicas int32) bool {
+	if !strings.Contains(address, "://") {
+		address = "tcp://" + address
+	}
+	hostPod := ""
+	if endpoint, err := neturl.Parse(address); err == nil {
+		hostPod, _, _ = strings.Cut(endpoint.Hostname(), ".")
+	}
 	for _, i := range ReplicaOrdinals(replicas) {
 		podName := RevisionPodName(clusterName, revision, i)
-		if nodeID == podName || strings.Contains(address, podName) {
+		if nodeID == podName || hostPod == podName {
 			return true
 		}
 	}
