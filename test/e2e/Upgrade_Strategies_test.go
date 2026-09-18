@@ -2082,6 +2082,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
+		AfterEach(func() {
+			if CurrentSpecReport().Failed() && gatedCluster != nil {
+				dumpBlueGreenUpgradeDiagnostics(tenantNamespace, gatedCluster.Name)
+			}
+		})
+
 		AfterAll(func() {
 			if tenantFW != nil {
 				_ = tenantFW.Cleanup(ctx)
@@ -2157,7 +2163,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				oldJobs[action] = jobName
 			}
 
-			By("Requesting rollback while keeping the same upgrade target")
+			By("Requesting rollback to the original version")
 			rollbackToken := time.Now().UTC().Format(time.RFC3339Nano)
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -2167,6 +2173,30 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					updated.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{}
 				}
 				updated.Spec.Upgrade.Requests.Rollback = rollbackToken
+				updated.Spec.Version = initialVersion
+				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", initialVersion)
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for rollback to finish before requesting another upgrade")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), updated)).To(Succeed())
+				g.Expect(updated.Status.UpgradeRequests).NotTo(BeNil())
+				g.Expect(updated.Status.UpgradeRequests.LastHandledRollback).To(Equal(rollbackToken))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+				g.Expect(updated.Status.BlueGreen.OperationID).To(BeEmpty())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Requesting the same target again while completed Jobs remain")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
