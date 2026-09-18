@@ -31,7 +31,7 @@ func (m *Manager) recordBlueGreenUpgradeStart(logger logr.Logger, cluster *openb
 
 	core.InitializeBlueGreenManualPromotion(cluster)
 	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.OperationID == "" {
-		cluster.Status.BlueGreen.OperationID = string(uuid.NewUUID())
+		cluster.Status.BlueGreen.OperationID = executorOperationIDPrefix + string(uuid.NewUUID())
 	}
 }
 

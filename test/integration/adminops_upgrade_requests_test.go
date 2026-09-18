@@ -62,6 +62,7 @@ func TestAdminOpsFinalPatchPreservesUpgradeRequestSiblings(t *testing.T) {
 				desired := cluster.DeepCopy()
 				if tt.phase != "" {
 					desired.Status.BlueGreen.Phase = tt.phase
+					desired.Status.BlueGreen.OperationID = "bg-v2-persisted-operation"
 				}
 				latest := original.Status.DeepCopy()
 				latest.UpgradeRequests = &openbaov1alpha1.UpgradeRequestStatus{
@@ -106,6 +107,7 @@ func TestAdminOpsFinalPatchPreservesUpgradeRequestSiblings(t *testing.T) {
 				require.True(t, tt.pending(stored), "a newer spec token must remain pending after the captured token is acknowledged")
 				if tt.phase != "" {
 					require.Equal(t, tt.phase, stored.Status.BlueGreen.Phase, "transition and acknowledgement must be saved together")
+					require.Equal(t, "bg-v2-persisted-operation", stored.Status.BlueGreen.OperationID)
 				}
 				if raceApply {
 					require.Equal(t, 1, conflicts)

@@ -62,10 +62,14 @@ func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alph
 const breakGlassNonceBytes = 16
 
 func rollbackRunID(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	if cluster.Status.BlueGreen == nil || cluster.Status.BlueGreen.RollbackAttempt <= 0 {
+	if cluster.Status.BlueGreen == nil {
 		return "rollback"
 	}
-	return fmt.Sprintf("rollback-retry-%d", cluster.Status.BlueGreen.RollbackAttempt)
+	runID := "rollback"
+	if cluster.Status.BlueGreen.RollbackAttempt > 0 {
+		runID = fmt.Sprintf("rollback-retry-%d", cluster.Status.BlueGreen.RollbackAttempt)
+	}
+	return operationScopedRunID(cluster.Status.BlueGreen.OperationID, runID)
 }
 
 func shouldResumeBlueGreenRollbackAfterBreakGlassAck(cluster *openbaov1alpha1.OpenBaoCluster) bool {

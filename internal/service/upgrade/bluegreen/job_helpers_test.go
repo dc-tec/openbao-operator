@@ -57,13 +57,14 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 			CurrentVersion: "2.4.3",
 			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
 				Phase:         openbaov1alpha1.PhaseJoiningMesh,
+				OperationID:   "bg-v2-operation",
 				BlueRevision:  "blue",
 				GreenRevision: "green",
 			},
 		},
 	}
 
-	jobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "", "blue", "green")
+	jobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "bg-v2-operation/", "blue", "green")
 	job := managedBlueGreenJob(&batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -108,7 +109,7 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 	if step.Outcome.kind != phaseOutcomeRequeueAfter {
 		t.Fatalf("expected outcome %s, got %s", phaseOutcomeRequeueAfter, step.Outcome.kind)
 	}
-	retryJobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "retry-1", "blue", "green")
+	retryJobName := upgrade.ExecutorJobName(cluster.Name, ActionJoinGreenNonVoters, "bg-v2-operation/retry-1", "blue", "green")
 	retryJob := &batchv1.Job{}
 	if getErr := c.Get(context.Background(), types.NamespacedName{Namespace: cluster.Namespace, Name: retryJobName}, retryJob); getErr != nil {
 		t.Fatalf("expected retry job %s/%s to be created: %v", cluster.Namespace, retryJobName, getErr)

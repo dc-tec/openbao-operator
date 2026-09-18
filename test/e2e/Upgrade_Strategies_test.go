@@ -5,10 +5,12 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -233,7 +235,12 @@ func findUpgradeExecutorJob(jobs []batchv1.Job, action bluegreen.ExecutorAction,
 		if job.Annotations[upgradeActionAnnotationKey] != string(action) {
 			continue
 		}
-		if job.Annotations[upgradeRunIDAnnotationKey] != runID {
+		// Existing callers select an attempt within a single upgrade operation.
+		_, attempt, scoped := strings.Cut(job.Annotations[upgradeRunIDAnnotationKey], "/")
+		if !scoped {
+			attempt = job.Annotations[upgradeRunIDAnnotationKey]
+		}
+		if attempt != runID {
 			continue
 		}
 		return job
@@ -1992,6 +1999,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			initialVersion  string
 			targetVersion   string
 			admin           client.Client
+			cfg             *rest.Config
 		)
 
 		BeforeAll(func() {
@@ -2000,6 +2008,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			Expect(err).NotTo(HaveOccurred())
 			tenantNamespace = tenantFW.Namespace
 			admin = tenantFW.Client
+			cfg, err = ctrlconfig.GetConfig()
+			Expect(err).NotTo(HaveOccurred())
 
 			initialVersion = blueGreenUpgradeFromVersion()
 			targetVersion = blueGreenUpgradeToVersion()
@@ -2041,7 +2051,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
 							Enabled: true,
 						},
-						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
+						Requests: append(e2ehelpers.CreateE2ERequests(tenantNamespace),
+							e2ehelpers.CreateJWTPolicyRoleRequests(tenantNamespace, "default", "raft-reader", "raft-reader",
+								`path "sys/storage/raft/configuration" { capabilities = ["read"] }`)...),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -2076,7 +2088,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("holds in Syncing until manual promotion after the pre-promotion hook succeeds", func() {
+		It("holds in Syncing and creates fresh executor Jobs after rollback before manual promotion", Label(
+			"case:upgrade-bluegreen-retry-identity", "covers:bluegreen-operation-identity",
+		), func() {
 			By("Triggering a blue/green upgrade with manual promotion")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -2127,6 +2141,90 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseSyncing))
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 			}, time.Minute, 10*time.Second).Should(Succeed())
+
+			By("Recording completed executor Jobs before rollback")
+			beforeRollback := &openbaov1alpha1.OpenBaoCluster{}
+			Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), beforeRollback)).To(Succeed())
+			firstOperationID := beforeRollback.Status.BlueGreen.OperationID
+			blueRevision := beforeRollback.Status.BlueGreen.BlueRevision
+			greenRevision := beforeRollback.Status.BlueGreen.GreenRevision
+			oldJobs := make(map[bluegreen.ExecutorAction]string)
+			for _, action := range []bluegreen.ExecutorAction{bluegreen.ActionJoinGreenNonVoters, bluegreen.ActionWaitGreenSynced} {
+				jobName := upgrade.ExecutorJobName(gatedCluster.Name, action, firstOperationID+"/", blueRevision, greenRevision)
+				job := &batchv1.Job{}
+				Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: jobName}, job)).To(Succeed())
+				Expect(jobSucceeded(job)).To(BeTrue())
+				oldJobs[action] = jobName
+			}
+
+			By("Requesting rollback while keeping the same upgrade target")
+			rollbackToken := time.Now().UTC().Format(time.RFC3339Nano)
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), updated)).To(Succeed())
+				original := updated.DeepCopy()
+				if updated.Spec.Upgrade.Requests == nil {
+					updated.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{}
+				}
+				updated.Spec.Upgrade.Requests.Rollback = rollbackToken
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the new attempt completes fresh join and sync Jobs while old Jobs remain")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), updated)).To(Succeed())
+				g.Expect(updated.Status.UpgradeRequests).NotTo(BeNil())
+				g.Expect(updated.Status.UpgradeRequests.LastHandledRollback).To(Equal(rollbackToken))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				status := updated.Status.BlueGreen
+				g.Expect(status.OperationID).NotTo(BeEmpty())
+				g.Expect(status.OperationID).NotTo(Equal(firstOperationID))
+				g.Expect(status.Phase).To(Equal(openbaov1alpha1.PhaseSyncing))
+				g.Expect(status.BlueRevision).To(Equal(blueRevision))
+				g.Expect(status.GreenRevision).To(Equal(greenRevision))
+				g.Expect(status.ValidationHook).NotTo(BeNil())
+				g.Expect(status.ValidationHook.Stage).To(Equal(openbaov1alpha1.BlueGreenValidationHookStageTerminalObserved))
+				for action, oldName := range oldJobs {
+					oldJob := &batchv1.Job{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: oldName}, oldJob)).To(Succeed())
+					g.Expect(jobSucceeded(oldJob)).To(BeTrue())
+					newName := upgrade.ExecutorJobName(gatedCluster.Name, action, status.OperationID+"/", blueRevision, greenRevision)
+					g.Expect(newName).NotTo(Equal(oldName))
+					newJob := &batchv1.Job{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: newName}, newJob)).To(Succeed())
+					g.Expect(jobSucceeded(newJob)).To(BeTrue())
+				}
+			}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying native Raft membership includes all new Green non-voters before promotion")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, gatedCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				output, err := e2ehelpers.RunCommandViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage,
+					baoAddr, "default", "raft-reader", map[string]string{
+						constants.LabelOpenBaoCluster:   gatedCluster.Name,
+						constants.LabelOpenBaoComponent: "backup",
+					}, "bao read -format=json sys/storage/raft/configuration")
+				g.Expect(err).NotTo(HaveOccurred())
+				var response struct {
+					Data portopenbao.RaftConfigurationResponse `json:"data"`
+				}
+				g.Expect(json.Unmarshal([]byte(output), &response)).To(Succeed())
+				g.Expect(response.Data.Config.Servers).To(HaveLen(6))
+				for ordinal := int32(0); ordinal < gatedCluster.Spec.Replicas; ordinal++ {
+					address := fmt.Sprintf("%s-%s-%d.%s.%s.svc:8201", gatedCluster.Name, greenRevision,
+						ordinal, gatedCluster.Name, tenantNamespace)
+					found := false
+					for _, peer := range response.Data.Config.Servers {
+						if peer.Address == address {
+							g.Expect(peer.Voter).To(BeFalse())
+							found = true
+						}
+					}
+					g.Expect(found).To(BeTrue(), "Green peer %s must be present in native Raft membership", address)
+				}
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 
 			promoteToken := time.Now().UTC().Format(time.RFC3339Nano)
 

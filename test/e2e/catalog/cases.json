@@ -2147,15 +2147,19 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17",
-    "generatedId": "upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17",
+    "id": "upgrade-bluegreen-retry-identity",
+    "generatedId": "upgrade-strategies-holds-in-syncing-and-creates-fresh-d60f290d",
+    "caseLabel": "upgrade-bluegreen-retry-identity",
+    "coverage": [
+      "bluegreen-operation-identity"
+    ],
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
-    "name": "holds in Syncing until manual promotion after the pre-promotion hook succeeds",
+    "name": "holds in Syncing and creates fresh executor Jobs after rollback before manual promotion",
     "path": [
       "Upgrade Strategies",
       "Blue/Green Syncing Gates",
-      "holds in Syncing until manual promotion after the pre-promotion hook succeeds"
+      "holds in Syncing and creates fresh executor Jobs after rollback before manual promotion"
     ],
     "labels": [
       "upgrade",
@@ -2163,7 +2167,9 @@
       "cluster",
       "slow",
       "bluegreen",
-      "verification"
+      "verification",
+      "case:upgrade-bluegreen-retry-identity",
+      "covers:bluegreen-operation-identity"
     ],
     "domainLabels": [
       "upgrade",
@@ -2177,6 +2183,10 @@
       "Triggering a blue/green upgrade with manual promotion",
       "Waiting for Syncing hold with the hook completed successfully",
       "Consistently holding in Syncing while no promote request is set",
+      "Recording completed executor Jobs before rollback",
+      "Requesting rollback while keeping the same upgrade target",
+      "Verifying the new attempt completes fresh join and sync Jobs while old Jobs remain",
+      "Verifying native Raft membership includes all new Green non-voters before promotion",
       "Approving promotion via spec.upgrade.requests.promote",
       "Verifying the upgrade resumes and completes cleanly"
     ],
