@@ -324,3 +324,23 @@ func TestBuildStatefulSet_PlacementPolicySpansRevisions(t *testing.T) {
 		t.Fatalf("expected placement selector to omit %q so it spans all cluster revisions", constants.LabelOpenBaoRevision)
 	}
 }
+
+func TestBuildStatefulSet_SourceGenerationDoesNotRollPods(t *testing.T) {
+	cluster := newMinimalCluster("source-generation", "default")
+	cluster.Generation = 1
+	first, err := buildStatefulSetWithRevision(cluster, "test-config", true, "openbao@sha256:verified", "", "", constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cluster.Generation = 2
+	next, err := buildStatefulSetWithRevision(cluster, "test-config", true, "openbao@sha256:verified", "", "", constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Annotations[constants.AnnotationClusterGeneration] != "1" || next.Annotations[constants.AnnotationClusterGeneration] != "2" {
+		t.Fatal("StatefulSet must retain its source generation")
+	}
+	if !reflect.DeepEqual(first.Spec.Template, next.Spec.Template) {
+		t.Fatal("source generation alone must not change the Pod template")
+	}
+}

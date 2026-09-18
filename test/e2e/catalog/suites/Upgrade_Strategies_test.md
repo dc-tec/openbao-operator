@@ -8,7 +8,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17` | holds in Syncing until manual promotion after the pre-promotion hook succeeds | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification` |
+| `upgrade-bluegreen-retry-identity` | holds in Syncing and creates fresh executor Jobs after rollback before manual promotion | active | `bluegreen-operation-identity` | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification` |
 | `upgrade-bluegreen-snapshot-promotion` | executes Blue/Green upgrade cycle with pre-upgrade snapshot | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `e2e-anchor` |
 | `upgrade-strategies-aborts-before-promotion-when-the-pre-230729f6` | aborts before promotion when the pre-promotion hook fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `failure` |
 | `upgrade-bluegreen-executor-failure-auto-abort` | induces executor failure and validates retry plus auto-abort behavior | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `e2e-anchor` |
@@ -21,13 +21,15 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `upgrade-bluegreen-safe-mode-break-glass-recovery` | acknowledges break glass and resumes rollback after the upgrade policy is repaired | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 | `upgrade-bluegreen-safe-mode-consensus-repair-failure` | enters safe mode when rollback consensus repair job fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 
-## `upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17`
+## `upgrade-bluegreen-retry-identity`
 
-Path: `Upgrade Strategies > Blue/Green Syncing Gates > holds in Syncing until manual promotion after the pre-promotion hook succeeds`
+Path: `Upgrade Strategies > Blue/Green Syncing Gates > holds in Syncing and creates fresh executor Jobs after rollback before manual promotion`
 
 State: `active`
 
-Covers: _none_
+Generated fallback ID: `upgrade-strategies-holds-in-syncing-and-creates-fresh-d60f290d`
+
+Covers: `bluegreen-operation-identity`
 
 Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`
 
@@ -35,6 +37,15 @@ Recorded checkpoints:
 - Triggering a blue/green upgrade with manual promotion
 - Waiting for Syncing hold with the hook completed successfully
 - Consistently holding in Syncing while no promote request is set
+- Recording completed executor Jobs before rollback
+- Recording Blue and Green data claims before rollback
+- Requesting rollback to the original version
+- Waiting for rollback to finish before requesting another upgrade
+- Verifying rollback retires Green data claims and preserves Blue data claims
+- Requesting the same target again while completed Jobs remain
+- Verifying the new attempt completes fresh join and sync Jobs while old Jobs remain
+- Verifying the retry uses fresh Green data claims while Blue claims remain unchanged
+- Verifying native Raft membership includes all new Green non-voters before promotion
 - Approving promotion via spec.upgrade.requests.promote
 - Verifying the upgrade resumes and completes cleanly
 
@@ -179,6 +190,7 @@ Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `recovery`, `e2e-an
 Recorded checkpoints:
 - Triggering a rolling upgrade with a bad non-semver image tag
 - Waiting for the rolling upgrade to initialize
+- Waiting for the first target to run the broken image before expiring its readiness deadline
 - Forcing the real timeout/retry path without waiting ten minutes
 - Injecting a stale deterministic step-down job for the retry cleanup path
 - Restoring the target image and requesting a rolling retry

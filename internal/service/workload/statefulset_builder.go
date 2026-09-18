@@ -2,6 +2,7 @@ package workload
 
 import (
 	"path"
+	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -51,11 +52,11 @@ func buildStatefulSetForSpec(cluster *openbaov1alpha1.OpenBaoCluster, configCont
 	}
 
 	statefulSetName := statefulSetNameForSpec(cluster, spec)
-	var statefulSetAnnotations map[string]string
+	// Stamp only StatefulSet metadata, so a source generation change alone does
+	// not roll Pods. SSA publishes this marker atomically with the rendered template.
+	statefulSetAnnotations := map[string]string{constants.AnnotationClusterGeneration: strconv.FormatInt(cluster.Generation, 10)}
 	if cluster.Spec.Maintenance != nil && cluster.Spec.Maintenance.Enabled {
-		statefulSetAnnotations = map[string]string{
-			constants.AnnotationMaintenance: maintenanceAnnotationEnabledValue,
-		}
+		statefulSetAnnotations[constants.AnnotationMaintenance] = maintenanceAnnotationEnabledValue
 	}
 
 	statefulSet := &appsv1.StatefulSet{

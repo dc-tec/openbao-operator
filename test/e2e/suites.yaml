@@ -696,6 +696,7 @@ suites:
       - chaos
     coverage:
       - lifecycle-job-owner-proof
+      - bluegreen-operation-identity
     runtime:
       observed: 36m39.240s
       budget: 55m

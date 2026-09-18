@@ -5,10 +5,12 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -233,7 +235,12 @@ func findUpgradeExecutorJob(jobs []batchv1.Job, action bluegreen.ExecutorAction,
 		if job.Annotations[upgradeActionAnnotationKey] != string(action) {
 			continue
 		}
-		if job.Annotations[upgradeRunIDAnnotationKey] != runID {
+		// Existing callers select an attempt within a single upgrade operation.
+		_, attempt, scoped := strings.Cut(job.Annotations[upgradeRunIDAnnotationKey], "/")
+		if !scoped {
+			attempt = job.Annotations[upgradeRunIDAnnotationKey]
+		}
+		if attempt != runID {
 			continue
 		}
 		return job
@@ -403,6 +410,8 @@ func dumpBlueGreenUpgradeDiagnostics(namespace, clusterName string) {
 	dumpKubectlOutput("get", "statefulset", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "yaml")
 	dumpKubectlOutput("get", "pods", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "wide")
 	dumpKubectlOutput("get", "jobs", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "yaml")
+	dumpKubectlOutput("get", "persistentvolumeclaims", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "wide")
+	dumpKubectlOutput("logs", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "--all-containers=true", "--prefix=true", "--tail=100")
 	dumpKubectlOutput("get", "events", "-n", namespace, "--sort-by=.lastTimestamp")
 	dumpKubectlOutput("logs", "deployment/openbao-operator-controller", "-n", operatorNamespace, "--tail=400")
 }
@@ -1372,6 +1381,25 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.Upgrade.TargetVersion).To(Equal(targetVersion))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+			By("Waiting for the first target to run the broken image before expiring its readiness deadline")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(recoveryCluster), updated)).To(Succeed())
+				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
+				g.Expect(updated.Status.Upgrade.Failure).To(BeNil())
+				g.Expect(updated.Status.Upgrade.CompletedPods).To(BeEmpty())
+				g.Expect(updated.Status.Upgrade.CurrentPartition).To(Equal(updated.Spec.Replicas))
+				pod := &corev1.Pod{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Namespace: tenantNamespace, Name: fmt.Sprintf("%s-%d", recoveryCluster.Name, updated.Spec.Replicas-1),
+				}, pod)).To(Succeed())
+				g.Expect(pod.DeletionTimestamp).To(BeNil())
+				g.Expect(pod.Spec.Containers).NotTo(BeEmpty())
+				g.Expect(pod.Spec.Containers[0].Image).To(Equal(brokenTarget))
+				g.Expect(pod.Status.ContainerStatuses).NotTo(BeEmpty())
+				g.Expect(pod.Status.ContainerStatuses[0].Ready).To(BeFalse())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
 			By("Forcing the real timeout/retry path without waiting ten minutes")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -1992,6 +2020,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			initialVersion  string
 			targetVersion   string
 			admin           client.Client
+			cfg             *rest.Config
 		)
 
 		BeforeAll(func() {
@@ -2000,6 +2029,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			Expect(err).NotTo(HaveOccurred())
 			tenantNamespace = tenantFW.Namespace
 			admin = tenantFW.Client
+			cfg, err = ctrlconfig.GetConfig()
+			Expect(err).NotTo(HaveOccurred())
 
 			initialVersion = blueGreenUpgradeFromVersion()
 			targetVersion = blueGreenUpgradeToVersion()
@@ -2041,7 +2072,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
 							Enabled: true,
 						},
-						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
+						Requests: append(e2ehelpers.CreateE2ERequests(tenantNamespace),
+							e2ehelpers.CreateJWTPolicyRoleRequests(tenantNamespace, "default", "raft-reader", "raft-reader",
+								`path "sys/storage/raft/configuration" { capabilities = ["read"] }`)...),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -2070,13 +2103,21 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
+		AfterEach(func() {
+			if CurrentSpecReport().Failed() && gatedCluster != nil {
+				dumpBlueGreenUpgradeDiagnostics(tenantNamespace, gatedCluster.Name)
+			}
+		})
+
 		AfterAll(func() {
 			if tenantFW != nil {
 				_ = tenantFW.Cleanup(ctx)
 			}
 		})
 
-		It("holds in Syncing until manual promotion after the pre-promotion hook succeeds", func() {
+		It("holds in Syncing and creates fresh executor Jobs after rollback before manual promotion", Label(
+			"case:upgrade-bluegreen-retry-identity", "covers:bluegreen-operation-identity",
+		), func() {
 			By("Triggering a blue/green upgrade with manual promotion")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -2127,6 +2168,160 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseSyncing))
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 			}, time.Minute, 10*time.Second).Should(Succeed())
+
+			By("Recording completed executor Jobs before rollback")
+			beforeRollback := &openbaov1alpha1.OpenBaoCluster{}
+			Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), beforeRollback)).To(Succeed())
+			firstOperationID := beforeRollback.Status.BlueGreen.OperationID
+			blueRevision := beforeRollback.Status.BlueGreen.BlueRevision
+			greenRevision := beforeRollback.Status.BlueGreen.GreenRevision
+			oldJobs := make(map[bluegreen.ExecutorAction]string)
+			for _, action := range []bluegreen.ExecutorAction{bluegreen.ActionJoinGreenNonVoters, bluegreen.ActionWaitGreenSynced} {
+				jobName := upgrade.ExecutorJobName(gatedCluster.Name, action, firstOperationID+"/", blueRevision, greenRevision)
+				job := &batchv1.Job{}
+				Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: jobName}, job)).To(Succeed())
+				Expect(jobSucceeded(job)).To(BeTrue())
+				oldJobs[action] = jobName
+			}
+
+			By("Recording Blue and Green data claims before rollback")
+			blueStatefulSetName := gatedCluster.Name
+			if blueRevision != "" {
+				blueStatefulSetName += "-" + blueRevision
+			}
+			blueClaims := make(map[string]types.UID)
+			greenClaims := make(map[string]types.UID)
+			for ordinal := int32(0); ordinal < gatedCluster.Spec.Replicas; ordinal++ {
+				for name, claims := range map[string]map[string]types.UID{
+					fmt.Sprintf("data-%s-%d", blueStatefulSetName, ordinal):                 blueClaims,
+					fmt.Sprintf("data-%s-%s-%d", gatedCluster.Name, greenRevision, ordinal): greenClaims,
+				} {
+					claim := &corev1.PersistentVolumeClaim{}
+					Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)).To(Succeed())
+					Expect(claim.Status.Phase).To(Equal(corev1.ClaimBound))
+					claims[name] = claim.UID
+				}
+			}
+
+			By("Requesting rollback to the original version")
+			rollbackToken := time.Now().UTC().Format(time.RFC3339Nano)
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), updated)).To(Succeed())
+				original := updated.DeepCopy()
+				if updated.Spec.Upgrade.Requests == nil {
+					updated.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{}
+				}
+				updated.Spec.Upgrade.Requests.Rollback = rollbackToken
+				updated.Spec.Version = initialVersion
+				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", initialVersion)
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Waiting for rollback to finish before requesting another upgrade")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), updated)).To(Succeed())
+				g.Expect(updated.Status.UpgradeRequests).NotTo(BeNil())
+				g.Expect(updated.Status.UpgradeRequests.LastHandledRollback).To(Equal(rollbackToken))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+				g.Expect(updated.Status.BlueGreen.OperationID).To(BeEmpty())
+				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying rollback retires Green data claims and preserves Blue data claims")
+			for name := range greenClaims {
+				claim := &corev1.PersistentVolumeClaim{}
+				err := admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)
+				Expect(apierrors.IsNotFound(err)).To(BeTrue(), "discarded Green claim %s must be gone before rollback completes: %v", name, err)
+			}
+			for name, uid := range blueClaims {
+				claim := &corev1.PersistentVolumeClaim{}
+				Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)).To(Succeed())
+				Expect(claim.UID).To(Equal(uid))
+				Expect(claim.DeletionTimestamp).To(BeNil())
+			}
+
+			By("Requesting the same target again while completed Jobs remain")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), updated)).To(Succeed())
+				original := updated.DeepCopy()
+				updated.Spec.Version = targetVersion
+				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the new attempt completes fresh join and sync Jobs while old Jobs remain")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), updated)).To(Succeed())
+				g.Expect(updated.Status.UpgradeRequests).NotTo(BeNil())
+				g.Expect(updated.Status.UpgradeRequests.LastHandledRollback).To(Equal(rollbackToken))
+				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+				status := updated.Status.BlueGreen
+				g.Expect(status.OperationID).NotTo(BeEmpty())
+				g.Expect(status.OperationID).NotTo(Equal(firstOperationID))
+				g.Expect(status.Phase).To(Equal(openbaov1alpha1.PhaseSyncing))
+				g.Expect(status.BlueRevision).To(Equal(blueRevision))
+				g.Expect(status.GreenRevision).To(Equal(greenRevision))
+				g.Expect(status.ValidationHook).NotTo(BeNil())
+				g.Expect(status.ValidationHook.Stage).To(Equal(openbaov1alpha1.BlueGreenValidationHookStageTerminalObserved))
+				for action, oldName := range oldJobs {
+					oldJob := &batchv1.Job{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: oldName}, oldJob)).To(Succeed())
+					g.Expect(jobSucceeded(oldJob)).To(BeTrue())
+					newName := upgrade.ExecutorJobName(gatedCluster.Name, action, status.OperationID+"/", blueRevision, greenRevision)
+					g.Expect(newName).NotTo(Equal(oldName))
+					newJob := &batchv1.Job{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: newName}, newJob)).To(Succeed())
+					g.Expect(jobSucceeded(newJob)).To(BeTrue())
+				}
+			}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the retry uses fresh Green data claims while Blue claims remain unchanged")
+			for name, uid := range greenClaims {
+				claim := &corev1.PersistentVolumeClaim{}
+				Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)).To(Succeed())
+				Expect(claim.UID).NotTo(Equal(uid), "retry must not reuse removed Green peer data")
+				Expect(claim.Status.Phase).To(Equal(corev1.ClaimBound))
+			}
+			for name, uid := range blueClaims {
+				claim := &corev1.PersistentVolumeClaim{}
+				Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: name}, claim)).To(Succeed())
+				Expect(claim.UID).To(Equal(uid))
+				Expect(claim.DeletionTimestamp).To(BeNil())
+			}
+
+			By("Verifying native Raft membership includes all new Green non-voters before promotion")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, gatedCluster.Name)
+				g.Expect(err).NotTo(HaveOccurred())
+				output, err := e2ehelpers.RunCommandViaJWT(ctx, cfg, admin, tenantNamespace, openBaoImage,
+					baoAddr, "default", "raft-reader", map[string]string{
+						constants.LabelOpenBaoCluster:   gatedCluster.Name,
+						constants.LabelOpenBaoComponent: "backup",
+					}, "bao read -format=json sys/storage/raft/configuration")
+				g.Expect(err).NotTo(HaveOccurred())
+				var response struct {
+					Data portopenbao.RaftConfigurationResponse `json:"data"`
+				}
+				g.Expect(json.Unmarshal([]byte(output), &response)).To(Succeed())
+				g.Expect(response.Data.Config.Servers).To(HaveLen(6))
+				for ordinal := int32(0); ordinal < gatedCluster.Spec.Replicas; ordinal++ {
+					address := fmt.Sprintf("%s-%s-%d.%s.%s.svc:8201", gatedCluster.Name, greenRevision,
+						ordinal, gatedCluster.Name, tenantNamespace)
+					found := false
+					for _, peer := range response.Data.Config.Servers {
+						if peer.Address == address {
+							g.Expect(peer.Voter).To(BeFalse())
+							found = true
+						}
+					}
+					g.Expect(found).To(BeTrue(), "Green peer %s must be present in native Raft membership", address)
+				}
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 
 			promoteToken := time.Now().UTC().Format(time.RFC3339Nano)
 

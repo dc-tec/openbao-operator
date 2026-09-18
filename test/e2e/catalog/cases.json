@@ -2147,15 +2147,19 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17",
-    "generatedId": "upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17",
+    "id": "upgrade-bluegreen-retry-identity",
+    "generatedId": "upgrade-strategies-holds-in-syncing-and-creates-fresh-d60f290d",
+    "caseLabel": "upgrade-bluegreen-retry-identity",
+    "coverage": [
+      "bluegreen-operation-identity"
+    ],
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
-    "name": "holds in Syncing until manual promotion after the pre-promotion hook succeeds",
+    "name": "holds in Syncing and creates fresh executor Jobs after rollback before manual promotion",
     "path": [
       "Upgrade Strategies",
       "Blue/Green Syncing Gates",
-      "holds in Syncing until manual promotion after the pre-promotion hook succeeds"
+      "holds in Syncing and creates fresh executor Jobs after rollback before manual promotion"
     ],
     "labels": [
       "upgrade",
@@ -2163,7 +2167,9 @@
       "cluster",
       "slow",
       "bluegreen",
-      "verification"
+      "verification",
+      "case:upgrade-bluegreen-retry-identity",
+      "covers:bluegreen-operation-identity"
     ],
     "domainLabels": [
       "upgrade",
@@ -2177,6 +2183,15 @@
       "Triggering a blue/green upgrade with manual promotion",
       "Waiting for Syncing hold with the hook completed successfully",
       "Consistently holding in Syncing while no promote request is set",
+      "Recording completed executor Jobs before rollback",
+      "Recording Blue and Green data claims before rollback",
+      "Requesting rollback to the original version",
+      "Waiting for rollback to finish before requesting another upgrade",
+      "Verifying rollback retires Green data claims and preserves Blue data claims",
+      "Requesting the same target again while completed Jobs remain",
+      "Verifying the new attempt completes fresh join and sync Jobs while old Jobs remain",
+      "Verifying the retry uses fresh Green data claims while Blue claims remain unchanged",
+      "Verifying native Raft membership includes all new Green non-voters before promotion",
       "Approving promotion via spec.upgrade.requests.promote",
       "Verifying the upgrade resumes and completes cleanly"
     ],
@@ -2488,6 +2503,7 @@
     "steps": [
       "Triggering a rolling upgrade with a bad non-semver image tag",
       "Waiting for the rolling upgrade to initialize",
+      "Waiting for the first target to run the broken image before expiring its readiness deadline",
       "Forcing the real timeout/retry path without waiting ten minutes",
       "Injecting a stale deterministic step-down job for the retry cleanup path",
       "Restoring the target image and requesting a rolling retry",

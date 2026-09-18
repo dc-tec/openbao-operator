@@ -82,7 +82,7 @@ func TestInitializeUpgrade_EmitsUpgradeStartedEvent(t *testing.T) {
 		},
 	}
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"},
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 		},
@@ -154,7 +154,7 @@ func TestPrepareFailedUpgradeRetry_EmitsRetryEvents(t *testing.T) {
 		},
 	}, cluster)
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"},
 			Name:      cluster.Name,
 			Namespace: cluster.Namespace,
 		},

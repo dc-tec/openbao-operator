@@ -159,7 +159,7 @@ func rollingLifecycleObjects(completing bool) (*openbaov1alpha1.OpenBaoCluster, 
 		}
 	}
 	sts := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{Name: cluster.Name},
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{constants.AnnotationClusterGeneration: "0"}, Name: cluster.Name},
 		Status:     appsv1.StatefulSetStatus{ReadyReplicas: 1, UpdatedReplicas: 1, CurrentRevision: "updated", UpdateRevision: "updated"},
 	}
 	pod := &corev1.Pod{

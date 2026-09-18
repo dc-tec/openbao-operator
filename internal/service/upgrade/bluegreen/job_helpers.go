@@ -3,6 +3,7 @@ package bluegreen
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 
@@ -47,7 +48,8 @@ func (m *Manager) runExecutorJobStep(ctx context.Context, logger logr.Logger, cl
 	}
 
 	autoRollback := autoRollbackSettings(cluster)
-	runID := executorRunID(autoRollback, cluster.Status.BlueGreen.JobFailureCount)
+	runID := operationScopedRunID(cluster.Status.BlueGreen.OperationID,
+		executorRunID(autoRollback, cluster.Status.BlueGreen.JobFailureCount))
 
 	result, err := upgrade.EnsureExecutorJob(
 		ctx,
@@ -104,4 +106,16 @@ func (m *Manager) runExecutorJobStep(ctx context.Context, logger logr.Logger, cl
 	}
 
 	return executorJobStep{Outcome: decision.Outcome}, nil
+}
+
+// New operations opt into operation-scoped executor names. Unprefixed IDs belong
+// to operations started by older operators and retain their existing Job names
+// until completion, so replacing the operator does not replay an active phase.
+const executorOperationIDPrefix = "bg-v2-"
+
+func operationScopedRunID(operationID, runID string) string {
+	if strings.HasPrefix(operationID, executorOperationIDPrefix) {
+		return operationID + "/" + runID
+	}
+	return runID
 }

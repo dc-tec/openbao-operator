@@ -70,6 +70,19 @@ For either current reason, a matching acknowledgment clears active break glass, 
 clears the recorded Job failure count, and schedules a new rollback or cleanup attempt. Watch the replacement Job and
 `status.blueGreen.phase`.
 
+## Wait for rollback cleanup
+
+After repairing Blue consensus and removing Green peers from Raft, the operator deletes the discarded Green
+StatefulSet. It waits for the Green Pods to disappear and for all Pod references to their data claims to be released,
+then deletes those data PVCs. A retry of the same version provisions fresh Green data claims; removed Raft peers cannot
+rejoin with their old data.
+
+Cleanup preserves Blue data claims and shared ACME cache or audit storage. This upgrade cleanup is independent of
+`spec.deletionPolicy`, which applies when deleting the cluster. Each deleted PVC's volume follows its PV reclaim policy.
+
+Rollback remains in `RollbackCleanup` while a Pod still references a discarded claim or a PVC is terminating. Inspect
+the remaining Pods, PVCs, and storage events. Do not remove protection finalizers or clear upgrade status to force a retry.
+
 ## Restore when rollback repair is no longer trustworthy
 
 If the cluster state cannot be repaired safely, select a known-good snapshot and use the forced lock-override path in

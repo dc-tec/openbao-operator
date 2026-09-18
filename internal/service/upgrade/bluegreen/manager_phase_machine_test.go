@@ -898,7 +898,11 @@ func TestHandlePhaseRollbackCleanup_FinalizesRollback(t *testing.T) {
 			Namespace: cluster.Namespace,
 		},
 	}
+	greenStatefulSet.OwnerReferences = job.OwnerReferences
+	greenStatefulSet.Annotations = job.Annotations
+	greenStatefulSet.Spec.Template.Labels = map[string]string{constants.LabelOpenBaoRevision: "green"}
 	manager := &Manager{
+		clusterOps: &clusterOpsStub{ok: true, podName: "example-blue-0"},
 		client: fake.NewClientBuilder().
 			WithScheme(scheme).
 			WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
@@ -911,6 +915,13 @@ func TestHandlePhaseRollbackCleanup_FinalizesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handlePhaseRollbackCleanup() error = %v", err)
 	}
+	if outcome.kind != phaseOutcomeRequeueAfter {
+		t.Fatalf("expected StatefulSet deletion to requeue, got %+v", outcome)
+	}
+	outcome, err = manager.handlePhaseRollbackCleanup(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if outcome.kind != phaseOutcomeDone {
 		t.Fatalf("handlePhaseRollbackCleanup() outcome = %+v, want done", outcome)
 	}
@@ -920,6 +931,26 @@ func TestHandlePhaseRollbackCleanup_FinalizesRollback(t *testing.T) {
 	if cluster.Status.OperationLock != nil {
 		t.Fatal("expected operation lock to be released")
 	}
+
+	// The desired target still differs from CurrentVersion. Reconciliation starts
+	// another operation without requiring a rolling-upgrade retry request.
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("Reconcile() after rollback: %v", err)
+	}
+	if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseDeployingGreen {
+		t.Fatalf("phase after rollback reconcile = %s, want DeployingGreen", cluster.Status.BlueGreen.Phase)
+	}
+	if cluster.Status.BlueGreen.OperationID == "" {
+		t.Fatal("operation identity must be assigned before executor phases")
+	}
+	jobs := &batchv1.JobList{}
+	if err := manager.client.List(context.Background(), jobs); err != nil {
+		t.Fatalf("List Jobs: %v", err)
+	}
+	if len(jobs.Items) != 1 || jobs.Items[0].Name != job.Name {
+		t.Fatal("starting an operation must not create an executor Job before status is persisted")
+	}
+
 }
 
 func TestHandlePhaseRollbackCleanup_EntersBreakGlassWhenPeerRemovalFails(t *testing.T) {

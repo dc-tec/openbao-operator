@@ -106,25 +106,6 @@ func (m *Manager) ensureGreenPeersRemovedDuringRollbackCleanup(
 	)
 }
 
-func (m *Manager) ensureGreenPodsRemovedDuringRollback(
-	ctx context.Context,
-	logger logr.Logger,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) (phaseOutcome, bool, error) {
-	greenPods, err := m.getPodsByRevision(ctx, cluster, cluster.Status.BlueGreen.GreenRevision)
-	if err != nil {
-		return phaseOutcome{}, true, fmt.Errorf("failed to check Green pods: %w", err)
-	}
-
-	activeGreenPods := countActivePods(greenPods)
-	if activeGreenPods > 0 {
-		logger.Info("Green pods still exist during rollback cleanup, waiting", "count", activeGreenPods)
-		return requeueAfterOutcome(constants.RequeueShort), true, nil
-	}
-
-	return phaseOutcome{}, false, nil
-}
-
 // handlePhaseRollingBack orchestrates the rollback sequence.
 func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
@@ -140,7 +121,7 @@ func (m *Manager) handlePhaseRollingBack(ctx context.Context, logger logr.Logger
 	return advance(openbaov1alpha1.PhaseRollbackCleanup), nil
 }
 
-// handlePhaseRollbackCleanup removes Green StatefulSet after rollback.
+// handlePhaseRollbackCleanup retires discarded Green workloads and data after rollback.
 func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 	if cluster.Status.BlueGreen == nil {
 		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
@@ -150,11 +131,15 @@ func (m *Manager) handlePhaseRollbackCleanup(ctx context.Context, logger logr.Lo
 		return outcome, err
 	}
 
-	if err := m.cleanupGreenStatefulSet(ctx, logger, cluster); err != nil {
-		return phaseOutcome{}, fmt.Errorf("failed to cleanup Green StatefulSet during rollback: %w", err)
-	}
-	if outcome, waiting, err := m.ensureGreenPodsRemovedDuringRollback(ctx, logger, cluster); waiting || err != nil {
+	if outcome, waiting, err := m.ensureBlueLeaderDuringRollback(ctx, logger, cluster); waiting || err != nil {
 		return outcome, err
+	}
+	retired, err := m.retireRollbackGreenData(ctx, cluster)
+	if err != nil {
+		return phaseOutcome{}, fmt.Errorf("failed to retire discarded Green data: %w", err)
+	}
+	if !retired {
+		return requeueAfterOutcome(constants.RequeueShort), nil
 	}
 
 	return m.completeBlueGreenRollback(ctx, logger, cluster, cluster.Status.BlueGreen.RollbackReason)

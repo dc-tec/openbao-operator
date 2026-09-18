@@ -187,6 +187,7 @@ func TestUnrevisionedBlueIdentityDoesNotMatchRevisionedGreen(t *testing.T) {
 			Servers: []portopenbao.RaftServer{
 				{NodeID: "vault-0", Address: "vault-0.vault.default.svc", Voter: true},
 				{NodeID: "vault-green-0", Address: "vault-green-0.vault.default.svc", Leader: true, Voter: true},
+				{NodeID: "cluster-uid-vault-1b8e6f3bc15eee28-1", Address: "vault-1b8e6f3bc15eee28-1.vault.default.svc:8201", Voter: true},
 			},
 		},
 	}
