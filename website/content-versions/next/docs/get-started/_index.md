@@ -24,6 +24,9 @@ You need:
 - Helm with OCI registry support for the recommended multi-tenant install;
 - ownership decisions for the operator namespace, target namespace, and OpenBao administration.
 
+If the cluster cannot pull from public registries, follow [Use private registries](../configure/air-gapped/) to mirror
+runtime images and configure registry credentials before installing the operator.
+
 ## Choose the outcome
 
 | Outcome | Use this route | Exit condition |

@@ -28,6 +28,8 @@ The core procedure uses Helm in the chart's default multi-tenant mode.
 - Use an identity that can create cluster-scoped CRDs, RBAC, and ValidatingAdmissionPolicies.
 - Decide whether Helm, a release manifest, or a maintained Kustomize overlay owns future upgrades.
 - Decide the tenancy model. Use the separate [single-tenant procedure](../single-tenant/) for one watched namespace.
+- If the cluster cannot pull from public registries, [mirror runtime images and configure registry credentials](../../configure/air-gapped/)
+  before installing the operator.
 
 ## Choose an installation path
 
@@ -103,11 +105,16 @@ Helm values do not configure that manifest.
      oci://ghcr.io/dc-tec/charts/openbao-operator \
      --version "${CHART_VERSION}" \
      --namespace "${OPERATOR_NAMESPACE}" \
+     --include-crds \
      --values operator-values.yaml
    {{< /command >}}
 
    Check the controller and Provisioner ServiceAccounts, RoleBinding subjects, admission-policy identity variables,
    projected token audience, images, and namespaces.
+
+   `helm template` omits CRDs unless you pass `--include-crds`. When applying rendered manifests directly, create the
+   operator namespace and wait for the CRDs to become `Established` before starting the controllers or applying
+   OpenBao custom resources. Configure the same ordering when a GitOps controller applies the manifests.
 
 5. Install the chart with the same values file.
 
@@ -254,6 +261,7 @@ separate CRD-deletion operation.
 
 | Symptom | Check |
 | --- | --- |
+| `no matches for kind "OpenBaoCluster"` | Verify that the CRDs are installed and `Established`. Include `--include-crds` when rendering the chart with `helm template`. |
 | Controller starts but Provisioner is absent | Confirm that the chart did not render `tenancy.mode=single` |
 | Tenant provisioning fails on a namespace label update | Inspect the tenant error and [configure label ownership](#choose-namespace-pod-security-label-ownership) if the platform restricts Pod Security label updates |
 | Pods run but admission rejects ordinary resources | Inspect policy bindings, rendered identity variables, and the API server's ValidatingAdmissionPolicy support |

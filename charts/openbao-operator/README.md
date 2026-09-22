@@ -11,15 +11,15 @@ This chart installs the OpenBao Operator and its cluster-scoped dependencies.
 
 ## Install
 
-```bash
-kubectl create namespace openbao-operator-system
-
-helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --version <chart-version> \
-  --namespace openbao-operator-system
-```
+Follow the [Getting started guide](https://dc-tec.github.io/openbao-operator/docs/get-started/) to choose a deployment
+model, install the operator, onboard a namespace, and create your first OpenBao cluster.
+The [installation procedure](https://dc-tec.github.io/openbao-operator/docs/get-started/install/) covers Helm values,
+namespace label ownership, CRDs, and verification.
 
 ## Common Configuration
+
+The examples below are Helm values fragments. Merge the settings you need into `operator-values.yaml` and use that
+file with the installation procedure.
 
 ### Multi-tenant mode (default)
 
@@ -59,15 +59,6 @@ tenancy:
   targetNamespace: openbao-system
 ```
 
-Apply with:
-
-```bash
-helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --version <chart-version> \
-  --namespace openbao-operator-system \
-  --values values.yaml
-```
-
 ### Pin default helper images
 
 Set `helperImages.init`, `helperImages.backup`, and `helperImages.upgrade` to complete image references when the
@@ -79,17 +70,13 @@ Edge packages populate these values and the manager digest from the verified can
 
 ## Upgrade
 
-```bash
-helm upgrade openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --version <chart-version> \
-  --namespace openbao-operator-system
-```
+Follow [Upgrade the operator](https://dc-tec.github.io/openbao-operator/docs/get-started/install/#upgrade-the-operator)
+to update CRDs and review OpenBao policy changes before upgrading the controller.
 
 ## Uninstall
 
-```bash
-helm uninstall openbao-operator --namespace openbao-operator-system
-```
+Follow [Uninstall the operator](https://dc-tec.github.io/openbao-operator/docs/get-started/install/#uninstall-the-operator)
+for removal instructions and CRD-retention requirements.
 
 ## Values Reference
 
@@ -100,6 +87,6 @@ See:
 
 ## More Information
 
-- Documentation: https://dc-tec.github.io/openbao-operator/latest/
-- Compatibility Matrix: https://dc-tec.github.io/openbao-operator/latest/reference/compatibility/
-- Source: https://github.com/dc-tec/openbao-operator
+- [Documentation](https://dc-tec.github.io/openbao-operator/)
+- [Compatibility matrix](https://dc-tec.github.io/openbao-operator/docs/reference/compatibility/)
+- [Source](https://github.com/dc-tec/openbao-operator)
