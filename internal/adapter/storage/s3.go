@@ -57,17 +57,23 @@ func NewBucket(bucket *blob.Bucket) *Bucket {
 
 // Upload stores the contents of body as an object with the given key.
 // For large objects, Go CDK automatically handles multipart uploads.
+// If reading body fails, the write is aborted and no object is created.
 func (b *Bucket) Upload(ctx context.Context, key string, body io.Reader) error {
-	w, err := b.bucket.NewWriter(ctx, key, nil)
+	// Go CDK commits the bytes written so far when Close is called. Cancelling the
+	// writer context before Close is the only way to abort a partial upload.
+	writeCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	w, err := b.bucket.NewWriter(writeCtx, key, nil)
 	if err != nil {
 		return err
 	}
-	_, copyErr := io.Copy(w, body)
-	closeErr := w.Close()
-	if copyErr != nil {
+	if _, copyErr := io.Copy(w, body); copyErr != nil {
+		cancel()
+		_ = w.Close()
 		return copyErr
 	}
-	return closeErr
+	return w.Close()
 }
 
 // Delete removes the object with the given key.

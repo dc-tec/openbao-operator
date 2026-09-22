@@ -120,6 +120,10 @@ A successful run advances `lastBackupTime`, `lastBackupName`, `lastBackupSize`, 
 details are in `lastFailureReason`, `lastFailureMessage`, and `lastFailureTime`. Confirm the object independently in
 storage before relying on it.
 
+If the snapshot stream fails during upload, the executor aborts the write, so the failed snapshot creates no object.
+After upload, it checks that the stored object size matches the number of bytes streamed and deletes the object if they
+differ. That deletion can fail on object-lock or write-only buckets, so check for leftover objects after a failed run.
+
 ## Set retention and pre-upgrade snapshots
 
 `maxCount: 0` and an empty `maxAge` mean unlimited retention. The operator applies retention after a successful
