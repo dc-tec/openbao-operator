@@ -128,7 +128,7 @@ func (m *Manager) applyCreateBackup(
 		m.emitNormalEvent(cluster, ReasonBackupStarted, "Backup started for schedule %s", observation.scheduledTime.UTC().Format(time.RFC3339))
 	}
 
-	if _, err := m.ensureBackupJob(ctx, logger, cluster, jobName, observation.scheduledTime); err != nil {
+	if _, err := m.ensureBackupJob(ctx, logger, cluster, jobName, observation.now); err != nil {
 		ensureErr := fmt.Errorf("failed to ensure backup Job: %w", err)
 		if releaseErr := m.releaseBackupLock(ctx, logger, cluster, "after job ensure failure"); releaseErr != nil {
 			return recon.Result{}, errors.Join(ensureErr, releaseErr)

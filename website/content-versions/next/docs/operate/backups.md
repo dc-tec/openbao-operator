@@ -123,7 +123,9 @@ storage before relying on it.
 ## Set retention and pre-upgrade snapshots
 
 `maxCount: 0` and an empty `maxAge` mean unlimited retention. The operator applies retention after a successful
-upload and never turns a retention error into a failed snapshot.
+upload and never turns a retention error into a failed snapshot. Retention always keeps the newest snapshot and the
+snapshot recorded in `status.backup.lastBackupName`, even when they are older than `maxAge`. Snapshot object keys use
+the time the backup Job was created, so a backup delayed past its schedule is not treated as old.
 
 {{< callout type="note" title="Retention currently needs a credentials Secret" >}}
 Controller-side retention runs only when `target.credentialsSecretRef` is configured. It is skipped for `roleArn`,

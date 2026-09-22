@@ -496,3 +496,46 @@ func TestReconcile_DisabledBackupFinishesOwnedOperation(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyCreateBackup_KeysStaleScheduleWithCreationTime(t *testing.T) {
+	cluster := newTestClusterWithBackup("stalled-schedule", "default")
+	staleSchedule := time.Date(2025, 1, 2, 3, 0, 0, 0, time.UTC)
+	now := staleSchedule.Add(48 * time.Hour)
+	next := metav1.NewTime(staleSchedule)
+	cluster.Status.Backup.NextScheduledBackup = &next
+
+	k8sClient := newTestClient(t, cluster)
+	manager := newBackupManager(k8sClient)
+
+	observation := backupObservation{
+		configured:    true,
+		due:           true,
+		now:           now,
+		scheduledTime: staleSchedule,
+		nextSchedule:  now.Add(24 * time.Hour),
+	}
+	if _, err := manager.applyBackupDecision(
+		context.Background(),
+		logr.Discard(),
+		cluster,
+		NewMetrics(cluster.Namespace, cluster.Name),
+		decideBackup(observation),
+	); err != nil {
+		t.Fatalf("applyBackupDecision() error = %v", err)
+	}
+
+	job := &batchv1.Job{}
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      backupJobName(cluster, staleSchedule),
+	}, job); err != nil {
+		t.Fatalf("expected backup Job: %v", err)
+	}
+	_, _, keyTime, _, err := ParseBackupKey(job.Annotations["openbao.org/backup-key"])
+	if err != nil {
+		t.Fatalf("ParseBackupKey() error = %v", err)
+	}
+	if !keyTime.Equal(now) {
+		t.Fatalf("backup key time = %s, want creation time %s rather than stale schedule %s", keyTime, now, staleSchedule)
+	}
+}

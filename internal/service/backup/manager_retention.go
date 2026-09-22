@@ -38,6 +38,9 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 		MaxCount: retention.MaxCount,
 		MaxAge:   maxAge,
 	}
+	if cluster.Status.Backup != nil {
+		policy.ProtectedKey = cluster.Status.Backup.LastBackupName
+	}
 
 	storageClient, err := m.openBackupStorageClient(ctx, cluster, false)
 	if err != nil {
