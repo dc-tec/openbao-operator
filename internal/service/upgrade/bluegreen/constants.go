@@ -28,6 +28,9 @@ const (
 	// ReasonRollbackStarted indicates rollback has started.
 	ReasonRollbackStarted = "RollbackStarted"
 
+	// ReasonRollbackRefused indicates a rollback was refused because Blue peer removal has started.
+	ReasonRollbackRefused = "RollbackRefused"
+
 	// ReasonBreakGlassEntered indicates automation entered break-glass mode.
 	ReasonBreakGlassEntered = "BreakGlassEntered"
 

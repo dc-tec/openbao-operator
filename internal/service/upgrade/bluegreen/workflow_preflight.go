@@ -220,6 +220,14 @@ func (m *Manager) maybeHandleTargetRevisionDrift(ctx context.Context, logger log
 		return false, recon.Result{}, nil
 	}
 
+	if isPastPointOfNoReturn(cluster.Status.BlueGreen.Phase) {
+		logger.Info("Spec drift detected after Blue peer removal started; completing current target before re-evaluating",
+			"phase", cluster.Status.BlueGreen.Phase,
+			"activeGreenRevision", cluster.Status.BlueGreen.GreenRevision,
+			"desiredGreenRevision", desiredGreenRevision)
+		return false, recon.Result{}, nil
+	}
+
 	logger.Info("Spec drift detected during blue/green upgrade; unwinding current target before re-evaluating",
 		"phase", cluster.Status.BlueGreen.Phase,
 		"activeGreenRevision", cluster.Status.BlueGreen.GreenRevision,

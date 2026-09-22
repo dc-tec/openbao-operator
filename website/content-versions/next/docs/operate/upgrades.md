@@ -139,6 +139,11 @@ kubectl -n <namespace> patch openbaocluster <name> --type merge -p "{
 Each request is edge-triggered: use a new non-empty value. For blue-green rollback repair failures, use
 [Recover a failed rollback](../recover-failed-rollback/) instead of retrying blindly.
 
+A blue-green upgrade can only roll back before the `Cleanup` phase, because `Cleanup` removes Blue peers from Raft.
+From `Cleanup` onward, the operator refuses `spec.upgrade.requests.rollback` and automatic rollback with a
+`RollbackRefused` warning event. It retries the current phase, and applies any spec change made during that time
+after the current upgrade completes.
+
 ## Verify the result
 
 {{< command label="verify" title="Watch upgrade state" >}}

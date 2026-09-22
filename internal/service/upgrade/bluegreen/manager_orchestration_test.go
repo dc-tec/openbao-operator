@@ -23,6 +23,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
+const staleGreenRevision = "green-old"
+
 func TestManager_ShouldReconcileBlueGreen(t *testing.T) {
 	t.Parallel()
 
@@ -322,7 +324,7 @@ func TestManager_MaybeHandleTargetRevisionDrift(t *testing.T) {
 		scheme := newBlueGreenTestScheme(t)
 		cluster := newBlueGreenCluster()
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
-		cluster.Status.BlueGreen.GreenRevision = "green-old"
+		cluster.Status.BlueGreen.GreenRevision = staleGreenRevision
 		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
 			Operation: openbaov1alpha1.ClusterOperationUpgrade,
 			Holder:    core.UpgradeOperationLockHolder,
@@ -364,10 +366,36 @@ func TestManager_MaybeHandleTargetRevisionDrift(t *testing.T) {
 		}
 	})
 
+	for _, phase := range []openbaov1alpha1.BlueGreenPhase{
+		openbaov1alpha1.PhaseCleanup,
+		openbaov1alpha1.PhaseRestoringReadReplicas,
+	} {
+		t.Run("completes current target when desired revision changes in "+string(phase), func(t *testing.T) {
+			cluster := newBlueGreenCluster()
+			cluster.Status.BlueGreen.Phase = phase
+			cluster.Status.BlueGreen.GreenRevision = staleGreenRevision
+
+			mgr := &Manager{}
+			handled, _, err := mgr.maybeHandleTargetRevisionDrift(context.Background(), logr.Discard(), cluster)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if handled {
+				t.Fatal("expected handled=false so the current phase continues")
+			}
+			if cluster.Status.BlueGreen.Phase != phase {
+				t.Fatalf("phase = %s, want %s", cluster.Status.BlueGreen.Phase, phase)
+			}
+			if cluster.Status.BlueGreen.RollbackStartTime != nil {
+				t.Fatal("rollback started after Blue peer removal")
+			}
+		})
+	}
+
 	t.Run("late phase triggers rollback when desired revision changes", func(t *testing.T) {
 		cluster := newBlueGreenCluster()
-		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
-		cluster.Status.BlueGreen.GreenRevision = "green-old"
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
+		cluster.Status.BlueGreen.GreenRevision = staleGreenRevision
 
 		mgr := &Manager{}
 		handled, result, err := mgr.maybeHandleTargetRevisionDrift(context.Background(), logr.Discard(), cluster)

@@ -262,6 +262,27 @@ func RunBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 		return fmt.Errorf("failed to create OpenBao client for consensus repair: %w", err)
 	}
 
+	return repairBlueGreenConsensus(ctx, logger, cfg, client, RetryPolicy{
+		MaxAttempts:     defaultPromoteVerifyMaxAttempts,
+		AttemptInterval: defaultPromoteVerifyInterval,
+	})
+}
+
+type consensusRepairClient interface {
+	raftPeerPromoter
+	RaftPeerDemoter
+}
+
+// repairBlueGreenConsensus promotes Blue peers and demotes Green peers. It refuses
+// to change membership unless the Blue peers still in the Raft configuration can
+// form a quorum, because demoting Green would otherwise leave no working majority.
+func repairBlueGreenConsensus(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	client consensusRepairClient,
+	promotePolicy RetryPolicy,
+) error {
 	config, err := client.ReadRaftConfiguration(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to read Raft configuration for consensus repair: %w", err)
@@ -274,6 +295,19 @@ func RunBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 		return RaftServerMatchesRevision(nodeID, address, cfg.ClusterName, cfg.GreenRevision, cfg.ClusterReplicas)
 	}
 
+	bluePeers := 0
+	for _, server := range config.Config.Servers {
+		if isBlueServer(server.NodeID, server.Address) {
+			bluePeers++
+		}
+	}
+	requiredBluePeers := raftQuorum(cfg.ClusterReplicas)
+	if bluePeers < requiredBluePeers {
+		return fmt.Errorf(
+			"refusing consensus repair: %d Blue peers remain in the Raft configuration, need %d of %d for quorum",
+			bluePeers, requiredBluePeers, cfg.ClusterReplicas)
+	}
+
 	for _, server := range config.Config.Servers {
 		if !isBlueServer(server.NodeID, server.Address) {
 			continue
@@ -284,7 +318,7 @@ func RunBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 		}
 
 		logger.Info("Promoting Blue peer to voter during consensus repair", "node_id", server.NodeID, "address", server.Address)
-		alreadyVoter, err := promoteRaftPeerAndVerify(ctx, client, server.NodeID)
+		alreadyVoter, err := promoteRaftPeerAndVerifyWithPolicy(ctx, client, server.NodeID, promotePolicy)
 		if err != nil {
 			return fmt.Errorf("failed to promote Blue peer %q to voter during consensus repair: %w", server.NodeID, err)
 		}
@@ -315,6 +349,14 @@ func RunBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 
 	logger.Info("Consensus repair completed: Blue voters and Green non-voters enforced")
 	return nil
+}
+
+// raftQuorum returns the majority size for a voter set of the given size.
+func raftQuorum(replicas int32) int {
+	if replicas <= 0 {
+		return 1
+	}
+	return int(replicas)/2 + 1
 }
 
 // RunBlueGreenPromoteGreenVoters promotes Green peers to voters under the Blue
