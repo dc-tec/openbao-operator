@@ -65,6 +65,8 @@ Route parent status and backend policy for controller detail.
 
 For Kubernetes API egress, some CNIs enforce NetworkPolicy after destination NAT. Add
 `spec.network.apiServerEndpointIPs` when the service VIP is allowed but the control-plane endpoint is still blocked.
+On Cilium, also check [node identity matching](../../configure/network/#restore-kubernetes-api-access-with-cilium),
+even when `APIServerNetworkReady=True`.
 See [Configure network policy](../../configure/network/) and [Expose OpenBao](../../configure/expose/).
 
 ## Escalate deliberately

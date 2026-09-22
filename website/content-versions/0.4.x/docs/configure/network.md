@@ -6,6 +6,7 @@ weight: 8
 verifiedBy:
   - api/v1alpha1/openbaocluster_networking_types.go
   - config/policy/openbao-validate-openbaocluster.yaml
+  - internal/service/networking/policy_build.go
   - internal/service/networking/policy_rules.go
   - internal/service/networking/api_server_network.go
   - internal/controller/openbaocluster/status_api_server_network.go
@@ -14,6 +15,9 @@ verifiedBy:
 The operator renders ingress-and-egress NetworkPolicies for OpenBao workload pods and lifecycle Job pods, then adds
 the paths required for cluster operation. Other pods in the namespace are not selected by these policies. Enforcement
 depends on a NetworkPolicy-capable CNI.
+
+The operator manages standard Kubernetes `NetworkPolicy` resources. The platform administrator manages CNI settings
+and any supplementary CNI-specific policies.
 
 Add environment-specific peers and egress explicitly; enabling an edge resource does not silently widen pod access.
 
@@ -61,6 +65,60 @@ spec:
 
 Use the smallest correct ranges. The operator does not auto-discover endpoint IPs because that would require broader
 cluster permissions and environment-specific assumptions.
+
+## Restore Kubernetes API access with Cilium
+
+By default, Cilium's CIDR rules exclude cluster nodes. An API server on a control-plane node can remain blocked
+with correct `apiServerEndpointIPs`, even when `APIServerNetworkReady=True`. See [Cilium's node CIDR matching
+rules][cilium-node-cidrs].
+
+Confirm that node CIDR matching is disabled and traffic to the API endpoint is dropped. If Hubble is enabled, inspect
+flows on the Cilium agent on the affected pod's node. Replace `<cilium-pod>`, `<namespace>`, and `<pod>` with their names;
+adjust `kube-system` if Cilium uses another namespace.
+
+{{< command label="inspect" title="Check Cilium settings and API policy drops" >}}
+kubectl -n kube-system get configmap cilium-config -o jsonpath='{.data.policy-cidr-match-mode}{"\n"}'
+kubectl -n kube-system exec <cilium-pod> -c cilium-agent -- hubble observe --since 3m --pod <namespace>/<pod>
+{{< /command >}}
+
+An empty setting disables node CIDR matching. Look for `Policy denied` drops to the API endpoint with destination
+identity `kube-apiserver` or `remote-node`. A timeout alone does not identify this failure mode.
+
+Keep the operator-managed NetworkPolicies and add the following supplementary policy through your platform deployment
+tooling. Replace `<namespace>` and `<cluster>` with the OpenBaoCluster namespace and name. The selector covers its
+workload and lifecycle Job pods. Use the actual API backend port if it differs from 6443.
+
+{{< command label="configure" title="Allow API-server egress for one OpenBao cluster" >}}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: <cluster>-apiserver
+  namespace: <namespace>
+spec:
+  endpointSelector:
+    matchLabels:
+      openbao.org/cluster: <cluster>
+  egress:
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+{{< /command >}}
+
+The platform administrator owns this policy. Cilium [deny policies][cilium-deny] still take precedence.
+
+Verify new API requests from the affected workload and Jobs. Expect forwarded connections and responses in Hubble,
+and successful API operations in application logs. An HTTP `401` or `403` confirms connectivity, not authorization.
+
+{{< callout type="note" title="Alternative: enable node CIDR matching" >}}
+A cluster administrator can set Cilium's `policyCIDRMatchMode: [nodes]` to allow `ipBlock` rules to match node IPs.
+This changes policy interpretation across the cluster; review existing policies before choosing this alternative.
+{{< /callout >}}
+
+[cilium-node-cidrs]: https://docs.cilium.io/en/stable/security/policy/layer3/#cidr-select-nodes
+[cilium-deny]: https://docs.cilium.io/en/stable/security/policy/deny/
 
 ## Allow edge and monitoring peers
 
