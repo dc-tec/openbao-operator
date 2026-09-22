@@ -524,6 +524,13 @@ func compareNode(oldNode, newNode schemaNode) []change {
 		added := setDifference(newRules, oldRules)
 		removed := setDifference(oldRules, newRules)
 		switch {
+		case isTLSRotationPeriodDiagnosticFix(newNode, added, removed):
+			changes = append(changes, newChange(
+				impactCompatible,
+				"cel-diagnostic-fix",
+				newNode,
+				"rotationPeriod presence guard preserves validation outcomes and corrects the missing-field error",
+			))
 		case len(added) > 0 && len(removed) == 0:
 			changes = append(changes, newChange(
 				impactReview,
@@ -548,6 +555,25 @@ func compareNode(oldNode, newNode schemaNode) []change {
 		}
 	}
 	return changes
+}
+
+// isTLSRotationPeriodDiagnosticFix recognizes only the presence guard verified by
+// TestCRD_OpenBaoCluster_TLSRotationPeriod. Missing fields are rejected both before
+// and after the change; other TLS modes and supplied values retain their behavior.
+func isTLSRotationPeriodDiagnosticFix(node schemaNode, added, removed []string) bool {
+	if node.CRD != "openbaoclusters.openbao.org" || node.Kind != "OpenBaoCluster" ||
+		node.Version != "v1alpha1" || node.Path != "spec" || len(added) != 1 || len(removed) != 1 {
+		return false
+	}
+
+	before := celRule{
+		Rule:    "self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod) > 0",
+		Message: "spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged",
+	}
+	after := before
+	after.Rule = "self.tls.mode != 'OperatorManaged' || " +
+		"(has(self.tls.rotationPeriod) && size(self.tls.rotationPeriod) > 0)"
+	return celRuleSet([]celRule{before})[removed[0]] && celRuleSet([]celRule{after})[added[0]]
 }
 
 func compareEnum(oldNode, newNode schemaNode) []change {
