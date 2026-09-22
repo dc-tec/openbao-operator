@@ -109,7 +109,8 @@ func FuzzApplyRetention(f *testing.F) {
 			policy.MaxAge = time.Duration(maxAgeHours%240) * time.Hour
 		}
 
-		result, err := ApplyRetention(context.Background(), logr.Discard(), store, prefix, policy)
+		listPrefix := GetBackupListPrefix(prefix, "default", "cluster")
+		result, err := ApplyRetention(context.Background(), logr.Discard(), store, listPrefix, policy)
 		if policy.MaxCount == 0 && policy.MaxAge == 0 {
 			if err != nil {
 				t.Fatalf("ApplyRetention() unexpected error: %v", err)
@@ -122,10 +123,10 @@ func FuzzApplyRetention(f *testing.F) {
 		if result.TotalBackups < 0 || result.DeletedByAge < 0 || result.DeletedByCount < 0 {
 			t.Fatalf("retention result contains negative counts")
 		}
-		if result.TotalBackups != len(objects) {
-			t.Fatalf("unexpected total backups %d", result.TotalBackups)
+		if result.TotalBackups+result.SkippedObjects != len(objects) {
+			t.Fatalf("unexpected total backups %d with %d skipped", result.TotalBackups, result.SkippedObjects)
 		}
-		if result.DeletedByAge+result.DeletedByCount >= result.TotalBackups {
+		if result.TotalBackups > 0 && result.DeletedByAge+result.DeletedByCount >= result.TotalBackups {
 			t.Fatalf("retention deleted every backup: byAge=%d byCount=%d total=%d",
 				result.DeletedByAge, result.DeletedByCount, result.TotalBackups)
 		}

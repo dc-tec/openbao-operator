@@ -214,3 +214,23 @@ func TestGetBackupListPrefix(t *testing.T) {
 		})
 	}
 }
+
+func TestIsScheduledBackupKey(t *testing.T) {
+	prefix := GetBackupListPrefix("backups", "default", "cluster")
+	tests := []struct {
+		key  string
+		want bool
+	}{
+		{key: prefix + "2025-01-15T03-00-00Z-0123abcd.snap", want: true},
+		{key: prefix + "pre-upgrade-2025-01-15T03-00-00Z-0123abcd.snap"},
+		{key: prefix + "nested/2025-01-15T03-00-00Z-0123abcd.snap"},
+		{key: prefix + "2025-01-15T03-00-00Z-0123abcd.snap.partial"},
+		{key: prefix + "2025-01-15T03-00-00Z-0123ABCD.snap"},
+		{key: "backups/default/other/2025-01-15T03-00-00Z-0123abcd.snap"},
+	}
+	for _, tt := range tests {
+		if got := IsScheduledBackupKey(tt.key, prefix); got != tt.want {
+			t.Errorf("IsScheduledBackupKey(%q) = %t, want %t", tt.key, got, tt.want)
+		}
+	}
+}

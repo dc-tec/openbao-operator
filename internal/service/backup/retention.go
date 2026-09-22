@@ -23,8 +23,11 @@ type RetentionPolicy struct {
 
 // RetentionResult contains the result of a retention policy application.
 type RetentionResult struct {
-	// TotalBackups is the number of backups found before retention.
+	// TotalBackups is the number of scheduled backups found before retention.
 	TotalBackups int
+	// SkippedObjects is the number of objects under the prefix that are not scheduled
+	// backups, such as pre-upgrade snapshots. Retention never deletes them.
+	SkippedObjects int
 	// DeletedByCount is the number of backups deleted due to MaxCount.
 	DeletedByCount int
 	// DeletedByAge is the number of backups deleted due to MaxAge.
@@ -33,12 +36,12 @@ type RetentionResult struct {
 	Errors []error
 }
 
-// ApplyRetention applies retention policy to backups in the given prefix.
-// It lists all backups, sorts them by timestamp (newest first), and deletes
+// ApplyRetention applies retention policy to scheduled backups in the given prefix.
+// It lists scheduled backups, sorts them by timestamp (newest first), and deletes
 // backups that exceed MaxCount or are older than MaxAge.
 //
 // Retention is applied after a successful backup upload:
-// 1. List all objects matching the prefix
+// 1. List all objects matching the prefix and keep only scheduled backup keys
 // 2. Sort by timestamp (newest first)
 // 3. If MaxCount > 0: Delete all objects beyond MaxCount
 // 4. If MaxAge is set: Delete all objects older than Now - MaxAge
@@ -67,9 +70,7 @@ func ApplyRetention(
 		return &RetentionResult{}, nil
 	}
 
-	result := &RetentionResult{
-		TotalBackups: len(objects),
-	}
+	result := &RetentionResult{}
 
 	// Parse backup timestamps and sort by time (newest first)
 	type backupInfo struct {
@@ -79,16 +80,25 @@ func ApplyRetention(
 
 	backups := make([]backupInfo, 0, len(objects))
 	for _, obj := range objects {
-		// Try to parse the timestamp from the key
+		if !IsScheduledBackupKey(obj.Key, prefix) {
+			result.SkippedObjects++
+			continue
+		}
 		_, _, timestamp, _, parseErr := ParseBackupKey(obj.Key)
 		if parseErr != nil {
-			// If we can't parse, use LastModified as fallback
-			timestamp = obj.LastModified
+			result.SkippedObjects++
+			continue
 		}
 		backups = append(backups, backupInfo{
 			key:       obj.Key,
 			timestamp: timestamp,
 		})
+	}
+	result.TotalBackups = len(backups)
+	if result.SkippedObjects > 0 {
+		logger.V(1).Info("Retention ignored objects that are not scheduled backups",
+			"prefix", prefix,
+			"skipped", result.SkippedObjects)
 	}
 
 	// Sort by timestamp, newest first

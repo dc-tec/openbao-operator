@@ -209,3 +209,34 @@ func TestApplyRetention_NeverDeletesNewestOrProtectedBackup(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyRetention_OnlyManagesScheduledBackups(t *testing.T) {
+	prefix := GetBackupListPrefix("backups", "default", "cluster")
+	scheduled := func(ts, id string) string { return prefix + ts + "-" + id + ".snap" }
+	oldScheduled := scheduled("2025-01-01T03-00-00Z", "aaaaaaaa")
+	newScheduled := scheduled("2025-01-03T03-00-00Z", "cccccccc")
+	untouched := []string{
+		prefix + "pre-upgrade-2024-12-01T03-00-00Z-dddddddd.snap",
+		prefix + "post-promotion-2024-12-01T03-00-00Z-eeeeeeee.snap",
+		prefix + "nested/2024-12-01T03-00-00Z-ffffffff.snap",
+		prefix + "operator-notes.txt",
+	}
+
+	objects := make([]blobstore.ObjectInfo, 0, 2+len(untouched))
+	objects = append(objects, blobstore.ObjectInfo{Key: oldScheduled}, blobstore.ObjectInfo{Key: newScheduled})
+	for _, key := range untouched {
+		objects = append(objects, blobstore.ObjectInfo{Key: key, LastModified: time.Unix(0, 0)})
+	}
+	store := &fakeBlobStore{objects: objects}
+
+	result, err := ApplyRetention(context.Background(), logr.Discard(), store, prefix, RetentionPolicy{MaxCount: 1, MaxAge: time.Hour})
+	if err != nil {
+		t.Fatalf("ApplyRetention() error = %v", err)
+	}
+	if !slices.Equal(store.deleted, []string{oldScheduled}) {
+		t.Fatalf("deleted = %v, want only %s", store.deleted, oldScheduled)
+	}
+	if result.TotalBackups != 2 || result.SkippedObjects != len(untouched) {
+		t.Fatalf("result = %+v, want 2 scheduled backups and %d skipped objects", result, len(untouched))
+	}
+}
