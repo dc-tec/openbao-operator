@@ -82,6 +82,11 @@ It preserves which inputs are accepted and replaces a missing-key evaluation err
 message. The match includes the resource, schema path, rule text, and rule metadata. Other CEL changes still require
 semantic review. `TestCRD_OpenBaoCluster_TLSRotationPeriod` verifies the API-server behavior.
 
+The two `reconcilePolicies` guards are compatible only when that optional boolean is new relative to the baseline
+and defaults to false or has no default. Both rules accept objects without the field. The checker matches the exact
+resource, parent paths, rules, and metadata; it still rejects other validation changes. The policy-reconciliation
+integration tests verify that existing configurations remain accepted and invalid opt-ins are rejected.
+
 The `API Contract` job runs for API, CRD, checker, gate-test, dependency, build-rule,
 and gate-workflow changes, every push to `main`, and manual CI runs. `CI Required`
 includes its result. Edge candidate builds and release image builds also depend

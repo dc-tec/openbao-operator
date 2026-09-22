@@ -239,6 +239,7 @@ serviceBoundaries:
     ignores:
       - "**/*_test.go"
     allowServiceImports:
+      - internal/service/configuration
       - internal/service/opslifecycle
       - internal/service/workloadidentity
     allowAdapterImports:
@@ -369,6 +370,7 @@ appBoundaries:
     allowServiceImports:
       - internal/service/bootstrap
       - internal/service/certs
+      - internal/service/configuration
       - internal/service/identity
       - internal/service/networking
       - internal/service/upgrade
@@ -382,6 +384,7 @@ appBoundaries:
       - "**/*_test.go"
     allowServiceImports:
       - internal/service/backup
+      - internal/service/configuration
       - internal/service/networking
       - internal/service/upgrade
       - internal/service/upgrade/bluegreen

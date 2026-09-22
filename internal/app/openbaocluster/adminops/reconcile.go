@@ -15,9 +15,11 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupmanager "github.com/dc-tec/openbao-operator/internal/service/backup"
+	"github.com/dc-tec/openbao-operator/internal/service/configuration"
 	upgrademanager "github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
 	rollingupgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade/rolling"
@@ -114,7 +116,25 @@ func (p reconcilerPlan) orderedFor(cluster *openbaov1alpha1.OpenBaoCluster) []su
 	if !backupOwnsLock && p.backupReconciler != nil {
 		reconcilers = append(reconcilers, p.backupReconciler)
 	}
+	if portauth.PolicyReconciliationEnabled(cluster) {
+		for i, rec := range reconcilers {
+			reconcilers[i] = policyReadinessReconciler{inner: rec}
+		}
+	}
 	return reconcilers
+}
+
+type policyReadinessReconciler struct{ inner subReconciler }
+
+func (r policyReadinessReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (upgrademanager.ReconcileResult, error) {
+	// Check before each reconciler: a preceding operation can release its lock
+	// during this pass. Running operations can still observe Jobs and finish.
+	if cluster.Status.OperationLock == nil {
+		if err := configuration.RequirePoliciesReady(cluster); err != nil {
+			return upgrademanager.ReconcileResult{}, err
+		}
+	}
+	return r.inner.Reconcile(ctx, logger, cluster)
 }
 
 // Reconcile executes admin-operations orchestration and status patching.

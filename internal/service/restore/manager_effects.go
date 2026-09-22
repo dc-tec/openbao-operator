@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	"github.com/dc-tec/openbao-operator/internal/service/configuration"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
@@ -266,6 +267,9 @@ func (m *Manager) createRestoreJob(
 ) (ctrl.Result, error) {
 	if restore.Status.Execution == nil || restore.Status.Execution.Stage != openbaov1alpha1.RestoreExecutionStagePrepared {
 		return ctrl.Result{}, fmt.Errorf("restore execution must be Prepared before Job creation")
+	}
+	if err := configuration.RequirePoliciesReady(cluster); err != nil {
+		return ctrl.Result{}, err
 	}
 	if err := validateRestoreExecutionIdentity(restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("invalid prepared restore execution: %w", err)

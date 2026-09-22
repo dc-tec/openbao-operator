@@ -139,10 +139,20 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	}
 
 	// 4. Bind Role (+ policies mirror to match existing golden)
+	if portauth.PolicyReconciliationEnabled(cluster) {
+		req := buildInitializeRequestBlock("create-policy-approval", opUpdate, pathSysPoliciesACLPrefix+portauth.PolicyNameApproval, false)
+		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: OperatorPolicyApproval(cluster)}, "data"))
+		initBody.AppendBlock(req)
+	}
 	{
 		subject := fmt.Sprintf("system:serviceaccount:%s:%s", config.OperatorNS, config.OperatorSA)
 		req := buildInitializeRequestBlock(reqCreateOperatorRole, opUpdate, fmt.Sprintf("%s%s", pathAuthJWTRolePrefix, authRoleNameOperator), false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(operatorJWTRoleData(subject, additionalSubjects.Operator, authPolicyNameOperator, jwtAudiences), "data"))
+		role := operatorJWTRoleData(subject, additionalSubjects.Operator, authPolicyNameOperator, jwtAudiences)
+		if portauth.PolicyReconciliationEnabled(cluster) {
+			role.TokenPolicies = append(role.TokenPolicies, portauth.PolicyNameApproval)
+			role.Policies = &role.TokenPolicies
+		}
+		req.Body().AppendBlock(gohcl.EncodeAsBlock(role, "data"))
 		initBody.AppendBlock(req)
 	}
 

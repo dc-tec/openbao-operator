@@ -16,6 +16,7 @@ import (
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 type openBaoClusterWorkloadReconciler struct {
@@ -121,7 +122,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		appResult.RequeueAfter <= 0 &&
 		cluster.Status.Workload != nil &&
 		cluster.Status.Workload.LastError == nil &&
-		!r.parent.SingleTenantMode {
+		(!r.parent.SingleTenantMode || portauth.PolicyReconciliationEnabled(cluster)) {
 		appResult.RequeueAfter = steadyStateStatusRefreshRequeueAfter(time.Now())
 	}
 	return ctrl.Result{RequeueAfter: appResult.RequeueAfter}, appErr

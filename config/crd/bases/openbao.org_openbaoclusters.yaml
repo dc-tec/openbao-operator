@@ -3817,12 +3817,23 @@ spec:
                           Issuer overrides the auto-discovered K8s issuer URL.
                           Critical for scenarios where OpenBao sees a different K8s URL than the Operator.
                         type: string
+                      reconcilePolicies:
+                        description: |-
+                          ReconcilePolicies restores the built-in operational policies after initialization.
+                          OpenBao must independently approve their exact contents through the
+                          openbao-operator-policy-approval policy. Bootstrap installs the initial approval;
+                          existing clusters and later permission changes require administrator approval.
+                          Auth methods, roles, and the approval policy are not reconciled.
+                        type: boolean
                     required:
                     - enabled
                     type: object
                     x-kubernetes-validations:
                     - message: spec.selfInit.oidc.additionalSubjects requires spec.selfInit.oidc.enabled=true
                       rule: '!has(self.additionalSubjects) || self.enabled'
+                    - message: policy reconciliation requires oidc.enabled=true
+                      rule: '!has(self.reconcilePolicies) || !self.reconcilePolicies
+                        || self.enabled'
                   requests:
                     description: |-
                       Requests defines the API operations to execute during self-initialization.
@@ -4090,6 +4101,10 @@ spec:
                 required:
                 - enabled
                 type: object
+                x-kubernetes-validations:
+                - message: policy reconciliation requires selfInit.enabled=true
+                  rule: '!has(self.oidc) || !has(self.oidc.reconcilePolicies) || !self.oidc.reconcilePolicies
+                    || self.enabled'
               service:
                 description: Service configures the primary Service used to expose
                   OpenBao inside or outside the cluster.
@@ -5745,6 +5760,11 @@ spec:
                           error.
                         type: string
                     type: object
+                  policyRevision:
+                    description: |-
+                      PolicyRevision identifies the last complete built-in policy bundle written
+                      successfully. This records reconciliation progress, not authorization.
+                    type: string
                 type: object
             type: object
         required:

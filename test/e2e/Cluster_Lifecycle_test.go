@@ -102,7 +102,8 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
 						Enabled: true,
 						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
-							Enabled: true,
+							Enabled:           true,
+							ReconcilePolicies: true,
 						},
 						Requests: append(
 							framework.DefaultAdminSelfInitRequests(),
@@ -185,6 +186,15 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			By("triggering a reconcile and waiting for Available condition")
 			Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
 			f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
+
+			By("verifying the approved policy bundle was reconciled")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, client.ObjectKeyFromObject(cluster), updated)).To(Succeed())
+				g.Expect(updated.Status.Workload).NotTo(BeNil())
+				g.Expect(updated.Status.Workload.PolicyRevision).NotTo(BeEmpty())
+				g.Expect(updated.Status.Workload.LastError).To(BeNil())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			By("verifying reconcile metrics are emitted for the cluster")
 			metricsOutput, metricErr := framework.WaitForControllerMetricSubstrings(

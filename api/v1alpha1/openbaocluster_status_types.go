@@ -62,6 +62,11 @@ type ControllerErrorStatus struct {
 
 // WorkloadControllerStatus holds status owned by the workload controller.
 type WorkloadControllerStatus struct {
+	// PolicyRevision identifies the last complete built-in policy bundle written
+	// successfully. This records reconciliation progress, not authorization.
+	// +optional
+	PolicyRevision string `json:"policyRevision,omitempty"`
+
 	// LastError is the last workload-controller error observed for this cluster.
 	// +optional
 	// +nullable

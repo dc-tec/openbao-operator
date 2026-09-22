@@ -18,6 +18,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
+	"github.com/dc-tec/openbao-operator/internal/service/configuration"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
@@ -63,6 +64,7 @@ func DefaultWorkloadResultPolicy() WorkloadResultPolicy {
 func AppendInitAndAutopilotReconcilers(
 	reconcilers []SubReconciler,
 	initMgr initmanagerport.Manager,
+	policyMgr *configuration.PolicyManager,
 	autopilotRuntime initmanagerport.AutopilotRuntime,
 	statefulSetReader client.Reader,
 	recorder events.EventRecorder,
@@ -73,6 +75,9 @@ func AppendInitAndAutopilotReconcilers(
 	}
 
 	reconcilers = append(reconcilers, initMgr)
+	if policyMgr != nil {
+		reconcilers = append(reconcilers, &policyConfigReconciler{manager: policyMgr})
+	}
 
 	// Add autopilot config reconciler for Day 2 operations when an autopilot runtime is available.
 	if autopilotRuntime != nil {
@@ -90,6 +95,41 @@ func AppendInitAndAutopilotReconcilers(
 	}
 
 	return reconcilers
+}
+
+type policyConfigReconciler struct{ manager *configuration.PolicyManager }
+
+func (r *policyConfigReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	// The pre-infrastructure attempt handles initialized clusters. Only write
+	// here after initialization or when infrastructure repair permits a retry.
+	if configuration.RequirePoliciesReady(cluster) == nil {
+		return recon.Result{}, nil
+	}
+	return r.manager.Reconcile(ctx, logger, cluster)
+}
+
+func reconcilePoliciesBeforeInfrastructure(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	policyReconciler SubReconciler,
+) {
+	// Repair policies before infrastructure operations can return early (for
+	// example, scale-down requires the controller policy). A failed attempt must
+	// still allow infrastructure repair, such as recreating a deleted Service.
+	// The policy stage after initialization retries and reports any remaining error.
+	if cluster.Status.Initialized && policyReconciler != nil {
+		if _, err := policyReconciler.Reconcile(ctx, logger, cluster); err != nil {
+			if cluster.Status.Workload == nil {
+				cluster.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{}
+			}
+			cluster.Status.Workload.LastError = controllerErrorStatus(err)
+		} else if cluster.Status.Workload != nil && cluster.Status.Workload.LastError != nil &&
+			cluster.Status.Workload.LastError.Reason == "PolicyReconciliationFailed" {
+			cluster.Status.Workload.LastError = nil
+		}
+	}
+
 }
 
 // RunWorkloadReconcilers executes workload orchestration with consistent status patching.

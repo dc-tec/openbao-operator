@@ -14,6 +14,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/configuration"
 )
 
 // RuntimeKubernetesConfig groups Kubernetes collaborators used to construct
@@ -44,6 +45,7 @@ type RuntimeOIDCConfig struct {
 type RuntimeOpenBaoConfig struct {
 	TLSReload         TLSReloadSignaler
 	InitManager       initmanagerport.Manager
+	PolicyManager     *configuration.PolicyManager
 	Raft              RuntimeRaft
 	SmartClientConfig portopenbao.ClientConfig
 	ClientForPod      func(context.Context, *openbaov1alpha1.OpenBaoCluster, string) (portopenbao.ClusterActions, error)
@@ -77,6 +79,10 @@ type RuntimeApplicationsConfig struct {
 // NewRuntimeApplications constructs the workload, admin-operations, status,
 // and deletion applications from process-level collaborators.
 func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
+	var policyReconciler SubReconciler
+	if config.OpenBao.PolicyManager != nil {
+		policyReconciler = config.OpenBao.PolicyManager
+	}
 	clientForPod := config.OpenBao.ClientForPod
 	if clientForPod == nil {
 		clientForPod = func(context.Context, *openbaov1alpha1.OpenBaoCluster, string) (portopenbao.ClusterActions, error) {
@@ -141,6 +147,7 @@ func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
 	workloadReconcilers = AppendInitAndAutopilotReconcilers(
 		workloadReconcilers,
 		config.OpenBao.InitManager,
+		config.OpenBao.PolicyManager,
 		config.OpenBao.Raft,
 		config.Kubernetes.APIReader,
 		config.Kubernetes.Recorder,
@@ -150,6 +157,7 @@ func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
 	return NewApplications(ApplicationsConfig{
 		Client:              config.Kubernetes.Client,
 		WorkloadReconcilers: workloadReconcilers,
+		PolicyReconciler:    policyReconciler,
 		WorkloadPolicy:      DefaultWorkloadResultPolicy(),
 		AdminOpsApplication: NewAdminOpsApplication(AdminOpsDependencies{
 			Client:                config.Kubernetes.Client,

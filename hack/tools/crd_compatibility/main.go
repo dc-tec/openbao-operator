@@ -455,7 +455,17 @@ func compareSnapshots(oldNodes, newNodes []schemaNode) []change {
 			))
 			continue
 		}
-		changes = append(changes, compareNode(oldNode, newNode)...)
+		nodeChanges := compareNode(oldNode, newNode)
+		if isNewPolicyOptInValidation(oldNode, newNode, oldByKey, newByKey) {
+			for i := range nodeChanges {
+				if nodeChanges[i].Classification == validationTightened {
+					nodeChanges[i].Impact = impactCompatible
+					nodeChanges[i].Classification = "cel-new-opt-in-guard"
+					nodeChanges[i].Detail = "validation applies only when the newly introduced reconcilePolicies field is true"
+				}
+			}
+		}
+		changes = append(changes, nodeChanges...)
 	}
 	for key, newNode := range newByKey {
 		if _, ok := oldByKey[key]; ok {

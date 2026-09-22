@@ -41,6 +41,7 @@ const (
 // When enabled, OpenBao initializes itself on first start using the configured
 // requests, and the root token is automatically revoked.
 // See: https://openbao.org/docs/configuration/self-init/
+// +kubebuilder:validation:XValidation:rule="!has(self.oidc) || !has(self.oidc.reconcilePolicies) || !self.oidc.reconcilePolicies || self.enabled",message="policy reconciliation requires selfInit.enabled=true"
 type SelfInitConfig struct {
 	// Enabled activates OpenBao's self-initialization feature.
 	// When true, the Operator injects initialize stanzas into config.hcl
@@ -275,9 +276,18 @@ type SelfInitPolicy struct {
 
 // SelfInitOIDCConfig configures OIDC identity for the cluster.
 // +kubebuilder:validation:XValidation:rule="!has(self.additionalSubjects) || self.enabled",message="spec.selfInit.oidc.additionalSubjects requires spec.selfInit.oidc.enabled=true"
+// +kubebuilder:validation:XValidation:rule="!has(self.reconcilePolicies) || !self.reconcilePolicies || self.enabled",message="policy reconciliation requires oidc.enabled=true"
 type SelfInitOIDCConfig struct {
 	// Enabled triggers the bootstrap logic.
 	Enabled bool `json:"enabled"`
+
+	// ReconcilePolicies restores the built-in operational policies after initialization.
+	// OpenBao must independently approve their exact contents through the
+	// openbao-operator-policy-approval policy. Bootstrap installs the initial approval;
+	// existing clusters and later permission changes require administrator approval.
+	// Auth methods, roles, and the approval policy are not reconciled.
+	// +optional
+	ReconcilePolicies bool `json:"reconcilePolicies,omitempty"`
 
 	// Audience, if set, must match the operator installation audience used for
 	// projected OpenBao auth tokens.

@@ -109,7 +109,10 @@ self-init does not update the existing role. Add the peer-management capabilitie
 
 ## Maintain policies after bootstrap
 
-Self-init creates the initial policies only during initialization. For an existing cluster:
+Self-init creates the initial policies only during initialization.
+
+You can opt into [approved policy reconciliation](../../operate/operator-policies/) to restore built-in policies within
+an administrator-approved grant. Otherwise, maintain policies through the following procedure:
 
 1. Review operator release notes for new OpenBao capabilities.
 2. Compare the implemented policy with the cluster's current policy.

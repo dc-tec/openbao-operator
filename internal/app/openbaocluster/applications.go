@@ -17,6 +17,7 @@ import (
 type ApplicationsConfig struct {
 	Client                   client.Client
 	WorkloadReconcilers      []SubReconciler
+	PolicyReconciler         SubReconciler
 	WorkloadPolicy           WorkloadResultPolicy
 	AdminOpsApplication      *AdminOpsApplication
 	StatusDependencies       StatusDependencies
@@ -47,6 +48,8 @@ func (a *Applications) ReconcileWorkload(
 	if a == nil || a.config.Client == nil {
 		return recon.Result{}, fmt.Errorf("workload application client is required")
 	}
+
+	reconcilePoliciesBeforeInfrastructure(ctx, logger, cluster, a.config.PolicyReconciler)
 
 	return RunWorkloadReconcilers(
 		ctx,

@@ -1776,6 +1776,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled triggers the bootstrap logic. |  |  |
+| `reconcilePolicies` _boolean_ | ReconcilePolicies restores the built-in operational policies after initialization.<br />OpenBao must independently approve their exact contents through the<br />openbao-operator-policy-approval policy. Bootstrap installs the initial approval;<br />existing clusters and later permission changes require administrator approval.<br />Auth methods, roles, and the approval policy are not reconciled. |  | Optional: \{\} <br /> |
 | `audience` _string_ | Audience, if set, must match the operator installation audience used for<br />projected OpenBao auth tokens.<br />This field does not create a per-cluster TokenRequest audience override. |  | Optional: \{\} <br /> |
 | `issuer` _string_ | Issuer overrides the auto-discovered K8s issuer URL.<br />Critical for scenarios where OpenBao sees a different K8s URL than the Operator. |  | Optional: \{\} <br /> |
 | `additionalSubjects` _[SelfInitOIDCAdditionalSubjects](#selfinitoidcadditionalsubjects)_ | AdditionalSubjects adds exact Kubernetes ServiceAccount subjects to the<br />generated Operator JWT roles. Use these bindings when a snapshot must<br />remain operable after restore to a target with different ServiceAccount<br />subjects. Configure the source cluster before self-initialization so the<br />bindings are present in each snapshot.<br />These bindings do not configure JWT issuer or signature verification for<br />another Kubernetes control plane. The jwt-operator auth method must also<br />trust the target's projected ServiceAccount tokens. |  | Optional: \{\} <br /> |
@@ -2336,6 +2337,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `policyRevision` _string_ | PolicyRevision identifies the last complete built-in policy bundle written<br />successfully. This records reconciliation progress, not authorization. |  | Optional: \{\} <br /> |
 | `lastError` _[ControllerErrorStatus](#controllererrorstatus)_ | LastError is the last workload-controller error observed for this cluster. |  | Optional: \{\} <br /> |
 
 
