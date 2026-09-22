@@ -34,6 +34,8 @@ and a pinned release for production. OpenBao Operator 0.5.0 is the current stabl
 - Install `kubectl`, Helm, `curl`, `jq`, and Cosign. Source deployments also require the repository toolchain and a
   registry the cluster can pull from.
 - Decide the tenancy model. Use the [single-tenant procedure](../single-tenant/) for one watched namespace.
+- If the cluster cannot pull from public registries, [mirror runtime images and configure registry credentials](../../configure/air-gapped/)
+  before installing the operator.
 
 ## Choose namespace Pod Security label ownership
 
@@ -241,6 +243,10 @@ helm template openbao-operator charts/openbao-operator \
 Review the controller and Provisioner ServiceAccounts, RoleBinding subjects, admission-policy identities, projected
 token audience, images, and namespaces before applying the render.
 
+`helm template` omits CRDs unless you pass `--include-crds`. When applying rendered manifests directly, create the
+operator namespace and wait for the CRDs to become `Established` before starting the controllers or applying
+OpenBao custom resources. Configure the same ordering when a GitOps controller applies the manifests.
+
 ## Select the target platform
 
 The chart defaults to `platform=auto`. The controller checks the API groups during startup and selects OpenShift
@@ -279,6 +285,7 @@ kubectl delete -f "${EDGE_ROOT}/install.yaml"
 
 | Symptom | Check |
 | --- | --- |
+| `no matches for kind "OpenBaoCluster"` | Verify that the CRDs are installed and `Established`. Include `--include-crds` when rendering the chart with `helm template`. |
 | Controller starts but Provisioner is absent | Confirm that you did not render `tenancy.mode=single` |
 | Tenant provisioning fails on a namespace label update | Inspect the tenant error and [configure label ownership](#choose-namespace-pod-security-label-ownership) if the platform restricts Pod Security label updates |
 | Pods cannot pull the source image | Push it to a cluster-reachable registry or load it into every local node |

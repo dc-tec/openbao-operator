@@ -11,7 +11,7 @@
 [![Docs](https://img.shields.io/badge/Docs-Live-green)](https://dc-tec.github.io/openbao-operator/)
 [![Artifact Hub](https://img.shields.io/badge/Artifact_Hub-Helm_OCI-417598?logo=artifacthub&logoColor=white)](https://artifacthub.io/packages/search?repo=openbao-operator)
 
-[Quick Start](#quick-start) • [Installation](#installation) • [Compatibility](#compatibility) • [Documentation](#documentation) • [Contributing](#contributing)
+[Get started](#get-started) • [Compatibility](#compatibility) • [Documentation](#documentation) • [Contributing](#contributing)
 
 </div>
 
@@ -21,6 +21,16 @@
 ---
 
 OpenBao Operator is a Kubernetes operator for [OpenBao](https://openbao.org) that automates lifecycle management: provisioning, TLS, backups/restores, upgrades, horizontal read scaling, and multi-tenancy controls.
+
+## Get started
+
+Follow the **[Getting started guide](https://dc-tec.github.io/openbao-operator/docs/get-started/)** to choose a deployment
+model, install the operator, onboard a namespace, and create your first OpenBao cluster.
+
+The documentation covers evaluation and production prerequisites, including platform-managed namespace security and
+private registries.
+For upgrades and removal, see [Upgrade the operator](https://dc-tec.github.io/openbao-operator/docs/get-started/install/#upgrade-the-operator)
+and [Uninstall the operator](https://dc-tec.github.io/openbao-operator/docs/get-started/install/#uninstall-the-operator).
 
 ## Documentation
 
@@ -73,149 +83,6 @@ For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openba
 - **RBAC boundaries**: Least-privilege split between controller and provisioner ([Tenant Boundaries](https://dc-tec.github.io/openbao-operator/docs/security/tenant-boundaries/))
 - **Guardrails**: Validating admission policies that block dangerous settings before they reach the cluster ([Admission Policies](https://dc-tec.github.io/openbao-operator/docs/security/admission/))
 - **Multi-tenancy**: Namespace isolation guarantees and limits ([Tenant Boundaries](https://dc-tec.github.io/openbao-operator/docs/security/tenant-boundaries/))
-
-## Quick Start
-
-Install and verify the operator before continuing. If it is not running, complete [Installation](#installation) first.
-The next move depends on the tenancy mode you chose:
-
-- **Multi-tenant (default)**: Create the target namespace, onboard it through `OpenBaoTenant`, then apply the first `OpenBaoCluster`.
-- **Single-tenant**: Skip `OpenBaoTenant` and create the first `OpenBaoCluster` directly in the controller's watched namespace.
-
-### Option A: Evaluation (Development Profile)
-
-```yaml
-# cluster.yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: my-cluster
-  namespace: openbao-demo
-spec:
-  version: "2.6.2"
-  replicas: 1
-  profile: Development
-  tls:
-    enabled: true
-    mode: OperatorManaged
-  storage:
-    size: "10Gi"
-```
-
-```bash
-kubectl create namespace openbao-demo
-
-# Default multi-tenant mode only: onboard the target namespace first.
-# Single-tenant mode: skip this OpenBaoTenant and apply cluster.yaml
-# directly in the controller's watched namespace instead.
-kubectl apply -f - <<'EOF'
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoTenant
-metadata:
-  name: openbao-demo
-  namespace: openbao-demo
-spec:
-  targetNamespace: openbao-demo
-EOF
-
-kubectl -n openbao-demo wait \
-  --for=condition=Provisioned \
-  openbaotenant/openbao-demo \
-  --timeout=2m
-
-kubectl apply -f cluster.yaml
-
-# Wait for the cluster, then inspect its Pods.
-kubectl -n openbao-demo wait \
-  --for=condition=Available \
-  openbaocluster/my-cluster \
-  --timeout=10m
-kubectl -n openbao-demo get pods -l openbao.org/cluster=my-cluster
-```
-
-If `spec.selfInit.enabled` is `false` (default), the operator stores a root token in `Secret/openbao-demo/my-cluster-root-token` (key: `token`).
-
-```bash
-kubectl -n openbao-demo get secret my-cluster-root-token -o jsonpath='{.data.token}' | base64 -d; echo
-```
-
-### Option B: Production (Hardened Profile)
-
-The default production path is:
-
-- Multi-tenant mode
-- Target namespace onboarded through `OpenBaoTenant` before the first cluster
-- `Hardened` profile
-- `spec.selfInit.enabled: true`
-- `spec.tls.mode: External` or `ACME`
-- `spec.upgrade.strategy: RollingUpdate`
-- Admission policies enabled
-
-The `Hardened` profile enforces:
-- External/ACME TLS (`spec.tls.mode`)
-- External unseal (`spec.unseal.type`)
-- Self-init enabled (`spec.selfInit.enabled: true`)
-
-Start with:
-- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/docs/get-started/deployment-model/)
-- [Operator Installation](https://dc-tec.github.io/openbao-operator/docs/get-started/install/)
-- [Onboard the Target Namespace](https://dc-tec.github.io/openbao-operator/docs/get-started/onboard-namespace/)
-- [Create Your First Cluster](https://dc-tec.github.io/openbao-operator/docs/get-started/create-cluster/)
-- [Security Profiles](https://dc-tec.github.io/openbao-operator/docs/configure/security-profile/)
-- [Production Checklist](https://dc-tec.github.io/openbao-operator/docs/operate/production-readiness/)
-- Production samples in `config/samples/production/`
-
-## Installation
-
-### Option 1: Helm (Recommended)
-
-Install the operator from our OCI registry.
-
-If your platform manages or restricts namespace Pod Security labels, configure
-[external label ownership](https://dc-tec.github.io/openbao-operator/docs/get-started/install/#choose-namespace-pod-security-label-ownership)
-before onboarding tenants. This requires `tenancy.namespacePodSecurityLabels.mode=external` in the operator's Helm values.
-
-```bash
-# 1. Create namespace
-kubectl create namespace openbao-operator-system
-
-# 2. Install/upgrade chart
-helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --version <chart-version> \
-  --namespace openbao-operator-system
-```
-
-If you install the operator into a custom namespace, replace `openbao-operator-system` consistently in the install, verification, and uninstall commands.
-
-Find the chart in Artifact Hub (indexing may lag shortly after releases):
-[Artifact Hub search: openbao-operator](https://artifacthub.io/packages/search?repo=openbao-operator)
-
-### Option 2: Plain YAML
-
-Apply a pinned release manifest directly.
-
-```bash
-kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
-```
-
-Replace `X.Y.Z` with the exact release you intend to run. Use `latest` only for throwaway evaluation, not for production installs.
-
-## Uninstall
-
-### Helm
-
-```bash
-helm uninstall openbao-operator --namespace openbao-operator-system
-```
-
-### Plain YAML
-
-```bash
-kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
-```
-
-> [!NOTE]
-> The operator installation includes CRDs. If you want to remove CRDs as well, delete the `openbao.org/*` CRDs after uninstalling (this will delete all custom resources).
 
 ## Contributing
 
