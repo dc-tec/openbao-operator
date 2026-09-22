@@ -115,6 +115,9 @@ const (
 
 	// ReasonRollingRetryAccepted indicates a failed rolling upgrade retry was accepted.
 	ReasonRollingRetryAccepted = "RollingRetryAccepted"
+
+	// ReasonRollingPartitionRetry indicates that a partition update will be retried.
+	ReasonRollingPartitionRetry = "RollingPartitionRetry"
 )
 
 // Message constants for condition updates.

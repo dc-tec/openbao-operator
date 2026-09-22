@@ -2,6 +2,7 @@ package rolling
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,6 +25,11 @@ func (m *Manager) reconcileUpgradeExecution(
 ) (recon.Result, error) {
 	completed, err := m.performPodByPodUpgrade(ctx, logger, cluster, metrics)
 	if err != nil {
+		if errors.Is(err, errPartitionRetry) {
+			logger.Info("Retrying rolling upgrade after StatefulSet partition conflict or unobserved template", "error", err, "retryAfter", constants.RequeueShort)
+			m.emitWarningEvent(cluster, upgrade.ReasonRollingPartitionRetry, "Rolling upgrade partition update will retry in %s", constants.RequeueShort)
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+		}
 		return m.handleUpgradeExecutionFailure(ctx, logger, cluster, metrics, strategy, err)
 	}
 	if !completed {

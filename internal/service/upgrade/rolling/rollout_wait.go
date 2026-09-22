@@ -2,6 +2,7 @@ package rolling
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,6 +21,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
+var errPartitionRetry = errors.New("StatefulSet partition update requires retry")
+
 // setStatefulSetPartition updates only the StatefulSet rolling-update partition.
 // MergeFrom avoids the full-object validation burden of SSA for StatefulSets.
 func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, partition int32) error {
@@ -34,7 +37,8 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 	}
 
 	if !statefulSetTemplateCurrent(sts, cluster) {
-		return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("StatefulSet template has not observed cluster generation %d", cluster.Generation))
+		return fmt.Errorf("%w: %w", errPartitionRetry, operatorerrors.WrapTransientKubernetesAPI(
+			fmt.Errorf("StatefulSet template has not observed cluster generation %d", cluster.Generation)))
 	}
 	newSts := sts.DeepCopy()
 	newSts.Spec.UpdateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
@@ -43,6 +47,10 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 	}
 
 	if err := m.client.Patch(ctx, newSts, client.MergeFromWithOptions(sts, client.MergeFromWithOptimisticLock{})); err != nil {
+		if apierrors.IsConflict(err) {
+			return fmt.Errorf("%w: %w", errPartitionRetry, operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to update StatefulSet partition: %w", err)))
+		}
 		return fmt.Errorf("failed to update StatefulSet partition: %w", err)
 	}
 
