@@ -5114,8 +5114,8 @@ spec:
             type: object
             x-kubernetes-validations:
             - message: spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged
-              rule: self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod)
-                > 0
+              rule: self.tls.mode != 'OperatorManaged' || (has(self.tls.rotationPeriod)
+                && size(self.tls.rotationPeriod) > 0)
             - message: spec.tls.acme.sharedCache is only supported when spec.tls.mode
                 is ACME
               rule: self.tls.mode == 'ACME' || !has(self.tls.acme) || !has(self.tls.acme.sharedCache)

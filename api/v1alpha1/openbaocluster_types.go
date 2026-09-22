@@ -174,7 +174,7 @@ const (
 // The Operator owns certain protected OpenBao configuration stanzas (for example,
 // listener "tcp", storage "raft", and seal "static" when using default unseal).
 // Users must not override these via spec.configuration.
-// +kubebuilder:validation:XValidation:rule="self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod) > 0",message="spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged"
+// +kubebuilder:validation:XValidation:rule="self.tls.mode != 'OperatorManaged' || (has(self.tls.rotationPeriod) && size(self.tls.rotationPeriod) > 0)",message="spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged"
 // +kubebuilder:validation:XValidation:rule="self.tls.mode == 'ACME' || !has(self.tls.acme) || !has(self.tls.acme.sharedCache)",message="spec.tls.acme.sharedCache is only supported when spec.tls.mode is ACME"
 // +kubebuilder:validation:XValidation:rule="self.tls.mode != 'ACME' || ((self.replicas <= 1) && (!has(self.upgrade) || self.upgrade.strategy != 'BlueGreen')) || (has(self.tls.acme) && has(self.tls.acme.sharedCache))",message="HA ACME clusters require spec.tls.acme.sharedCache when more than one Pod can serve the same hostname"
 // +kubebuilder:validation:XValidation:rule="!has(self.unseal) || self.unseal.type != 'ocikms' || !has(self.unseal.credentialsSecretRef) || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey) && self.unseal.ocikms.authTypeAPIKey == true)",message="spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true"

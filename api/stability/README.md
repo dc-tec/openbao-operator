@@ -77,6 +77,11 @@ removal, validation tightening, and changed defaults. Updating the inventory
 snapshot does not authorize an incompatible schema change. The approved 0.5.0
 field decisions remain in effect; this gate does not graduate `v1alpha1` to beta.
 
+The checker recognizes the exact `OpenBaoCluster/v1alpha1` `rotationPeriod` presence-guard rewrite as compatible.
+It preserves which inputs are accepted and replaces a missing-key evaluation error with the existing required-field
+message. The match includes the resource, schema path, rule text, and rule metadata. Other CEL changes still require
+semantic review. `TestCRD_OpenBaoCluster_TLSRotationPeriod` verifies the API-server behavior.
+
 The `API Contract` job runs for API, CRD, checker, gate-test, dependency, build-rule,
 and gate-workflow changes, every push to `main`, and manual CI runs. `CI Required`
 includes its result. Edge candidate builds and release image builds also depend
