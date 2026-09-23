@@ -2172,6 +2172,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			By("Recording completed executor Jobs before rollback")
 			beforeRollback := &openbaov1alpha1.OpenBaoCluster{}
 			Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), beforeRollback)).To(Succeed())
+			Expect(beforeRollback.Status.BlueGreen.BlueReplicas).To(Equal(gatedCluster.Spec.Replicas),
+				"upgrade must capture the configured Blue population after bootstrap")
+			Expect(beforeRollback.Status.BlueGreen.GreenReplicas).To(Equal(gatedCluster.Spec.Replicas))
 			firstOperationID := beforeRollback.Status.BlueGreen.OperationID
 			blueRevision := beforeRollback.Status.BlueGreen.BlueRevision
 			greenRevision := beforeRollback.Status.BlueGreen.GreenRevision

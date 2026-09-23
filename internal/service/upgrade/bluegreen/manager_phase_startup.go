@@ -25,12 +25,19 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 		return outcome, err
 	}
 
-	core.CaptureBlueGreenTarget(cluster)
-	if sts, err := m.readExecutionStatefulSet(ctx, cluster, upgrade.StableVoterStatefulSetName(cluster)); err == nil {
-		cluster.Status.BlueGreen.BlueReplicas = *sts.Spec.Replicas
-	} else {
+	sts, err := m.readExecutionStatefulSet(ctx, cluster, upgrade.StableVoterStatefulSetName(cluster))
+	if err != nil {
 		return phaseOutcome{}, fmt.Errorf("capture Blue replica count: %w", err)
 	}
+	// Bootstrap uses one replica until initialization completes. Stay Idle until
+	// infra applies the desired count so the upgrade cannot pin that temporary size.
+	if *sts.Spec.Replicas != cluster.Spec.Replicas {
+		logger.Info("Waiting for Blue replica reconciliation before starting upgrade",
+			"statefulSetReplicas", *sts.Spec.Replicas, "desiredReplicas", cluster.Spec.Replicas)
+		return requeueAfterOutcome(constants.RequeueShort), nil
+	}
+	core.CaptureBlueGreenTarget(cluster)
+	cluster.Status.BlueGreen.BlueReplicas = *sts.Spec.Replicas
 	cluster.Status.BlueGreen.GreenRevision = m.calculateRevision(cluster)
 	return advance(openbaov1alpha1.PhaseDeployingGreen), nil
 }
