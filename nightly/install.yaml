@@ -5113,8 +5113,8 @@ spec:
             type: object
             x-kubernetes-validations:
             - message: spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged
-              rule: self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod)
-                > 0
+              rule: self.tls.mode != 'OperatorManaged' || (has(self.tls.rotationPeriod)
+                && size(self.tls.rotationPeriod) > 0)
             - message: spec.tls.acme.sharedCache is only supported when spec.tls.mode
                 is ACME
               rule: self.tls.mode == 'ACME' || !has(self.tls.acme) || !has(self.tls.acme.sharedCache)
@@ -7194,10 +7194,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260920-2b1f6467d24d
+          value: nightly-20260923-b029ff60bb23
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:d03c20a05afc5e4c6d1d19f4df896c74d0d8bbaef2236cdfd903a9a422ad67fb
+        image: ghcr.io/dc-tec/openbao-operator@sha256:cfa6be9053e90a0ffd0fd21512007ac21f27bf32b3e80b1e62b790c4a937e677
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7312,8 +7312,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260920-2b1f6467d24d
-        image: ghcr.io/dc-tec/openbao-operator@sha256:d03c20a05afc5e4c6d1d19f4df896c74d0d8bbaef2236cdfd903a9a422ad67fb
+          value: nightly-20260923-b029ff60bb23
+        image: ghcr.io/dc-tec/openbao-operator@sha256:cfa6be9053e90a0ffd0fd21512007ac21f27bf32b3e80b1e62b790c4a937e677
         livenessProbe:
           httpGet:
             path: /healthz
