@@ -2934,3 +2934,38 @@ func TestVAP_OpenBaoTenant_RejectsTargetNamespaceMutation(t *testing.T) {
 
 	t.Fatalf("expected VAP to deny OpenBaoTenant targetNamespace mutation after retries")
 }
+
+func TestCRD_OpenBaoCluster_PluginDeclaration(t *testing.T) {
+	tests := []struct {
+		name   string
+		plugin openbaov1alpha1.Plugin
+		valid  bool
+	}{
+		{name: "digest-pinned", plugin: openbaov1alpha1.Plugin{Image: "registry.example.com/plugin:v1.0.0@sha256:" + strings.Repeat("a", 64)}, valid: true},
+		{name: "command-kms", plugin: openbaov1alpha1.Plugin{Command: "openbao-plugin-kms-pkcs11"}, valid: true},
+		{name: "bad-checksum", plugin: openbaov1alpha1.Plugin{Command: "plugin", SHA256Sum: "bad"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalClusterObj(newTestNamespace(t), "plugin-"+tt.name)
+			cluster.Spec.Version = "2.7.0"
+			tt.plugin.Type, tt.plugin.Name = "kms", "pkcs11"
+			cluster.Spec.Plugins = []openbaov1alpha1.Plugin{tt.plugin}
+			err := k8sClient.Create(ctx, cluster)
+			if !tt.valid {
+				requireInvalidRequest(t, err)
+				return
+			}
+			if err != nil {
+				t.Fatalf("create plugin declaration: %v", err)
+			}
+			var actual openbaov1alpha1.OpenBaoCluster
+			if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &actual); err != nil {
+				t.Fatal(err)
+			}
+			if len(actual.Spec.Plugins) != 1 || actual.Spec.Plugins[0].SHA256Sum != "" || actual.Spec.Plugins[0].BinaryName != "" || actual.Spec.Plugins[0].Version != "" {
+				t.Fatalf("omitted plugin fields were not preserved: %#v", actual.Spec.Plugins)
+			}
+		})
+	}
+}

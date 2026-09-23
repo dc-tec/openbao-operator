@@ -22,6 +22,7 @@ Labels: `cluster`, `lifecycle`, `unseal`, `pkcs11`, `hsm`
 
 Recorded checkpoints:
 - creating the PKCS#11 credentials Secret
+- configuring the pinned PKCS#11 plugin for the target OpenBao version
 - creating an OpenBaoCluster configured for PKCS#11 unseal
 - waiting for the initial PKCS#11-sealed pod to become ready
 - verifying the rendered OpenBao config contains the PKCS#11 seal stanza

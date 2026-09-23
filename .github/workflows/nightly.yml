@@ -97,7 +97,7 @@ jobs:
       - name: Run OpenBao config compatibility
         uses: ./.github/actions/run-openbao-config-compat
         with:
-          versions: 2.4.4 2.5.5 2.6.3
+          versions: 2.4.4 2.5.5 2.6.3 2.7.0
           report-schema-drift: "true"
           operator-schema-drift-image-tag: 2.6.3
 

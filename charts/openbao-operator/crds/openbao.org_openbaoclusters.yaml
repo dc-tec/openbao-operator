@@ -1914,8 +1914,9 @@ spec:
                         type: string
                       type: array
                     binaryName:
-                      description: BinaryName is the name of the plugin binary file
-                        within the OCI image.
+                      description: |-
+                        BinaryName is the name of the plugin binary file within the OCI image.
+                        OpenBao 2.7 and later can infer it from the image ENTRYPOINT or CMD.
                       minLength: 1
                       type: string
                     command:
@@ -1943,6 +1944,8 @@ spec:
                       description: |-
                         SHA256Sum is the expected SHA256 checksum of the plugin binary.
                         Must be a 64-character hexadecimal string.
+                        OpenBao 2.7 and later allow omission for digest-pinned OCI images and
+                        command-based plugins. Earlier versions require this field.
                       maxLength: 64
                       minLength: 64
                       pattern: ^[0-9a-fA-F]{64}$
@@ -1952,15 +1955,15 @@ spec:
                       minLength: 1
                       type: string
                     version:
-                      description: Version is the image version or tag.
+                      description: |-
+                        Version is the plugin version and, when Image has no tag, the image tag.
+                        OpenBao 2.7 and later can infer it from the image tag. Command-based KMS
+                        plugins on OpenBao 2.7 and later do not require a version.
                       minLength: 1
                       type: string
                   required:
-                  - binaryName
                   - name
-                  - sha256sum
                   - type
-                  - version
                   type: object
                 type: array
               podMetadata:

@@ -67,7 +67,7 @@ docker-build-upgrade: ## Build docker image with the upgrade helper.
 docker-push-upgrade: ## Push docker image with the upgrade helper.
 	$(CONTAINER_TOOL) push ${IMG}
 
-OPENBAO_SOFTHSM_BASE_IMAGE ?= openbao/openbao-hsm:2.6.2
+OPENBAO_SOFTHSM_BASE_IMAGE ?= openbao/openbao:2.6.3
 OPENBAO_SOFTHSM_IMG ?= openbao-softhsm:dev
 PYKMIP_BASE_IMAGE ?= python:3.11-slim
 PYKMIP_VERSION ?= 0.10.0
@@ -77,7 +77,7 @@ PYKMIP_SERVER_IMG ?= pykmip-server:dev
 docker-build-e2e-openbao-softhsm: ## Build the test-only OpenBao image with SoftHSM PKCS#11 support.
 	$(CONTAINER_TOOL) build \
 		-f test/e2e/images/openbao-softhsm/Dockerfile \
-		--build-arg OPENBAO_HSM_BASE_IMAGE=$(OPENBAO_SOFTHSM_BASE_IMAGE) \
+		--build-arg OPENBAO_BASE_IMAGE=$(OPENBAO_SOFTHSM_BASE_IMAGE) \
 		-t $(OPENBAO_SOFTHSM_IMG) \
 		test/e2e/images/openbao-softhsm
 

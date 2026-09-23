@@ -6,6 +6,7 @@ package e2e
 import (
 	"context"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -19,7 +20,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
+	"github.com/dc-tec/openbao-operator/test/utils"
 )
 
 var _ = Describe("Cluster PKCS#11 Unseal", Label("cluster", "lifecycle", "unseal", "pkcs11", "hsm"), Ordered, func() {
@@ -69,6 +72,19 @@ var _ = Describe("Cluster PKCS#11 Unseal", Label("cluster", "lifecycle", "unseal
 		}
 		Expect(c.Create(ctx, credentials)).To(Succeed())
 
+		By("configuring the pinned PKCS#11 plugin for the target OpenBao version")
+		plugin := openbaov1alpha1.Plugin{Type: "kms", Name: "pkcs11", Command: "openbao-plugin-kms-pkcs11"}
+		modern, err := platformsemver.AtLeast(openBaoVersion, 2, 7, 0)
+		Expect(err).NotTo(HaveOccurred())
+		if !modern {
+			pluginChecksum, err := utils.Run(exec.Command("docker", "run", "--rm", "--entrypoint", "cat", openBaoImage,
+				"/opt/openbao-softhsm/plugin.sha256"))
+			Expect(err).NotTo(HaveOccurred())
+			checksumFields := strings.Fields(pluginChecksum)
+			Expect(checksumFields).NotTo(BeEmpty())
+			plugin.Version, plugin.BinaryName, plugin.SHA256Sum = "v0.1.0", plugin.Command, checksumFields[0]
+		}
+
 		By("creating an OpenBaoCluster configured for PKCS#11 unseal")
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -80,6 +96,7 @@ var _ = Describe("Cluster PKCS#11 Unseal", Label("cluster", "lifecycle", "unseal
 				Version:  openBaoVersion,
 				Image:    openBaoImage,
 				Replicas: 1,
+				Plugins:  []openbaov1alpha1.Plugin{plugin},
 				InitContainer: &openbaov1alpha1.InitContainerConfig{
 					Enabled: true,
 					Image:   configInitImage,
@@ -135,7 +152,7 @@ var _ = Describe("Cluster PKCS#11 Unseal", Label("cluster", "lifecycle", "unseal
 		Expect(c.Create(ctx, cluster)).To(Succeed())
 
 		By("waiting for the initial PKCS#11-sealed pod to become ready")
-		_, err := f.WaitForStatefulSetReady(ctx, clusterName, 1, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+		_, err = f.WaitForStatefulSetReady(ctx, clusterName, 1, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
 		Expect(err).NotTo(HaveOccurred())
 		f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
 
@@ -144,6 +161,7 @@ var _ = Describe("Cluster PKCS#11 Unseal", Label("cluster", "lifecycle", "unseal
 		Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-config", Namespace: f.Namespace}, config)).To(Succeed())
 		Expect(config.Data).To(HaveKey("config.hcl"))
 		Expect(config.Data["config.hcl"]).To(ContainSubstring(`seal "pkcs11"`))
+		Expect(config.Data["config.hcl"]).To(ContainSubstring(`plugin "kms" "pkcs11"`))
 		Expect(config.Data["config.hcl"]).To(ContainSubstring(`token_label`))
 		Expect(config.Data["config.hcl"]).To(ContainSubstring(`OpenBao`))
 		Expect(config.Data["config.hcl"]).To(ContainSubstring(`key_label`))

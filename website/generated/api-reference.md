@@ -1368,9 +1368,9 @@ _Appears in:_
 | `name` _string_ | Name is the name of the plugin. |  | MinLength: 1 <br /> |
 | `image` _string_ | Image is the OCI image URL including registry and repository.<br />Required if Command is not set. Conflicts with Command. |  | Optional: \{\} <br /> |
 | `command` _string_ | Command is the command name of a manually downloaded plugin.<br />Required if Image is not set. Conflicts with Image. |  | Optional: \{\} <br /> |
-| `version` _string_ | Version is the image version or tag. |  | MinLength: 1 <br /> |
-| `binaryName` _string_ | BinaryName is the name of the plugin binary file within the OCI image. |  | MinLength: 1 <br /> |
-| `sha256sum` _string_ | SHA256Sum is the expected SHA256 checksum of the plugin binary.<br />Must be a 64-character hexadecimal string. |  | MaxLength: 64 <br />MinLength: 64 <br />Pattern: `^[0-9a-fA-F]\{64\}$` <br /> |
+| `version` _string_ | Version is the plugin version and, when Image has no tag, the image tag.<br />OpenBao 2.7 and later can infer it from the image tag. Command-based KMS<br />plugins on OpenBao 2.7 and later do not require a version. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+| `binaryName` _string_ | BinaryName is the name of the plugin binary file within the OCI image.<br />OpenBao 2.7 and later can infer it from the image ENTRYPOINT or CMD. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+| `sha256sum` _string_ | SHA256Sum is the expected SHA256 checksum of the plugin binary.<br />Must be a 64-character hexadecimal string.<br />OpenBao 2.7 and later allow omission for digest-pinned OCI images and<br />command-based plugins. Earlier versions require this field. |  | MaxLength: 64 <br />MinLength: 64 <br />Pattern: `^[0-9a-fA-F]\{64\}$` <br />Optional: \{\} <br /> |
 | `args` _string array_ | Args are arguments to pass to the running plugin.<br />Only used if plugin_auto_register=true is set. |  | Optional: \{\} <br /> |
 | `env` _string array_ | Env are environment variables to pass to the running plugin.<br />Only used if plugin_auto_register=true is set. |  | Optional: \{\} <br /> |
 

@@ -12,6 +12,9 @@ import (
 const reasonPrerequisitesMissing = "PrerequisitesMissing"
 
 func (m *Manager) validateUnsealPrerequisites(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if err := portopenbao.ValidateSealPlugins(cluster); err != nil {
+		return providerPrerequisitesError(err)
+	}
 	if cluster == nil || cluster.Spec.Unseal == nil {
 		return nil
 	}
