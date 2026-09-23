@@ -42,7 +42,7 @@ Full documentation is available at **[dc-tec.github.io/openbao-operator](https:/
 | **Installation, Operations, Day-2 Tasks** | **Component Design, Boundaries, Flows** |
 | [![Security](https://img.shields.io/badge/Security-000000?style=for-the-badge&logo=imou&logoColor=white)](https://dc-tec.github.io/openbao-operator/docs/security) | [![Contributing](https://img.shields.io/badge/Contributing-181717?style=for-the-badge&logo=github&logoColor=white)](https://dc-tec.github.io/openbao-operator/contribute) |
 | **Threat Model, Hardening, RBAC** | **Dev Setup, Coding Standards, Release** |
-| [![Compatibility](https://img.shields.io/badge/Compatibility-10b981?style=for-the-badge&logo=kubernetes&logoColor=white)](https://dc-tec.github.io/openbao-operator/docs/reference/compatibility) | [![Samples](https://img.shields.io/badge/Samples-9333ea?style=for-the-badge&logo=yaml&logoColor=white)](config/samples/) |
+| [![Compatibility](https://img.shields.io/badge/Compatibility-10b981?style=for-the-badge&logo=kubernetes&logoColor=white)](https://dc-tec.github.io/openbao-operator/next/docs/reference/compatibility) | [![Samples](https://img.shields.io/badge/Samples-9333ea?style=for-the-badge&logo=yaml&logoColor=white)](config/samples/) |
 | **Validated K8s/OpenBao Versions** | **Ready-to-apply Example Manifests** |
 
 Recommended entry points:
@@ -53,10 +53,10 @@ Recommended entry points:
 
 ## Compatibility
 
-For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openbao-operator/docs/reference/compatibility).
+For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openbao-operator/next/docs/reference/compatibility).
 
 - **Kubernetes**: requires `v1.33+`; release validation runs on `v1.34`–`v1.36`
-- **OpenBao**: primary validation on `2.6.2`, with config compatibility checks for `2.4.4`, `2.5.5`, and `2.6.2`
+- **OpenBao**: primary validation target on `main` is `2.6.3`, with config compatibility checks for `2.4.4`, `2.5.5`, and `2.6.3`
 - **Support posture**: best-effort support for the latest stable release line
 
 ## CRDs (API Surface)
