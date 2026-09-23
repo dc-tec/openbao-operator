@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -119,6 +120,21 @@ func ParseBackupKey(key string) (namespace, cluster string, timestamp time.Time,
 	}
 
 	return namespace, cluster, timestamp, uuid, nil
+}
+
+// scheduledBackupFilename matches keys written by scheduled and manual backups:
+// <timestamp>-<uuid>.snap with no filename prefix.
+var scheduledBackupFilename = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-[0-9a-f]{8}\.snap$`)
+
+// IsScheduledBackupKey reports whether key is a scheduled or manual backup directly
+// under listPrefix. Pre-upgrade and blue/green phase snapshots carry a filename prefix
+// and are not scheduled backups.
+func IsScheduledBackupKey(key, listPrefix string) bool {
+	name, ok := strings.CutPrefix(key, listPrefix)
+	if !ok || strings.Contains(name, "/") {
+		return false
+	}
+	return scheduledBackupFilename.MatchString(name)
 }
 
 // GetBackupListPrefix returns the object prefix for listing backups of a specific cluster.

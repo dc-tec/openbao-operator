@@ -127,6 +127,10 @@ upload and never turns a retention error into a failed snapshot. Retention alway
 snapshot recorded in `status.backup.lastBackupName`, even when they are older than `maxAge`. Snapshot object keys use
 the time the backup Job was created, so a backup delayed past its schedule is not treated as old.
 
+Retention only manages scheduled and manual snapshots stored directly under the cluster prefix. It leaves pre-upgrade
+and blue-green phase snapshots, nested objects, and any other files in that prefix untouched. Remove those by hand or
+with storage lifecycle rules.
+
 {{< callout type="note" title="Retention currently needs a credentials Secret" >}}
 Controller-side retention runs only when `target.credentialsSecretRef` is configured. It is skipped for `roleArn`,
 workload identity, and other provider-default identity paths. Apply storage-native lifecycle rules for those paths.
