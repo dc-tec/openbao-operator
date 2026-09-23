@@ -3,7 +3,7 @@ ARG PKCS11_PLUGIN_IMAGE=ghcr.io/openbao/openbao-plugin-kms-pkcs11:v0.1.0@sha256:
 FROM ${PKCS11_PLUGIN_IMAGE} AS pkcs11-plugin
 FROM ${OPENBAO_BASE_IMAGE}
 
-COPY --from=pkcs11-plugin /openbao-plugin-kms-pkcs11 /openbao/plugins/openbao-plugin-kms-pkcs11
+COPY --from=pkcs11-plugin --chmod=0755 /openbao-plugin-kms-pkcs11 /openbao/plugins/openbao-plugin-kms-pkcs11
 
 USER root
 
