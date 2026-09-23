@@ -138,3 +138,42 @@ func TestPublishBackupSnapshot_VerificationFailureDeletesObject(t *testing.T) {
 	require.Equal(t, []string{"backup.snap"}, store.deleted)
 	require.Nil(t, store.object)
 }
+
+func TestPublishBackupSnapshot_SizeMismatchDeletesObject(t *testing.T) {
+	t.Parallel()
+
+	baoClient := &openbaotest.MockClusterActions{
+		SnapshotFunc: func(_ context.Context, writer io.Writer) error {
+			_, err := writer.Write([]byte("complete-snapshot"))
+			return err
+		},
+	}
+	store := &backupFlowBlobStore{
+		useHeadResult: true,
+		headResult:    &blobstore.ObjectInfo{Key: "backup.snap", Size: int64(len("complete"))},
+	}
+
+	_, err := publishBackupSnapshot(context.Background(), baoClient, store, "backup.snap")
+
+	require.ErrorIs(t, err, errVerificationCategory)
+	require.ErrorContains(t, err, "uploaded object has 8 bytes, streamed 17")
+	require.Equal(t, []string{"backup.snap"}, store.deleted)
+}
+
+func TestPublishBackupSnapshot_VerifiesStreamedSize(t *testing.T) {
+	t.Parallel()
+
+	baoClient := &openbaotest.MockClusterActions{
+		SnapshotFunc: func(_ context.Context, writer io.Writer) error {
+			_, err := writer.Write([]byte("complete-snapshot"))
+			return err
+		},
+	}
+	store := &backupFlowBlobStore{}
+
+	objInfo, err := publishBackupSnapshot(context.Background(), baoClient, store, "backup.snap")
+
+	require.NoError(t, err)
+	require.Equal(t, int64(len("complete-snapshot")), objInfo.Size)
+	require.Empty(t, store.deleted)
+}

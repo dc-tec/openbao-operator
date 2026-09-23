@@ -68,11 +68,12 @@ func publishBackupSnapshot(
 	storageClient blobstore.BlobStore,
 	backupKey string,
 ) (*blobstore.ObjectInfo, error) {
-	if err := uploadBackupSnapshot(ctx, baoClient, storageClient, backupKey); err != nil {
+	written, err := uploadBackupSnapshot(ctx, baoClient, storageClient, backupKey)
+	if err != nil {
 		return nil, cleanupFailedBackup(ctx, storageClient, backupKey, err)
 	}
 
-	objInfo, err := verifyBackupUpload(ctx, storageClient, backupKey)
+	objInfo, err := verifyBackupUpload(ctx, storageClient, backupKey, written)
 	if err != nil {
 		return nil, cleanupFailedBackup(ctx, storageClient, backupKey, err)
 	}
@@ -119,12 +120,25 @@ func resolveBackupKey(cfg *backupconfig.ExecutorConfig, now time.Time) (string, 
 	)
 }
 
+// countingReader counts the bytes the storage client consumed from the snapshot stream.
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+// uploadBackupSnapshot streams a snapshot to storage and returns the number of bytes uploaded.
 func uploadBackupSnapshot(
 	ctx context.Context,
 	baoClient portopenbao.ClusterActions,
 	storageClient blobstore.BlobStore,
 	backupKey string,
-) error {
+) (int64, error) {
 	pr, pw := io.Pipe()
 	type snapshotStreamResult struct {
 		snapshotErr error
@@ -139,7 +153,8 @@ func uploadBackupSnapshot(
 		}
 	}()
 
-	uploadErr := storageClient.Upload(ctx, backupKey, pr)
+	body := &countingReader{r: pr}
+	uploadErr := storageClient.Upload(ctx, backupKey, body)
 	var uploadAbortErr error
 	if uploadErr != nil {
 		uploadAbortErr = fmt.Errorf("upload stopped snapshot stream: %w", uploadErr)
@@ -152,25 +167,26 @@ func uploadBackupSnapshot(
 	independentSnapshotFailure := snapshotResult.snapshotErr != nil &&
 		(uploadAbortErr == nil || !errors.Is(snapshotResult.snapshotErr, uploadAbortErr))
 	if independentSnapshotFailure {
-		return categorizef(errSnapshotCategory, "failed to get snapshot: %w", snapshotResult.snapshotErr)
+		return 0, categorizef(errSnapshotCategory, "failed to get snapshot: %w", snapshotResult.snapshotErr)
 	}
 	if uploadErr != nil {
-		return categorizef(errStorageCategory, "failed to upload backup: %w", uploadErr)
+		return 0, categorizef(errStorageCategory, "failed to upload backup: %w", uploadErr)
 	}
 	if snapshotResult.snapshotErr != nil {
-		return categorizef(errSnapshotCategory, "failed to get snapshot: %w", snapshotResult.snapshotErr)
+		return 0, categorizef(errSnapshotCategory, "failed to get snapshot: %w", snapshotResult.snapshotErr)
 	}
 	if snapshotResult.closeErr != nil && !errors.Is(snapshotResult.closeErr, io.ErrClosedPipe) {
-		return categorizef(errSnapshotCategory, "failed to close snapshot stream: %w", snapshotResult.closeErr)
+		return 0, categorizef(errSnapshotCategory, "failed to close snapshot stream: %w", snapshotResult.closeErr)
 	}
 
-	return nil
+	return body.n, nil
 }
 
 func verifyBackupUpload(
 	ctx context.Context,
 	storageClient blobstore.BlobStore,
 	backupKey string,
+	expectedSize int64,
 ) (*blobstore.ObjectInfo, error) {
 	objInfo, err := storageClient.Head(ctx, backupKey)
 	if err != nil {
@@ -186,6 +202,12 @@ func verifyBackupUpload(
 		return nil, categorize(
 			errVerificationCategory,
 			fmt.Errorf("backup verification failed: uploaded object has zero size"),
+		)
+	}
+	if objInfo.Size != expectedSize {
+		return nil, categorize(
+			errVerificationCategory,
+			fmt.Errorf("backup verification failed: uploaded object has %d bytes, streamed %d", objInfo.Size, expectedSize),
 		)
 	}
 
