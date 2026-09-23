@@ -2,6 +2,37 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.5.1](https://github.com/dc-tec/openbao-operator/compare/0.5.0...0.5.1) (2026-09-23)
+
+
+### Features
+
+* **compat:** qualify OpenBao 2.7 external seal plugins ([#762](https://github.com/dc-tec/openbao-operator/issues/762)) ([94b18f2](https://github.com/dc-tec/openbao-operator/commit/94b18f2e3a2dde49550adad43d095220d4dac945))
+
+
+### Bug Fixes
+
+* **api:** clarify missing TLS rotation period validation ([#751](https://github.com/dc-tec/openbao-operator/issues/751)) ([017a5bd](https://github.com/dc-tec/openbao-operator/commit/017a5bd7276ac7405a8a1ba4b994a436cb889ce2))
+* **backup:** abort partial uploads when the snapshot stream fails ([#759](https://github.com/dc-tec/openbao-operator/issues/759)) ([6d02c45](https://github.com/dc-tec/openbao-operator/commit/6d02c45851b0d26fa027cd7060a9d7a26e684551))
+* **backup:** keep the newest snapshot when applying retention ([#757](https://github.com/dc-tec/openbao-operator/issues/757)) ([6668b31](https://github.com/dc-tec/openbao-operator/commit/6668b3194d8224ffbda4749009b1106c8a20aa7d))
+* **backup:** limit retention to scheduled backup keys ([#758](https://github.com/dc-tec/openbao-operator/issues/758)) ([7a86183](https://github.com/dc-tec/openbao-operator/commit/7a86183398f584c8504865fbf454051d56aea3ba))
+* **backup:** preserve trigger before job creation ([#703](https://github.com/dc-tec/openbao-operator/issues/703)) ([ee44f8e](https://github.com/dc-tec/openbao-operator/commit/ee44f8ec8be8faae088cbfd4a7a4a5dc704d54e4))
+* **metrics:** clear finalized reconciliation series ([#721](https://github.com/dc-tec/openbao-operator/issues/721)) ([fc15f5e](https://github.com/dc-tec/openbao-operator/commit/fc15f5e94abdff12c0cbbea3ae7975e65067b806))
+* **metrics:** keep cluster phase gauges one-hot ([#716](https://github.com/dc-tec/openbao-operator/issues/716)) ([f4c2e1a](https://github.com/dc-tec/openbao-operator/commit/f4c2e1a132c708cf753f5bb54a5e28b2cc20441c))
+* **readiness:** require synchronized caches and fresh admission checks ([#720](https://github.com/dc-tec/openbao-operator/issues/720)) ([4764ab9](https://github.com/dc-tec/openbao-operator/commit/4764ab9c65e5e752d5a43901cb61583c5d34a85c))
+* **startup:** validate platform discovery and return errors ([#717](https://github.com/dc-tec/openbao-operator/issues/717)) ([4197f3c](https://github.com/dc-tec/openbao-operator/commit/4197f3c95005161fe4df593f978a11c232ab4a7c))
+* **status:** preserve restore state in final adminops patch ([#710](https://github.com/dc-tec/openbao-operator/issues/710)) ([e362877](https://github.com/dc-tec/openbao-operator/commit/e362877532582a179a4c91ab15707f0b32946eeb))
+* **upgrade:** correct peer identity, rollback retries, and rollout verification ([2b1f646](https://github.com/dc-tec/openbao-operator/commit/2b1f6467d24d671f09b2d52cd8da686315db1d3f))
+* **upgrade:** guard blue/green rollback and preserve active inputs ([#755](https://github.com/dc-tec/openbao-operator/issues/755)) ([ac197df](https://github.com/dc-tec/openbao-operator/commit/ac197dfd71437357bdb933d4f100b07b66b6308c))
+* **upgrade:** limit blue/green abort to phases before promotion ([#754](https://github.com/dc-tec/openbao-operator/issues/754)) ([6518d2b](https://github.com/dc-tec/openbao-operator/commit/6518d2b17b8e92e11f2f43024638c84e2152ac7c))
+* **upgrade:** retry transient rolling partition conflicts ([#753](https://github.com/dc-tec/openbao-operator/issues/753)) ([b029ff6](https://github.com/dc-tec/openbao-operator/commit/b029ff60bb2354b11a40ee9ed4b4544adcc8e3ff))
+
+
+### Performance Improvements
+
+* **kube:** reuse apply responses for ownership verification ([#739](https://github.com/dc-tec/openbao-operator/issues/739)) ([a64fd38](https://github.com/dc-tec/openbao-operator/commit/a64fd38602e9ccd1ee505838c095333b56bb2a51))
+* **raft:** avoid redundant Autopilot configuration writes ([#737](https://github.com/dc-tec/openbao-operator/issues/737)) ([4b80116](https://github.com/dc-tec/openbao-operator/commit/4b801165c4bfb47f2871989504a32d853e2063cf))
+
 ## [0.5.0](https://github.com/dc-tec/openbao-operator/compare/0.4.2...0.5.0) (2026-08-31)
 
 OpenBao Operator 0.5.0 defines a selected compatibility boundary within the
