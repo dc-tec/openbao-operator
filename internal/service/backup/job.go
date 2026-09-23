@@ -105,7 +105,10 @@ func clearBackupFailure(status *openbaov1alpha1.BackupStatus) {
 
 // ensureBackupJob creates or updates a Kubernetes Job for executing the backup.
 // Returns true if a Job was created or is already running, false if backup should not proceed.
-func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string, scheduledTime time.Time) (bool, error) {
+// keyTime timestamps the backup object key. It must be the Job creation time, not the
+// scheduled time: retention ages backups by key timestamp, and a stale scheduled time
+// after a blocked period would make a fresh snapshot look old enough to delete.
+func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string, keyTime time.Time) (bool, error) {
 	job := &batchv1.Job{}
 
 	err := m.reader.Get(ctx, types.NamespacedName{
@@ -121,15 +124,14 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 		// Job doesn't exist - create it
 		logger.Info("Creating backup Job", "job", jobName)
 
-		// Generate deterministic backup key
+		// Generate the backup key
 		// Format: <pathPrefix>/<namespace>/<cluster>/[<filenamePrefix>-]<timestamp>-<uuid>.snap
-		// precise timestamp from schedule to match job name
 		backupKey, err := GenerateBackupKey(
 			cluster.Spec.Backup.Target.PathPrefix,
 			cluster.Namespace,
 			cluster.Name,
 			"", // filenamePrefix (empty default)
-			scheduledTime,
+			keyTime,
 		)
 		if err != nil {
 			return false, fmt.Errorf("failed to generate backup key: %w", err)

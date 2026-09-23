@@ -125,6 +125,10 @@ func FuzzApplyRetention(f *testing.F) {
 		if result.TotalBackups != len(objects) {
 			t.Fatalf("unexpected total backups %d", result.TotalBackups)
 		}
+		if result.DeletedByAge+result.DeletedByCount >= result.TotalBackups {
+			t.Fatalf("retention deleted every backup: byAge=%d byCount=%d total=%d",
+				result.DeletedByAge, result.DeletedByCount, result.TotalBackups)
+		}
 	})
 }
 

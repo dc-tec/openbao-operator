@@ -1,8 +1,14 @@
 package backup
 
 import (
+	"context"
+	"slices"
 	"testing"
 	"time"
+
+	"github.com/go-logr/logr"
+
+	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
 func TestParseRetentionMaxAge(t *testing.T) {
@@ -153,5 +159,53 @@ func TestRetentionResult(t *testing.T) {
 
 	if len(result.Errors) != 0 {
 		t.Errorf("Expected no errors, got %d", len(result.Errors))
+	}
+}
+
+func TestApplyRetention_NeverDeletesNewestOrProtectedBackup(t *testing.T) {
+	now := time.Now().UTC()
+	key := func(age time.Duration, id string) string {
+		generated, err := GenerateBackupKey("backups", "default", "cluster", "", now.Add(-age))
+		if err != nil {
+			t.Fatalf("GenerateBackupKey() error = %v", err)
+		}
+		return generated[:len(generated)-len("00000000.snap")] + id + ".snap"
+	}
+	newest := key(48*time.Hour, "cccccccc")
+	protected := key(72*time.Hour, "bbbbbbbb")
+	oldest := key(96*time.Hour, "aaaaaaaa")
+
+	tests := []struct {
+		name        string
+		policy      RetentionPolicy
+		wantDeleted []string
+	}{
+		{
+			name:        "every backup older than max age keeps the newest",
+			policy:      RetentionPolicy{MaxAge: 24 * time.Hour},
+			wantDeleted: []string{protected, oldest},
+		},
+		{
+			name:        "protected key survives age and count",
+			policy:      RetentionPolicy{MaxCount: 1, MaxAge: 24 * time.Hour, ProtectedKey: protected},
+			wantDeleted: []string{oldest},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeBlobStore{objects: []blobstore.ObjectInfo{
+				{Key: oldest}, {Key: newest}, {Key: protected},
+			}}
+			if _, err := ApplyRetention(context.Background(), logr.Discard(), store, "backups/default/cluster/", tt.policy); err != nil {
+				t.Fatalf("ApplyRetention() error = %v", err)
+			}
+			slices.Sort(store.deleted)
+			want := slices.Clone(tt.wantDeleted)
+			slices.Sort(want)
+			if !slices.Equal(store.deleted, want) {
+				t.Fatalf("deleted = %v, want %v", store.deleted, want)
+			}
+		})
 	}
 }
