@@ -15,7 +15,7 @@ fi
 
 VERSIONS=("$@")
 if [ ${#VERSIONS[@]} -eq 0 ]; then
-  VERSIONS=("2.4.4" "2.5.5" "2.6.2")
+  VERSIONS=("2.4.4" "2.5.5" "2.6.3")
 fi
 
 FILES=( "$ROOT_DIR"/internal/adapter/config/testdata/*.hcl )
