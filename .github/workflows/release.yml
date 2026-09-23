@@ -441,6 +441,7 @@ jobs:
           HELM: ${{ steps.helm4.outputs.helm-path }}
           HELM_INSTALL: ${{ steps.helm3.outputs.helm-path }}
           OPERATOR_UPGRADE_E2E_TARGET_VERSION: ${{ needs.prepare.outputs.version }}
+          OPERATOR_UPGRADE_E2E_TARGET_RELEASE: ${{ needs.prepare.outputs.version }}
           OPERATOR_UPGRADE_E2E_MANAGER_SOURCE: >-
             ${{ needs.prepare.outputs.manager_image }}:${{ needs.prepare.outputs.build_tag }}
           OPERATOR_UPGRADE_E2E_INIT_SOURCE: >-

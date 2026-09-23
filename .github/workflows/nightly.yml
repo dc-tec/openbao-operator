@@ -500,7 +500,14 @@ jobs:
         with:
           cache-tools: false
 
-      - name: Setup Helm
+      - name: Setup Helm 3 compatibility client
+        id: helm3
+        uses: ./.github/actions/setup-helm
+        with:
+          version-key: HELM3_COMPAT_VERSION
+
+      - name: Setup Helm 4
+        id: helm4
         uses: ./.github/actions/setup-helm
 
       - name: Setup Kubernetes CLI tools
@@ -517,6 +524,8 @@ jobs:
 
       - name: Upgrade previous stable operator to nightly candidate
         env:
+          HELM: ${{ steps.helm4.outputs.helm-path }}
+          HELM_INSTALL: ${{ steps.helm3.outputs.helm-path }}
           OPERATOR_UPGRADE_E2E_MANAGER_SOURCE: ${{ needs.build-e2e-images.outputs.manager_ref }}
           OPERATOR_UPGRADE_E2E_INIT_SOURCE: ${{ needs.build-e2e-images.outputs.config_init_ref }}
         run: make test-e2e-operator-upgrade
