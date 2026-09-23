@@ -645,7 +645,7 @@ jobs:
     uses: ./.github/workflows/reusable-channel-hardening.yml
     with:
       ref: ${{ github.sha }}
-      source_ref: refs/heads/main
+      source_ref: ${{ github.ref }}
       version: ${{ needs.prepare-nightly-candidate.outputs.version }}
       chart_version: ${{ needs.prepare-nightly-candidate.outputs.chart_version }}
       build_tag: ${{ needs.prepare-nightly-candidate.outputs.build_tag }}
@@ -672,6 +672,7 @@ jobs:
 
       - name: Write nightly metadata
         env:
+          SOURCE_REF: ${{ github.ref }}
           SHA: ${{ needs.prepare-nightly-candidate.outputs.sha }}
           SHORT_SHA: ${{ needs.prepare-nightly-candidate.outputs.short_sha }}
           DATE_UTC: ${{ needs.prepare-nightly-candidate.outputs.date_utc }}
@@ -694,7 +695,7 @@ jobs:
 
           data = {
               "channel": "nightly",
-              "source_ref": "refs/heads/main",
+              "source_ref": os.environ["SOURCE_REF"],
               "sha": os.environ["SHA"],
               "short_sha": os.environ["SHORT_SHA"],
               "date_utc": os.environ["DATE_UTC"],
