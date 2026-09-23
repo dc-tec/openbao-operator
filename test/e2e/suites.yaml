@@ -697,6 +697,7 @@ suites:
     coverage:
       - lifecycle-job-owner-proof
       - bluegreen-operation-identity
+      - bluegreen-replica-drift
     runtime:
       observed: 36m39.240s
       budget: 55m

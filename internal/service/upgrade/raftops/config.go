@@ -31,6 +31,7 @@ type ExecutorConfig struct {
 	ClusterNamespace string
 	ClusterName      string
 	ClusterReplicas  int32
+	BlueReplicas     int32
 
 	Action ExecutorAction
 
@@ -131,6 +132,13 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 		return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClusterReplicas, replicasStr, err)
 	}
 	cfg.ClusterReplicas = int32(replicas)
+	if value := strings.TrimSpace(os.Getenv(constants.EnvUpgradeBlueReplicas)); value != "" {
+		blueReplicas, err := strconv.ParseInt(value, 10, 32)
+		if err != nil || blueReplicas <= 0 {
+			return nil, fmt.Errorf("invalid %s value %q: must be a positive int32", constants.EnvUpgradeBlueReplicas, value)
+		}
+		cfg.BlueReplicas = int32(blueReplicas)
+	}
 
 	cfg.Action = ExecutorAction(strings.TrimSpace(os.Getenv(constants.EnvUpgradeAction)))
 	if cfg.Action == "" {
@@ -228,4 +236,12 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// blueReplicaCount retains compatibility with Jobs created before Blue was pinned separately.
+func (c *ExecutorConfig) blueReplicaCount() int32 {
+	if c.BlueReplicas > 0 {
+		return c.BlueReplicas
+	}
+	return c.ClusterReplicas
 }

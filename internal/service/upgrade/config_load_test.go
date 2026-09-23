@@ -14,6 +14,7 @@ var executorConfigEnvKeys = []string{
 	constants.EnvClusterNamespace,
 	constants.EnvClusterName,
 	constants.EnvClusterReplicas,
+	constants.EnvUpgradeBlueReplicas,
 	constants.EnvUpgradeAction,
 	constants.EnvUpgradeJWTAuthRole,
 	constants.EnvOpenBaoJWTAuthStrategy,
@@ -58,6 +59,21 @@ func TestLoadExecutorConfig(t *testing.T) {
 		wantErr string
 		assert  func(*testing.T, *ExecutorConfig)
 	}{
+		{
+			name:   "captured Blue replicas",
+			mutate: func(env map[string]string) { env[constants.EnvUpgradeBlueReplicas] = "5" },
+			assert: func(t *testing.T, cfg *ExecutorConfig) {
+				t.Helper()
+				if cfg.BlueReplicas != 5 {
+					t.Fatalf("BlueReplicas=%d, want 5", cfg.BlueReplicas)
+				}
+			},
+		},
+		{
+			name:    "invalid Blue replicas",
+			mutate:  func(env map[string]string) { env[constants.EnvUpgradeBlueReplicas] = "0" },
+			wantErr: "invalid " + constants.EnvUpgradeBlueReplicas,
+		},
 		{
 			name: "missing namespace",
 			mutate: func(env map[string]string) {

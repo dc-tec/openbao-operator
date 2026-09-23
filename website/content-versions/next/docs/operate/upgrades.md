@@ -142,7 +142,10 @@ Each request is edge-triggered: use a new non-empty value. For blue-green rollba
 A blue-green upgrade can only roll back before the `Cleanup` phase, because `Cleanup` removes Blue peers from Raft.
 From `Cleanup` onward, the operator refuses `spec.upgrade.requests.rollback` and automatic rollback with a
 `RollbackRefused` warning event. It retries the current phase, and applies any spec change made during that time
-after the current upgrade completes.
+after the current upgrade completes. The operator records Green's target image, version, and replica count and Blue's
+original replica count in `status.blueGreen`. Changes to `spec.replicas` do not change the active upgrade's cleanup
+checks or rollback quorum. When resuming an older operation without these fields, the operator recovers its image and
+replica counts from the existing StatefulSets; it stops if those inputs cannot be recovered.
 
 ## Verify the result
 

@@ -14,7 +14,7 @@ Notes:
 - Files: `20`
 - Specs: `85`
 - Explicit case IDs: `37`
-- Coverage tags: `50`
+- Coverage tags: `51`
 
 ## Suites
 
@@ -57,6 +57,7 @@ Notes:
 | `backup-queueing` | 1 |
 | `bluegreen-drift` | 1 |
 | `bluegreen-operation-identity` | 1 |
+| `bluegreen-replica-drift` | 1 |
 | `bluegreen-upgrade` | 1 |
 | `cert-replacement` | 1 |
 | `configmap-protection` | 1 |

@@ -139,6 +139,10 @@ func (m *Manager) reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return result, nil
 	}
 
+	if err := m.ensureExecutionState(ctx, cluster); err != nil {
+		return recon.Result{}, err
+	}
+
 	if handled, result, err := m.handleManualRollbackRequest(ctx, logger, cluster, acknowledgements); handled || err != nil {
 		return result, err
 	}

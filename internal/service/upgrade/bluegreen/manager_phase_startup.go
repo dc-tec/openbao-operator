@@ -13,6 +13,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	configurationservice "github.com/dc-tec/openbao-operator/internal/service/configuration"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
 // handlePhaseIdle transitions from Idle to DeployingGreen when an upgrade is detected.
@@ -23,6 +25,12 @@ func (m *Manager) handlePhaseIdle(ctx context.Context, logger logr.Logger, clust
 		return outcome, err
 	}
 
+	core.CaptureBlueGreenTarget(cluster)
+	if sts, err := m.readExecutionStatefulSet(ctx, cluster, upgrade.StableVoterStatefulSetName(cluster)); err == nil {
+		cluster.Status.BlueGreen.BlueReplicas = *sts.Spec.Replicas
+	} else {
+		return phaseOutcome{}, fmt.Errorf("capture Blue replica count: %w", err)
+	}
 	cluster.Status.BlueGreen.GreenRevision = m.calculateRevision(cluster)
 	return advance(openbaov1alpha1.PhaseDeployingGreen), nil
 }

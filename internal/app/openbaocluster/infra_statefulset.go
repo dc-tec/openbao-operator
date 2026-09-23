@@ -31,6 +31,12 @@ func (r *infraReconciler) computeStatefulSetSpec(
 
 	if workloadsvc.IsBlueGreenStrategy(cluster) {
 		spec.Revision = workloadsvc.BlueGreenStableRevision(cluster)
+		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
+			spec.Replicas = upgrade.BlueGreenSourceReplicas(cluster)
+			if cluster.Status.BlueGreen.BlueReplicas == 0 {
+				spec.SkipReconciliation = true
+			}
+		}
 		if spec.Revision == "" {
 			spec.Name = cluster.Name
 		} else {

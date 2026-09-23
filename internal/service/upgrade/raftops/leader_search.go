@@ -139,7 +139,11 @@ func FindLeaderInSingleScan(
 	revision string,
 	factory *openbao.ClientFactory,
 ) (string, bool) {
-	for _, i := range ReplicaOrdinals(cfg.ClusterReplicas) {
+	replicas := cfg.ClusterReplicas
+	if revision == cfg.BlueRevision {
+		replicas = cfg.blueReplicaCount()
+	}
+	for _, i := range ReplicaOrdinals(replicas) {
 		url := PodURL(cfg, revision, i)
 		client, err := factory.New(url)
 		if err != nil {

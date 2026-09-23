@@ -346,6 +346,7 @@ func TestFinalizeUpgradeTerminalStatePromotesGreenToBlue(t *testing.T) {
 		Build()
 	manager := &Manager{client: client, scheme: scheme}
 
+	upgradecore.CaptureBlueGreenTarget(cluster)
 	if err := manager.finalizeUpgradeTerminalState(context.Background(), logr.Discard(), cluster, true); err != nil {
 		t.Fatalf("finalizeUpgradeTerminalState() error = %v", err)
 	}

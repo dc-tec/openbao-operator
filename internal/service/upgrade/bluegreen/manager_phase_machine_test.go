@@ -398,7 +398,9 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 		cluster.Status.BlueGreen.GreenRevision = ""
 		cluster.Spec.Upgrade.BlueGreen.AutoPromote = false
 
-		manager := &Manager{}
+		scheme := newBlueGreenTestScheme(t)
+		blueSTS := executionTestStatefulSet(cluster, cluster.Status.BlueGreen.BlueRevision, cluster.Spec.Replicas, cluster.Status.BlueGreen.BlueImage)
+		manager := &Manager{client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(blueSTS).Build()}
 		outcome, err := manager.handlePhaseIdle(context.Background(), logr.Discard(), cluster, "")
 		if err != nil {
 			t.Fatalf("handlePhaseIdle() error = %v", err)
@@ -934,6 +936,10 @@ func TestHandlePhaseRollbackCleanup_FinalizesRollback(t *testing.T) {
 
 	// The desired target still differs from CurrentVersion. Reconciliation starts
 	// another operation without requiring a rolling-upgrade retry request.
+	blueSTS := executionTestStatefulSet(cluster, cluster.Status.BlueGreen.BlueRevision, cluster.Spec.Replicas, cluster.Status.BlueGreen.BlueImage)
+	if err := manager.client.Create(context.Background(), blueSTS); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() after rollback: %v", err)
 	}

@@ -136,7 +136,7 @@ func buildUpgradeExecutorEnv(
 	env := []corev1.EnvVar{
 		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
 		{Name: constants.EnvClusterName, Value: cluster.Name},
-		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
+		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", BlueGreenTargetReplicas(cluster))},
 		{Name: constants.EnvUpgradeAction, Value: string(action)},
 		{Name: constants.EnvUpgradeJWTAuthRole, Value: jwtRole},
 		{
@@ -149,6 +149,9 @@ func buildUpgradeExecutorEnv(
 	}
 	if !tlsTrust.UseSystemRoots {
 		env = append(env, corev1.EnvVar{Name: constants.EnvTLSCAPath, Value: constants.PathTLSCACert})
+	}
+	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle && cluster.Status.BlueGreen.BlueReplicas > 0 {
+		env = append(env, corev1.EnvVar{Name: constants.EnvUpgradeBlueReplicas, Value: fmt.Sprintf("%d", cluster.Status.BlueGreen.BlueReplicas)})
 	}
 	if blueRevision != "" {
 		env = append(env, corev1.EnvVar{Name: constants.EnvUpgradeBlueRevision, Value: blueRevision})

@@ -289,7 +289,7 @@ func repairBlueGreenConsensus(
 	}
 
 	isBlueServer := func(nodeID string, address string) bool {
-		return RaftServerMatchesRevision(nodeID, address, cfg.ClusterName, cfg.BlueRevision, cfg.ClusterReplicas)
+		return RaftServerMatchesRevision(nodeID, address, cfg.ClusterName, cfg.BlueRevision, cfg.blueReplicaCount())
 	}
 	isGreenServer := func(nodeID string, address string) bool {
 		return RaftServerMatchesRevision(nodeID, address, cfg.ClusterName, cfg.GreenRevision, cfg.ClusterReplicas)
@@ -301,11 +301,11 @@ func repairBlueGreenConsensus(
 			bluePeers++
 		}
 	}
-	requiredBluePeers := raftQuorum(cfg.ClusterReplicas)
+	requiredBluePeers := raftQuorum(cfg.blueReplicaCount())
 	if bluePeers < requiredBluePeers {
 		return fmt.Errorf(
 			"refusing consensus repair: %d Blue peers remain in the Raft configuration, need %d of %d for quorum",
-			bluePeers, requiredBluePeers, cfg.ClusterReplicas)
+			bluePeers, requiredBluePeers, cfg.blueReplicaCount())
 	}
 
 	for _, server := range config.Config.Servers {
@@ -503,7 +503,11 @@ func RunBlueGreenRemovePeers(
 	}
 
 	for _, server := range config.Config.Servers {
-		if !RaftServerMatchesRevision(server.NodeID, server.Address, cfg.ClusterName, revisionToRemove, cfg.ClusterReplicas) {
+		replicas := cfg.ClusterReplicas
+		if revisionToRemove == cfg.BlueRevision {
+			replicas = cfg.blueReplicaCount()
+		}
+		if !RaftServerMatchesRevision(server.NodeID, server.Address, cfg.ClusterName, revisionToRemove, replicas) {
 			continue
 		}
 

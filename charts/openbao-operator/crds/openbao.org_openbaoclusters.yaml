@@ -5252,13 +5252,34 @@ spec:
                       BlueImage is the container image used by the Blue cluster.
                       This ensures the Blue cluster is not actively upgraded when spec.image changes.
                     type: string
+                  blueReplicas:
+                    description: |-
+                      BlueReplicas is the voter population captured when the upgrade starts.
+                      It remains fixed until Green becomes the stable workload.
+                    format: int32
+                    minimum: 1
+                    type: integer
                   blueRevision:
                     description: BlueRevision is the hash/name of the currently active
                       cluster.
                     type: string
+                  greenImage:
+                    description: GreenImage is the image selected for the in-flight
+                      target.
+                    type: string
+                  greenReplicas:
+                    description: GreenReplicas is the replica count selected for the
+                      in-flight target.
+                    format: int32
+                    minimum: 1
+                    type: integer
                   greenRevision:
                     description: GreenRevision is the hash/name of the next cluster
                       (if upgrade in progress).
+                    type: string
+                  greenVersion:
+                    description: GreenVersion is the version selected for the in-flight
+                      target.
                     type: string
                   jobFailureCount:
                     description: |-

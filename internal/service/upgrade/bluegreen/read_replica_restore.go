@@ -9,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
 func shouldRestoreSteadyReadReplicas(cluster *openbaov1alpha1.OpenBaoCluster) bool {
@@ -29,9 +30,7 @@ func beginSteadyReadReplicaRestore(
 		cluster.Status.BlueGreen.BlueRevision = greenRevision
 		cluster.Status.BlueGreen.BlueControllerRevision = ""
 	}
-	if cluster.Spec.Image != "" {
-		cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image
-	}
+	core.PromoteBlueGreenTarget(cluster)
 	cluster.Status.BlueGreen.GreenRevision = ""
 	cluster.Status.BlueGreen.ManualPromotionRequired = false
 	maybeResetBlueGreenRollbackState(cluster)
