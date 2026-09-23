@@ -12,9 +12,6 @@ verifiedBy:
   - internal/service/backup/manager_retention.go
   - internal/service/workloadidentity/readiness.go
   - internal/service/backup/manager_trigger_test.go
-aliases:
-  - /docs/validated-deployments/runbooks/scheduled-backups-s3-compatible/
-  - /docs/next/validated-deployments/runbooks/scheduled-backups-s3-compatible/
 ---
 
 The operator creates a transient Job for each due or manually requested backup. The Job authenticates to OpenBao,
@@ -123,10 +120,20 @@ A successful run advances `lastBackupTime`, `lastBackupName`, `lastBackupSize`, 
 details are in `lastFailureReason`, `lastFailureMessage`, and `lastFailureTime`. Confirm the object independently in
 storage before relying on it.
 
+If the snapshot stream fails during upload, the executor aborts the write, so the failed snapshot creates no object.
+After upload, it checks that the stored object size matches the number of bytes streamed and deletes the object if they
+differ. That deletion can fail on object-lock or write-only buckets, so check for leftover objects after a failed run.
+
 ## Set retention and pre-upgrade snapshots
 
 `maxCount: 0` and an empty `maxAge` mean unlimited retention. The operator applies retention after a successful
-upload and never turns a retention error into a failed snapshot.
+upload and never turns a retention error into a failed snapshot. Retention always keeps the newest snapshot and the
+snapshot recorded in `status.backup.lastBackupName`, even when they are older than `maxAge`. Snapshot object keys use
+the time the backup Job was created, so a backup delayed past its schedule is not treated as old.
+
+Retention only manages scheduled and manual snapshots stored directly under the cluster prefix. It leaves pre-upgrade
+and blue-green phase snapshots, nested objects, and any other files in that prefix untouched. Remove those by hand or
+with storage lifecycle rules.
 
 {{< callout type="note" title="Retention currently needs a credentials Secret" >}}
 Controller-side retention runs only when `target.credentialsSecretRef` is configured. It is skipped for `roleArn`,

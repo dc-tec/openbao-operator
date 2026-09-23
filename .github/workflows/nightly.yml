@@ -500,7 +500,14 @@ jobs:
         with:
           cache-tools: false
 
-      - name: Setup Helm
+      - name: Setup Helm 3 compatibility client
+        id: helm3
+        uses: ./.github/actions/setup-helm
+        with:
+          version-key: HELM3_COMPAT_VERSION
+
+      - name: Setup Helm 4
+        id: helm4
         uses: ./.github/actions/setup-helm
 
       - name: Setup Kubernetes CLI tools
@@ -517,6 +524,8 @@ jobs:
 
       - name: Upgrade previous stable operator to nightly candidate
         env:
+          HELM: ${{ steps.helm4.outputs.helm-path }}
+          HELM_INSTALL: ${{ steps.helm3.outputs.helm-path }}
           OPERATOR_UPGRADE_E2E_MANAGER_SOURCE: ${{ needs.build-e2e-images.outputs.manager_ref }}
           OPERATOR_UPGRADE_E2E_INIT_SOURCE: ${{ needs.build-e2e-images.outputs.config_init_ref }}
         run: make test-e2e-operator-upgrade
@@ -636,7 +645,7 @@ jobs:
     uses: ./.github/workflows/reusable-channel-hardening.yml
     with:
       ref: ${{ github.sha }}
-      source_ref: refs/heads/main
+      source_ref: ${{ github.ref }}
       version: ${{ needs.prepare-nightly-candidate.outputs.version }}
       chart_version: ${{ needs.prepare-nightly-candidate.outputs.chart_version }}
       build_tag: ${{ needs.prepare-nightly-candidate.outputs.build_tag }}
@@ -663,6 +672,7 @@ jobs:
 
       - name: Write nightly metadata
         env:
+          SOURCE_REF: ${{ github.ref }}
           SHA: ${{ needs.prepare-nightly-candidate.outputs.sha }}
           SHORT_SHA: ${{ needs.prepare-nightly-candidate.outputs.short_sha }}
           DATE_UTC: ${{ needs.prepare-nightly-candidate.outputs.date_utc }}
@@ -685,7 +695,7 @@ jobs:
 
           data = {
               "channel": "nightly",
-              "source_ref": "refs/heads/main",
+              "source_ref": os.environ["SOURCE_REF"],
               "sha": os.environ["SHA"],
               "short_sha": os.environ["SHORT_SHA"],
               "date_utc": os.environ["DATE_UTC"],

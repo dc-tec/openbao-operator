@@ -2,18 +2,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-STABILITY_FILE="${ROOT_DIR}/api/stability/v1alpha1.yaml"
 FIXTURE_DIR="${ROOT_DIR}/test/fixtures/operator-upgrade"
 MIGRATION_FIXTURE_DIR="${ROOT_DIR}/test/fixtures/api-migration"
+# The API stability inventory retains its original contract baseline. Runtime
+# upgrade qualification follows the previous stable operator release instead.
+# shellcheck source=../../test/fixtures/operator-upgrade/versions.env
+source "${FIXTURE_DIR}/versions.env"
 
-FROM_VERSION="${OPERATOR_UPGRADE_E2E_FROM_VERSION:-}"
-if [[ -z "${FROM_VERSION}" ]]; then
-  FROM_VERSION="$(sed -nE 's/^baseline:[[:space:]]*([^[:space:]]+).*$/\1/p' "${STABILITY_FILE}" | head -n1)"
-fi
-TARGET_RELEASE="${OPERATOR_UPGRADE_E2E_TARGET_RELEASE:-}"
-if [[ -z "${TARGET_RELEASE}" ]]; then
-  TARGET_RELEASE="$(sed -nE 's/^release:[[:space:]]*([^[:space:]]+).*$/\1/p' "${STABILITY_FILE}" | head -n1)"
-fi
+FROM_VERSION="${OPERATOR_UPGRADE_E2E_FROM_VERSION:-${OPERATOR_UPGRADE_BASELINE}}"
+TARGET_RELEASE="${OPERATOR_UPGRADE_E2E_TARGET_RELEASE:-${OPERATOR_UPGRADE_TARGET_RELEASE}}"
 TARGET_VERSION="${OPERATOR_UPGRADE_E2E_TARGET_VERSION:-${TARGET_RELEASE}-e2e}"
 VERIFY_ONLY="${OPERATOR_UPGRADE_E2E_VERIFY_ONLY:-false}"
 
@@ -47,7 +44,7 @@ PVC_RESOURCE="persistentvolumeclaim/data-operator-upgrade-0"
 TRANSIT_CLUSTER_RESOURCE="openbaocluster/operator-upgrade-transit"
 HARDENED_CLUSTER_RESOURCE="openbaocluster/operator-upgrade-hardened"
 HARDENED_INIT_IMAGE_REPOSITORY="ghcr.io/dc-tec/openbao-init"
-DEFAULT_HARDENED_INIT_IMAGE="${HARDENED_INIT_IMAGE_REPOSITORY}@sha256:94fd43850f0e7ba9b101f513004668598823f319964abb94e56f5b8195fe25e4"
+DEFAULT_HARDENED_INIT_IMAGE="${OPERATOR_UPGRADE_BASELINE_INIT_IMAGE}"
 HARDENED_INIT_IMAGE="${OPERATOR_UPGRADE_E2E_HARDENED_INIT_IMAGE:-${DEFAULT_HARDENED_INIT_IMAGE}}"
 
 require_command() {
@@ -305,7 +302,7 @@ create_external_tls_secrets() {
 
 verify_harness() {
   local required_files=(
-    "${STABILITY_FILE}"
+    "${FIXTURE_DIR}/versions.env"
     "${ROOT_DIR}/release-notes/${TARGET_RELEASE}.md"
     "${MIGRATION_FIXTURE_DIR}/${FROM_VERSION}-openbaocluster.yaml"
     "${MIGRATION_FIXTURE_DIR}/${TARGET_RELEASE}-openbaocluster.yaml"
@@ -323,7 +320,7 @@ verify_harness() {
   )
 
   if [[ -z "${FROM_VERSION}" || -z "${TARGET_RELEASE}" ]]; then
-    echo "api stability baseline and release must be set" >&2
+    echo "operator upgrade baseline and target release must be set" >&2
     exit 1
   fi
   if ! [[ "${FROM_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then

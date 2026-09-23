@@ -27,6 +27,7 @@ The operator requires Kubernetes 1.33 or newer. The rows below describe the curr
 
 | Version | Validation | Production note |
 | --- | --- | --- |
+| 2.7.0 | Config parser and focused local lifecycle, upgrade, restore, and PKCS#11 qualification | Prepare external plugins before upgrading; see [OpenBao 2.7 migration](../../operate/openbao-270/) |
 | 2.6.3 | Default CI, nightly, and release target; local lifecycle, rolling-upgrade, backup, and restore qualification | Unreleased `main` baseline; validate the exact environment in staging |
 | 2.6.2 | OpenBao Operator 0.5.0 release target; rolling-upgrade source for local 2.6.3 qualification | Use the latest qualified security patch |
 | Other 2.6.x | Not individually release-gated | Validate the exact patch in staging |
@@ -47,6 +48,18 @@ Local qualification uses Kubernetes 1.34.3 on Linux ARM64 with static unseal and
 fresh self-initialization, file audit output, a 2.6.2 to 2.6.3 rolling upgrade with three voters and one read replica,
 and S3 backup and restore with RustFS. The restore checks voter replacement, read-replica recovery, and retained data.
 These checks do not qualify external unseal providers, cloud storage credentials, or a pre-2.6 `BlueGreen` transition.
+
+## OpenBao 2.7.0 qualification
+
+Focused qualification uses Kubernetes 1.34.3 on Linux ARM64. It covers fresh self-initialization and file audit
+storage, 2.6.3 to 2.7.0 rolling and BlueGreen upgrades with retained data, and S3 backup and restore with RustFS.
+The rolling case includes three voters and a read replica. The BlueGreen case includes a pre-upgrade snapshot,
+non-voter synchronization, membership changes, and service availability assertions.
+
+The external PKCS#11 0.1.0 plugin passes SoftHSM initialization, restart, and scale tests on both 2.6.3 and 2.7.0.
+A one-voter PKCS#11 cluster also completes a 2.6.3 to 2.7.0 upgrade with the same cluster identity and PVCs.
+A separate server configuration check covers a digest-pinned OCI plugin with inferred metadata. These results do
+not qualify cloud KMS credentials, vendor HSMs, PKCS#11 0.2.0, or removed application plugins.
 
 ## Production upgrade rule
 

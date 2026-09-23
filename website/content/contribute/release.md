@@ -70,6 +70,11 @@ Also confirm that compatibility guidance, generated API surfaces, and release no
 main, Nightly, release-gate E2E, previous-stable operator-upgrade, security, provenance, and performance evidence before
 authorizing publication.
 
+Set the previous stable version, target release, and pinned baseline init image in
+`test/fixtures/operator-upgrade/versions.env`. Keep the Hardened fixture's init image consistent with that pin.
+Add the target migration fixture and an upgrade section in its release notes. The runtime upgrade baseline is
+independent of the historical API stability baseline in `api/stability/v1alpha1.yaml`.
+
 {{< callout type="note" title="Hugo versions documentation by minor line" >}}
 `next` tracks `main`; the unprefixed site is the latest stable minor line. Before the first `X.Y.0` tag, copy the
 reviewed `next` contract into `X.Y.x`, pin its API source to the final tag, and make it the stable default. Patch
