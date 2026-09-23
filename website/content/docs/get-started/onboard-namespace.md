@@ -143,10 +143,11 @@ For a rejected label update, inspect the tenant's error and conditions:
 kubectl -n <request-namespace> get openbaotenant <name> -o yaml
 {{< /command >}}
 
-If the error identifies a platform restriction on Pod Security label updates, ask the operator administrator to update
-the Helm release with `tenancy.namespacePodSecurityLabels.mode=external`. Preserve the installation's other values and
-keep the required namespace policy under platform control. After the Provisioner restarts, repeat the tenant
-verification step above. The `Provisioned` condition must become `True`; inspect its message if it remains `False`.
+If the error identifies a platform restriction on Pod Security label updates, ask the operator administrator to
+re-render the installation with `tenancy.namespacePodSecurityLabels.mode=external` and apply the updated resources.
+Preserve the installation's other values and keep the required namespace policy under platform control. After the
+Provisioner restarts, repeat the tenant verification step above. The `Provisioned` condition must become `True`;
+inspect its message if it remains `False`.
 
 ## Remove or retarget a tenant
 

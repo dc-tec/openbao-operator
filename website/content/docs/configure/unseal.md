@@ -134,6 +134,13 @@ spec:
 The Secret must contain `token` and `ca.crt`. Use an orphan or periodic token with only the transit encrypt and decrypt
 permissions. Set both `tlsClientCert` and `tlsClientKey` when using client-certificate authentication.
 
+## OpenBao 2.7 seal plugins
+
+OpenBao 2.7 requires a matching `spec.plugins` KMS declaration for the typed
+AWS, Azure, GCP, OCI, and PKCS#11 seal settings. The operator blocks these
+configurations without a matching plugin. Follow the [2.7 migration procedure]({{< relref "/docs/operate/openbao-270" >}})
+before upgrading an existing cluster.
+
 ## Configure a plugin-backed KMS seal
 
 OpenBao 2.6.0 and later can use a plugin catalog entry with `type: kms` as the seal implementation. The unseal

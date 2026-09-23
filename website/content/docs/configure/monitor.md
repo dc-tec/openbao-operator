@@ -4,6 +4,7 @@ description: Scrape operator and workload metrics with explicit authentication, 
 eyebrow: Configure · Observe
 weight: 9
 verifiedBy:
+  - internal/platform/entrypoint/health.go
   - charts/openbao-operator/values.yaml
   - charts/openbao-operator/templates/networkpolicy.yaml
   - charts/openbao-operator/templates/metrics
@@ -14,6 +15,7 @@ verifiedBy:
   - internal/controller/openbaocluster/split_reconcilers.go
   - internal/platform/constants/timing.go
   - internal/platform/observability/metrics.go
+  - internal/platform/observability/kubernetes.go
   - internal/service/networking/metrics.go
   - internal/service/networking/services.go
 ---
@@ -164,12 +166,33 @@ spec:
 The operator renders the listener, a headless metrics Service, and ServiceMonitor relabeling for pod and node names.
 Use a pod selector in `trustedIngressPeers` as well when the monitoring namespace contains unrelated workloads.
 
+## Check manager probes
+
+The controller and Provisioner expose separate process probes:
+
+- `/healthz` checks that the process responds. Admission, OpenBao, KMS, and object-storage outages do not fail liveness.
+- `/readyz` requires synchronized caches for the manager's watched resources and a fresh, ready admission-dependency
+  check. Standby replicas can become ready without acquiring leadership. Readiness does not prove that a controller
+  has completed its first reconciliation or that an OpenBao cluster is available.
+
+Each process checks admission dependencies every 15 seconds with a 10-second request deadline. A result becomes stale
+at 30 seconds. Probe requests inspect maintained state and do not query the Kubernetes API. With the current 12
+admission dependencies, a successful scan uses 24 GET requests when the first configured name prefix matches;
+alternate-prefix lookups add requests. This polling cost applies per manager process, independently of cluster count.
+The existing admission metric remains driven by startup and reconciliation checks, not this private probe snapshot.
+
+In `--admission-enforcement=fail` mode, missing dependencies continue to block startup. In `warn` mode, the manager
+starts but remains not-ready until its admission checks pass. If admission is lost after startup, readiness fails
+while liveness continues to pass. The unsafe admission bypass skips only the admission check; cache synchronization
+is still required. Workload and administrative operations retain their immediate admission checks before mutation.
+
 ## Start with a small signal set
 
 | Concern | Operator signals |
 | --- | --- |
 | Availability | `openbao_cluster_ready_replicas` and `Available` or `Degraded` conditions |
 | Reconciliation | `openbao_reconcile_errors_total` and `openbao_reconcile_duration_seconds` |
+| Kubernetes API requests | `openbao_kube_client_requests_total` |
 | Backup | `openbao_backup_last_success_timestamp` and backup readiness or failure state |
 | Upgrade | `openbao_upgrade_in_progress`, failure, rollback, and duration metrics |
 | Read pool | `openbao_cluster_read_replicas_desired`, `_ready`, `_registered`, and `_healthy` |
@@ -184,3 +207,23 @@ or tamper-resistance boundary.
 
 Finally, verify the Service, ServiceMonitor or VMServiceScrape, Prometheus target state, certificate validation, token
 scope, NetworkPolicy path, and a representative query from each surface.
+
+## Attribute Kubernetes API requests
+
+Use `openbao_kube_client_requests_total` to compare request rates before and after an operator change:
+
+```promql
+sum by (verb, resource, subresource, result) (
+  rate(openbao_kube_client_requests_total[5m])
+)
+```
+
+The counter records HTTP attempts, including retries. It excludes reads served from the client cache.
+The `verb` label distinguishes `apply` from other `patch` requests, as well as `get`, `list`, `watch`, `create`,
+`update`, and `delete`. Discovery and unsupported operations use `other`.
+The `resource` and `subresource` labels use fixed allowlists; unknown values use `other`, and absent subresources use
+`none`. Labels exclude object names, namespaces, URLs, and error text. The `result` label is `success`, `conflict`,
+`not_found`, `forbidden`, or `error`.
+
+Count requests separately from storage writes. A successful APPLY can leave the stored object unchanged.
+Use the request counter to measure API traffic and processing demand; it does not measure etcd writes.

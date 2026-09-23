@@ -4,13 +4,13 @@ description: Fields, defaults, and validation for the OpenBaoCluster API.
 eyebrow: Reference · Generated API
 weight: 1
 verifiedBy:
-  - api/v1alpha1 at 590ae5a92364ae88c294dda46868c3409ddfce67
-  - website/generated/api-reference.md at 590ae5a92364ae88c294dda46868c3409ddfce67
+  - api/v1alpha1 at 94b18f2e3a2dde49550adad43d095220d4dac945
+  - website/generated/api-reference.md at 94b18f2e3a2dde49550adad43d095220d4dac945
 ---
 
 {{< callout type="note" title="Generated reference" >}}
 
-This page is synchronized from the generated API reference at `590ae5a92364ae88c294dda46868c3409ddfce67` for the `next` documentation line.
+This page is synchronized from the generated API reference at `94b18f2e3a2dde49550adad43d095220d4dac945` for the `next` documentation line.
 {{< /callout >}}
 
 
@@ -301,7 +301,7 @@ _Appears in:_
 | `jwtAuthRole` _string_ | JWTAuthRole is the name of the JWT Auth role configured in OpenBao<br />for backup operations. When set, the backup executor will use JWT Auth<br />(projected ServiceAccount token) instead of a static token. This is the preferred authentication<br />method as tokens are automatically rotated by Kubernetes.<br />The role must be configured in OpenBao and must grant the "read" capability on<br />sys/storage/raft/snapshot. The role must bind to the backup ServiceAccount<br />(&lt;cluster-name&gt;-backup-serviceaccount) in the cluster namespace.<br />If OIDC is enabled in SelfInit and this field is empty, a default role<br />named "openbao-operator-backup" will be assumed/created. |  | Optional: \{\} <br /> |
 | `tokenSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | TokenSecretRef references a Secret containing an OpenBao API token to use<br />for backup operations when JWT Auth is not effective.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons.<br />If an effective JWT role exists through JWTAuthRole or the SelfInit OIDC<br />default, this field is ignored in favor of JWT Auth. Otherwise this field<br />is required and must reference a token with permission to read<br />sys/storage/raft/snapshot. The operator does not infer or fall back to a<br />&lt;cluster&gt;-root-token Secret. |  | Optional: \{\} <br /> |
 | `retention` _[BackupRetention](#backupretention)_ | Retention defines optional backup retention policy. |  | Optional: \{\} <br /> |
-| `image` _string_ | Image is the container image to use for backup operations.<br />If not specified, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_BACKUP_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-backup") and the tag matches OPERATOR_VERSION.<br />This allows users to override the image for air-gapped environments or custom registries. |  | Optional: \{\} <br /> |
+| `image` _string_ | Image is the container image to use for backup operations.<br />If not specified, OPERATOR_BACKUP_IMAGE can supply a complete image reference, including a digest.<br />Otherwise, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_BACKUP_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-backup") and the tag matches OPERATOR_VERSION.<br />This allows users to override the image for air-gapped environments or custom registries. |  | Optional: \{\} <br /> |
 
 
 #### BackupStatus
@@ -425,6 +425,10 @@ _Appears in:_
 | `blueRevision` _string_ | BlueRevision is the hash/name of the currently active cluster. |  |  |
 | `blueControllerRevision` _string_ | BlueControllerRevision is the Kubernetes StatefulSet controller revision<br />of Blue. It identifies an unrevisioned rolling workload after switching to<br />BlueGreen without requiring the existing Pods to be restarted or relabeled. |  | Optional: \{\} <br /> |
 | `blueImage` _string_ | BlueImage is the container image used by the Blue cluster.<br />This ensures the Blue cluster is not actively upgraded when spec.image changes. |  |  |
+| `blueReplicas` _integer_ | BlueReplicas is the voter population captured when the upgrade starts.<br />It remains fixed until Green becomes the stable workload. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+| `greenImage` _string_ | GreenImage is the image selected for the in-flight target. |  | Optional: \{\} <br /> |
+| `greenVersion` _string_ | GreenVersion is the version selected for the in-flight target. |  | Optional: \{\} <br /> |
+| `greenReplicas` _integer_ | GreenReplicas is the replica count selected for the in-flight target. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `greenRevision` _string_ | GreenRevision is the hash/name of the next cluster (if upgrade in progress). |  |  |
 | `manualPromotionRequired` _boolean_ | ManualPromotionRequired snapshots whether the current in-flight blue/green<br />upgrade requires an explicit spec.upgrade.requests.promote request before<br />promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote<br />when the upgrade starts. |  | Optional: \{\} <br /> |
 | `startTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | StartTime is when the current phase began. |  |  |
@@ -868,7 +872,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled controls whether the init container is used to render the configuration.<br />The operator requires the init container; disabling it is not supported. | true | Optional: \{\} <br /> |
-| `image` _string_ | Image is the container image to use for the init container.<br />If not specified, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_INIT_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-init") and the tag matches OPERATOR_VERSION. |  | Optional: \{\} <br /> |
+| `image` _string_ | Image is the container image to use for the init container.<br />If not specified, OPERATOR_INIT_IMAGE can supply a complete image reference, including a digest.<br />Otherwise, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_INIT_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-init") and the tag matches OPERATOR_VERSION. |  | Optional: \{\} <br /> |
 
 
 #### InitialRecoveryKeysConfig
@@ -1371,9 +1375,9 @@ _Appears in:_
 | `name` _string_ | Name is the name of the plugin. |  | MinLength: 1 <br /> |
 | `image` _string_ | Image is the OCI image URL including registry and repository.<br />Required if Command is not set. Conflicts with Command. |  | Optional: \{\} <br /> |
 | `command` _string_ | Command is the command name of a manually downloaded plugin.<br />Required if Image is not set. Conflicts with Image. |  | Optional: \{\} <br /> |
-| `version` _string_ | Version is the image version or tag. |  | MinLength: 1 <br /> |
-| `binaryName` _string_ | BinaryName is the name of the plugin binary file within the OCI image. |  | MinLength: 1 <br /> |
-| `sha256sum` _string_ | SHA256Sum is the expected SHA256 checksum of the plugin binary.<br />Must be a 64-character hexadecimal string. |  | MaxLength: 64 <br />MinLength: 64 <br />Pattern: `^[0-9a-fA-F]\{64\}$` <br /> |
+| `version` _string_ | Version is the plugin version and, when Image has no tag, the image tag.<br />OpenBao 2.7 and later can infer it from the image tag. Command-based KMS<br />plugins on OpenBao 2.7 and later do not require a version. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+| `binaryName` _string_ | BinaryName is the name of the plugin binary file within the OCI image.<br />OpenBao 2.7 and later can infer it from the image ENTRYPOINT or CMD. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+| `sha256sum` _string_ | SHA256Sum is the expected SHA256 checksum of the plugin binary.<br />Must be a 64-character hexadecimal string.<br />OpenBao 2.7 and later allow omission for digest-pinned OCI images and<br />command-based plugins. Earlier versions require this field. |  | MaxLength: 64 <br />MinLength: 64 <br />Pattern: `^[0-9a-fA-F]\{64\}$` <br />Optional: \{\} <br /> |
 | `args` _string array_ | Args are arguments to pass to the running plugin.<br />Only used if plugin_auto_register=true is set. |  | Optional: \{\} <br /> |
 | `env` _string array_ | Env are environment variables to pass to the running plugin.<br />Only used if plugin_auto_register=true is set. |  | Optional: \{\} <br /> |
 
@@ -2224,7 +2228,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `image` _string_ | Image is the container image to use for upgrade operations.<br />This image is used by Kubernetes Jobs created during upgrades (for example, blue/green<br />cluster orchestration actions). The executor runs inside the tenant namespace and<br />authenticates to OpenBao using a projected ServiceAccount token (JWT auth).<br />If not specified, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_UPGRADE_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-upgrade") and the tag matches OPERATOR_VERSION. |  | Optional: \{\} <br /> |
+| `image` _string_ | Image is the container image to use for upgrade operations.<br />This image is used by Kubernetes Jobs created during upgrades (for example, blue/green<br />cluster orchestration actions). The executor runs inside the tenant namespace and<br />authenticates to OpenBao using a projected ServiceAccount token (JWT auth).<br />If not specified, OPERATOR_UPGRADE_IMAGE can supply a complete image reference, including a digest.<br />Otherwise, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_UPGRADE_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-upgrade") and the tag matches OPERATOR_VERSION. |  | Optional: \{\} <br /> |
 | `preUpgradeSnapshot` _boolean_ | PreUpgradeSnapshot, when true, triggers a backup before any upgrade.<br />When enabled, the upgrade manager will create a backup using the backup<br />configuration (spec.backup.target, spec.backup.image, etc.) and<br />wait for it to complete before proceeding with the upgrade.<br />If the backup fails, the upgrade will be blocked and a Degraded condition<br />will be set with Reason=PreUpgradeBackupFailed.<br />Requires spec.backup to be configured with target, image, and<br />authentication (jwtAuthRole or tokenSecretRef). |  | Optional: \{\} <br /> |
 | `jwtAuthRole` _string_ | JWTAuthRole is the name of the JWT Auth role configured in OpenBao<br />for upgrade executor Jobs. The executor authenticates with a projected<br />ServiceAccount token from &lt;cluster-name&gt;-upgrade-serviceaccount.<br />The role must be configured in OpenBao and must grant the permissions<br />required by the selected upgrade strategy, including:<br />- "read" capability on sys/health<br />- "sudo" and "update" capability on sys/step-down<br />- "read" capability on sys/storage/raft/autopilot/state<br />- for Blue/Green, raft join/configuration/remove-peer/promote/demote operations<br />The role must bind to the upgrade ServiceAccount (&lt;cluster-name&gt;-upgrade-serviceaccount),<br />which is automatically created by the operator.<br />If OIDC is enabled during initial SelfInit bootstrap and this field is<br />empty, a default role named "openbao-operator-upgrade" will be created.<br />For already-initialized clusters, configure this role explicitly or keep<br />the default role created during initial bootstrap.<br />This is the supported authentication mechanism for built-in upgrade orchestration. |  | Optional: \{\} <br /> |
 | `strategy` _[UpdateStrategyType](#updatestrategytype)_ | Strategy defines the update strategy to use. | RollingUpdate | Enum: [RollingUpdate BlueGreen] <br /> |
