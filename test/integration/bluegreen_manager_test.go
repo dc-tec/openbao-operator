@@ -49,6 +49,10 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 		status.Initialized = true
 		status.CurrentVersion = "2.4.3"
 		status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+			BlueReplicas:  cluster.Spec.Replicas,
+			GreenReplicas: cluster.Spec.Replicas,
+			GreenImage:    cluster.Spec.Image,
+			GreenVersion:  cluster.Spec.Version,
 			Phase:         openbaov1alpha1.PhaseJoiningMesh,
 			BlueRevision:  currentBlueRevision,
 			GreenRevision: targetGreenRevision,
@@ -218,6 +222,10 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabel_AdvancesAfterDemotion(t *test
 		status.Initialized = true
 		status.CurrentVersion = "2.4.3"
 		status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+			BlueReplicas:  cluster.Spec.Replicas,
+			GreenReplicas: cluster.Spec.Replicas,
+			GreenImage:    cluster.Spec.Image,
+			GreenVersion:  cluster.Spec.Version,
 			Phase:         openbaov1alpha1.PhaseDemotingBlue,
 			BlueRevision:  currentBlueRevision,
 			GreenRevision: targetGreenRevision,

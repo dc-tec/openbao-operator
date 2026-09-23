@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -85,6 +87,16 @@ func EnsureBlueGreenStatus(ctx context.Context, logger logr.Logger, c client.Rea
 	}
 
 	if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
+		if cluster.Status.BlueGreen.BlueReplicas == 0 {
+			name := cluster.Name
+			if blueRevision := cluster.Status.BlueGreen.BlueRevision; blueRevision != "" {
+				name += "-" + blueRevision
+			}
+			sts := &appsv1.StatefulSet{}
+			if err := c.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, sts); err == nil && sts.Spec.Replicas != nil {
+				cluster.Status.BlueGreen.BlueReplicas = *sts.Spec.Replicas
+			}
+		}
 		return
 	}
 	if cluster.Status.BlueGreen.BlueRevision != "" && cluster.Status.CurrentVersion == cluster.Spec.Version {

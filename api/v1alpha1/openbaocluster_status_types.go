@@ -197,6 +197,21 @@ type BlueGreenStatus struct {
 	// BlueImage is the container image used by the Blue cluster.
 	// This ensures the Blue cluster is not actively upgraded when spec.image changes.
 	BlueImage string `json:"blueImage,omitempty"`
+	// BlueReplicas is the voter population captured when the upgrade starts.
+	// It remains fixed until Green becomes the stable workload.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	BlueReplicas int32 `json:"blueReplicas,omitempty"`
+	// GreenImage is the image selected for the in-flight target.
+	// +optional
+	GreenImage string `json:"greenImage,omitempty"`
+	// GreenVersion is the version selected for the in-flight target.
+	// +optional
+	GreenVersion string `json:"greenVersion,omitempty"`
+	// GreenReplicas is the replica count selected for the in-flight target.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	GreenReplicas int32 `json:"greenReplicas,omitempty"`
 	// GreenRevision is the hash/name of the next cluster (if upgrade in progress).
 	GreenRevision string `json:"greenRevision,omitempty"`
 	// ManualPromotionRequired snapshots whether the current in-flight blue/green

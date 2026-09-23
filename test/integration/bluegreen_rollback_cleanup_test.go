@@ -34,7 +34,11 @@ func TestBlueGreenRollbackCleanupWaitsForDataDeletion(t *testing.T) {
 		status.Initialized = true
 		status.CurrentVersion = testPreviousOpenBaoVersion
 		status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
-			Phase: openbaov1alpha1.PhaseRollbackCleanup, BlueRevision: "blue",
+			BlueReplicas:  cluster.Spec.Replicas,
+			GreenReplicas: cluster.Spec.Replicas,
+			GreenImage:    cluster.Spec.Image,
+			GreenVersion:  cluster.Spec.Version,
+			Phase:         openbaov1alpha1.PhaseRollbackCleanup, BlueRevision: "blue",
 			GreenRevision: "green", OperationID: "bg-v2-cleanup",
 		}
 	})

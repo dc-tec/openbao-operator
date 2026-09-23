@@ -140,18 +140,19 @@ func (m *Manager) finalizeCompletedBlueGreenUpgrade(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	promoteGreenToBlue bool,
 ) (phaseOutcome, error) {
+	completedVersion := cluster.Status.BlueGreen.GreenVersion
 	if err := m.finalizeUpgradeTerminalState(ctx, logger, cluster, promoteGreenToBlue); err != nil {
 		logger.Error(err, "Failed to finalize blue/green terminal state")
 		return phaseOutcome{}, err
 	}
 
-	logger.Info("Blue/green upgrade completed", "newVersion", cluster.Spec.Version)
+	logger.Info("Blue/green upgrade completed", "newVersion", completedVersion)
 	logging.LogAuditEvent(logger, logging.EventUpgradeCompleted, upgrade.UpgradeCompletedAuditFields(
 		cluster,
 		string(openbaov1alpha1.UpdateStrategyBlueGreen),
-		cluster.Spec.Version,
+		completedVersion,
 	))
-	m.emitNormalEvent(cluster, ReasonUpgradeComplete, "Blue/green upgrade completed for target version %s", cluster.Spec.Version)
+	m.emitNormalEvent(cluster, ReasonUpgradeComplete, "Blue/green upgrade completed for target version %s", completedVersion)
 
 	return requeueAfterOutcome(constants.RequeueShort), nil
 }

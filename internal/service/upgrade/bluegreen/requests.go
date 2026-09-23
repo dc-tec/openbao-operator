@@ -43,6 +43,18 @@ func (m *Manager) handleManualRollbackRequest(ctx context.Context, logger logr.L
 		return false, recon.Result{}, nil
 	}
 
+	if isPastPointOfNoReturn(cluster.Status.BlueGreen.Phase) {
+		acknowledgements.Rollback = rollbackRequest
+		m.emitWarningEvent(cluster, ReasonRollbackRefused,
+			"Blue/green rollback request via %s refused in phase %s because Blue peer removal has started",
+			upgrade.RequestRollbackFieldPath, cluster.Status.BlueGreen.Phase)
+		logger.Info("Ignoring rollback request because Blue peer removal has started",
+			"rollbackRequest", rollbackRequest,
+			"phase", cluster.Status.BlueGreen.Phase,
+			"rollbackRequestField", upgrade.RequestRollbackFieldPath)
+		return false, recon.Result{}, nil
+	}
+
 	logger.Info("Manual rollback requested",
 		"rollbackRequest", rollbackRequest,
 		"phase", cluster.Status.BlueGreen.Phase,

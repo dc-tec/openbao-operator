@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -345,6 +346,7 @@ func TestFinalizeUpgradeTerminalStatePromotesGreenToBlue(t *testing.T) {
 		Build()
 	manager := &Manager{client: client, scheme: scheme}
 
+	upgradecore.CaptureBlueGreenTarget(cluster)
 	if err := manager.finalizeUpgradeTerminalState(context.Background(), logr.Discard(), cluster, true); err != nil {
 		t.Fatalf("finalizeUpgradeTerminalState() error = %v", err)
 	}
@@ -407,7 +409,7 @@ func TestTriggerRollbackOrAbort_EarlyAndLatePhase(t *testing.T) {
 
 	t.Run("late phase triggers rollback", func(t *testing.T) {
 		cluster := newBlueGreenCluster()
-		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
 		phaseStart := metav1.NewTime(time.Now().Add(-time.Minute))
 		cluster.Status.BlueGreen.StartTime = &phaseStart
 		cluster.Status.BlueGreen.JobFailureCount = 3
@@ -436,4 +438,36 @@ func TestTriggerRollbackOrAbort_EarlyAndLatePhase(t *testing.T) {
 		}
 
 	})
+
+	for _, phase := range []openbaov1alpha1.BlueGreenPhase{
+		openbaov1alpha1.PhaseCleanup,
+		openbaov1alpha1.PhaseRestoringReadReplicas,
+	} {
+		t.Run("refuses rollback in "+string(phase), func(t *testing.T) {
+			cluster := newBlueGreenCluster()
+			cluster.Status.BlueGreen.Phase = phase
+			cluster.Status.BlueGreen.GreenRevision = deploymentNameSuffix
+			cluster.Status.BlueGreen.JobFailureCount = 5
+			recorder := events.NewFakeRecorder(10)
+			manager := &Manager{recorder: recorder}
+
+			result, err := manager.triggerRollbackOrAbort(context.Background(), logr.Discard(), cluster, "cleanup peer removal job failure threshold exceeded")
+			if err != nil {
+				t.Fatalf("triggerRollbackOrAbort() error = %v", err)
+			}
+			if result.RequeueAfter != constants.RequeueStandard {
+				t.Fatalf("requeueAfter = %v, want %v", result.RequeueAfter, constants.RequeueStandard)
+			}
+			if cluster.Status.BlueGreen.Phase != phase {
+				t.Fatalf("phase = %s, want %s", cluster.Status.BlueGreen.Phase, phase)
+			}
+			if cluster.Status.BlueGreen.RollbackStartTime != nil {
+				t.Fatal("rollback started after Blue peer removal")
+			}
+			if cluster.Status.BlueGreen.JobFailureCount != 5 {
+				t.Fatalf("job failure count = %d, want 5 so the next attempt uses a new run ID", cluster.Status.BlueGreen.JobFailureCount)
+			}
+			expectEventContains(t, recorder, "Warning", ReasonRollbackRefused)
+		})
+	}
 }

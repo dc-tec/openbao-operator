@@ -2116,7 +2116,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 
 		It("holds in Syncing and creates fresh executor Jobs after rollback before manual promotion", Label(
-			"case:upgrade-bluegreen-retry-identity", "covers:bluegreen-operation-identity",
+			"case:upgrade-bluegreen-retry-identity", "covers:bluegreen-operation-identity", "covers:bluegreen-replica-drift",
 		), func() {
 			By("Triggering a blue/green upgrade with manual promotion")
 			Eventually(func(g Gomega) {
@@ -2172,6 +2172,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			By("Recording completed executor Jobs before rollback")
 			beforeRollback := &openbaov1alpha1.OpenBaoCluster{}
 			Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), beforeRollback)).To(Succeed())
+			Expect(beforeRollback.Status.BlueGreen.BlueReplicas).To(Equal(gatedCluster.Spec.Replicas),
+				"upgrade must capture the configured Blue population after bootstrap")
+			Expect(beforeRollback.Status.BlueGreen.GreenReplicas).To(Equal(gatedCluster.Spec.Replicas))
 			firstOperationID := beforeRollback.Status.BlueGreen.OperationID
 			blueRevision := beforeRollback.Status.BlueGreen.BlueRevision
 			greenRevision := beforeRollback.Status.BlueGreen.GreenRevision
@@ -2203,7 +2206,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				}
 			}
 
-			By("Requesting rollback to the original version")
+			By("Requesting rollback while increasing the desired replica count")
 			rollbackToken := time.Now().UTC().Format(time.RFC3339Nano)
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -2213,6 +2216,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					updated.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{}
 				}
 				updated.Spec.Upgrade.Requests.Rollback = rollbackToken
+				updated.Spec.Replicas = 7
 				updated.Spec.Version = initialVersion
 				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", initialVersion)
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
@@ -2229,6 +2233,17 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.BlueGreen.OperationID).To(BeEmpty())
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying rollback used the captured three-node populations")
+			repairName := upgrade.ExecutorJobName(gatedCluster.Name, bluegreen.ActionRepairConsensus, firstOperationID+"/rollback", blueRevision, greenRevision)
+			repairJob := &batchv1.Job{}
+			Expect(admin.Get(ctx, types.NamespacedName{Namespace: tenantNamespace, Name: repairName}, repairJob)).To(Succeed())
+			repairEnv := make(map[string]string)
+			for _, variable := range repairJob.Spec.Template.Spec.Containers[0].Env {
+				repairEnv[variable.Name] = variable.Value
+			}
+			Expect(repairEnv[constants.EnvClusterReplicas]).To(Equal("3"))
+			Expect(repairEnv[constants.EnvUpgradeBlueReplicas]).To(Equal("3"))
 
 			By("Verifying rollback retires Green data claims and preserves Blue data claims")
 			for name := range greenClaims {
@@ -2248,6 +2263,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(gatedCluster), updated)).To(Succeed())
 				original := updated.DeepCopy()
+				updated.Spec.Replicas = 3
 				updated.Spec.Version = targetVersion
 				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())

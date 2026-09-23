@@ -44,7 +44,7 @@ func (m *Manager) ensureGreenReadyForBlueDemotion(
 		return nil, err
 	}
 
-	ok, message := demotionPreconditionsSatisfied(greenSnapshots, int(cluster.Spec.Replicas))
+	ok, message := demotionPreconditionsSatisfied(greenSnapshots, int(upgrade.BlueGreenTargetReplicas(cluster)))
 	if !ok {
 		logger.Info(message)
 		return nil, nil
@@ -100,7 +100,7 @@ func (m *Manager) ensureGreenReadyForBlueCleanup(
 		}
 	}
 
-	ok, message := cleanupPreconditionsSatisfied(greenSnapshots, int(cluster.Spec.Replicas), leaderOK)
+	ok, message := cleanupPreconditionsSatisfied(greenSnapshots, int(upgrade.BlueGreenTargetReplicas(cluster)), leaderOK)
 	if !ok {
 		logger.Info(message)
 		return requeueAfterOutcome(constants.RequeueShort), true, nil

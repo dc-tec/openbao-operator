@@ -117,7 +117,7 @@ func TestHandleManualRollbackRequest_EmitsRollbackStartedEvent(t *testing.T) {
 	t.Parallel()
 
 	cluster := newBlueGreenCluster()
-	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseDemotingBlue
 	cluster.Status.BlueGreen.GreenRevision = deploymentNameSuffix
 	cluster.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{
 		Rollback: "2026-03-10T12:05:00Z",
@@ -144,6 +144,45 @@ func TestHandleManualRollbackRequest_EmitsRollbackStartedEvent(t *testing.T) {
 	}
 
 	expectEventContains(t, recorder, "Warning", ReasonRollbackStarted)
+}
+
+func TestHandleManualRollbackRequest_RefusedAfterBluePeerRemoval(t *testing.T) {
+	t.Parallel()
+
+	for _, phase := range []openbaov1alpha1.BlueGreenPhase{
+		openbaov1alpha1.PhaseCleanup,
+		openbaov1alpha1.PhaseRestoringReadReplicas,
+	} {
+		t.Run(string(phase), func(t *testing.T) {
+			t.Parallel()
+
+			cluster := newBlueGreenCluster()
+			cluster.Status.BlueGreen.Phase = phase
+			cluster.Status.BlueGreen.GreenRevision = deploymentNameSuffix
+			cluster.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{
+				Rollback: "2026-03-10T12:10:00Z",
+			}
+			recorder := events.NewFakeRecorder(10)
+			manager := &Manager{recorder: recorder}
+
+			var acknowledgements upgrade.RequestAcknowledgements
+			handled, _, err := manager.handleManualRollbackRequest(context.Background(), logr.Discard(), cluster, &acknowledgements)
+			if err != nil {
+				t.Fatalf("handleManualRollbackRequest() error = %v", err)
+			}
+			if handled {
+				t.Fatal("handled = true, want false after Blue peer removal started")
+			}
+			if cluster.Status.BlueGreen.Phase != phase {
+				t.Fatalf("phase = %s, want %s", cluster.Status.BlueGreen.Phase, phase)
+			}
+			if acknowledgements.Rollback != "2026-03-10T12:10:00Z" {
+				t.Fatalf("rollback acknowledgement = %q, want request token", acknowledgements.Rollback)
+			}
+
+			expectEventContains(t, recorder, "Warning", ReasonRollbackRefused)
+		})
+	}
 }
 
 func TestHandleManualRollbackRequest_IgnoresStaleRequestWhenIdle(t *testing.T) {

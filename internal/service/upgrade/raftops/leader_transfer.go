@@ -222,7 +222,7 @@ func RaftLeaderInfoForRevision(config *portopenbao.RaftConfigurationResponse, cf
 			server.Address,
 			cfg.ClusterName,
 			cfg.BlueRevision,
-			cfg.ClusterReplicas,
+			cfg.blueReplicaCount(),
 		)
 	}
 
@@ -253,7 +253,7 @@ func DemoteBlueVotersExceptLeader(
 		if !server.Voter || server.NodeID == leaderID {
 			continue
 		}
-		isBlue := RaftServerMatchesRevision(server.NodeID, server.Address, cfg.ClusterName, cfg.BlueRevision, cfg.ClusterReplicas)
+		isBlue := RaftServerMatchesRevision(server.NodeID, server.Address, cfg.ClusterName, cfg.BlueRevision, cfg.blueReplicaCount())
 		// Retain the prefix-based contract for older direct callers that did not
 		// populate BlueRevision. Production passes "<cluster>--" for an
 		// unrevisioned Blue workload and therefore uses exact expected pod names.
@@ -453,7 +453,7 @@ func DemoteAllBluePods(ctx context.Context, logger logr.Logger, cfg *ExecutorCon
 		return fmt.Errorf("client is required to demote Blue pods")
 	}
 
-	for _, i := range ReplicaOrdinals(cfg.ClusterReplicas) {
+	for _, i := range ReplicaOrdinals(cfg.blueReplicaCount()) {
 		bluePodName := RevisionPodName(cfg.ClusterName, cfg.BlueRevision, i)
 		logger.V(1).Info("Demoting Blue pod to non-voter", "pod_name", bluePodName)
 		if err := client.DemoteRaftPeer(ctx, bluePodName); err != nil {

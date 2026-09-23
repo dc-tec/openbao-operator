@@ -20,6 +20,7 @@ const (
 	// Upgrade executor
 	EnvUpgradeAction        = "UPGRADE_ACTION"
 	EnvUpgradeJWTAuthRole   = "UPGRADE_JWT_AUTH_ROLE"
+	EnvUpgradeBlueReplicas  = "UPGRADE_BLUE_REPLICAS"
 	EnvUpgradeBlueRevision  = "UPGRADE_BLUE_REVISION"
 	EnvUpgradeGreenRevision = "UPGRADE_GREEN_REVISION"
 	EnvUpgradeSyncThreshold = "UPGRADE_SYNC_THRESHOLD"

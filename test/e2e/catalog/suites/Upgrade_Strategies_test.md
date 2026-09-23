@@ -8,7 +8,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `upgrade-bluegreen-retry-identity` | holds in Syncing and creates fresh executor Jobs after rollback before manual promotion | active | `bluegreen-operation-identity` | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification` |
+| `upgrade-bluegreen-retry-identity` | holds in Syncing and creates fresh executor Jobs after rollback before manual promotion | active | `bluegreen-operation-identity`, `bluegreen-replica-drift` | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification` |
 | `upgrade-bluegreen-snapshot-promotion` | executes Blue/Green upgrade cycle with pre-upgrade snapshot | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `e2e-anchor` |
 | `upgrade-strategies-aborts-before-promotion-when-the-pre-230729f6` | aborts before promotion when the pre-promotion hook fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `failure` |
 | `upgrade-bluegreen-executor-failure-auto-abort` | induces executor failure and validates retry plus auto-abort behavior | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `e2e-anchor` |
@@ -29,7 +29,7 @@ State: `active`
 
 Generated fallback ID: `upgrade-strategies-holds-in-syncing-and-creates-fresh-d60f290d`
 
-Covers: `bluegreen-operation-identity`
+Covers: `bluegreen-operation-identity`, `bluegreen-replica-drift`
 
 Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`
 
@@ -39,8 +39,9 @@ Recorded checkpoints:
 - Consistently holding in Syncing while no promote request is set
 - Recording completed executor Jobs before rollback
 - Recording Blue and Green data claims before rollback
-- Requesting rollback to the original version
+- Requesting rollback while increasing the desired replica count
 - Waiting for rollback to finish before requesting another upgrade
+- Verifying rollback used the captured three-node populations
 - Verifying rollback retires Green data claims and preserves Blue data claims
 - Requesting the same target again while completed Jobs remain
 - Verifying the new attempt completes fresh join and sync Jobs while old Jobs remain

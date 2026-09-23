@@ -2151,7 +2151,8 @@
     "generatedId": "upgrade-strategies-holds-in-syncing-and-creates-fresh-d60f290d",
     "caseLabel": "upgrade-bluegreen-retry-identity",
     "coverage": [
-      "bluegreen-operation-identity"
+      "bluegreen-operation-identity",
+      "bluegreen-replica-drift"
     ],
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
@@ -2169,7 +2170,8 @@
       "bluegreen",
       "verification",
       "case:upgrade-bluegreen-retry-identity",
-      "covers:bluegreen-operation-identity"
+      "covers:bluegreen-operation-identity",
+      "covers:bluegreen-replica-drift"
     ],
     "domainLabels": [
       "upgrade",
@@ -2185,8 +2187,9 @@
       "Consistently holding in Syncing while no promote request is set",
       "Recording completed executor Jobs before rollback",
       "Recording Blue and Green data claims before rollback",
-      "Requesting rollback to the original version",
+      "Requesting rollback while increasing the desired replica count",
       "Waiting for rollback to finish before requesting another upgrade",
+      "Verifying rollback used the captured three-node populations",
       "Verifying rollback retires Green data claims and preserves Blue data claims",
       "Requesting the same target again while completed Jobs remain",
       "Verifying the new attempt completes fresh join and sync Jobs while old Jobs remain",

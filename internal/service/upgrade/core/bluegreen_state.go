@@ -83,6 +83,9 @@ func ResetBlueGreenTransientState(status *openbaov1alpha1.BlueGreenStatus) {
 	}
 	AdvanceBlueGreenPhase(status, openbaov1alpha1.PhaseIdle)
 	status.GreenRevision = ""
+	status.GreenImage = ""
+	status.GreenVersion = ""
+	status.GreenReplicas = 0
 	status.ManualPromotionRequired = false
 	if status.ValidationHook == nil {
 		status.OperationID = ""
@@ -99,10 +102,28 @@ func FinalizeBlueGreenTerminalState(cluster *openbaov1alpha1.OpenBaoCluster, pro
 	if promoteGreenToBlue {
 		cluster.Status.BlueGreen.BlueRevision = cluster.Status.BlueGreen.GreenRevision
 		cluster.Status.BlueGreen.BlueControllerRevision = ""
-		if cluster.Spec.Image != "" {
-			cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image
-		}
+		PromoteBlueGreenTarget(cluster)
 	}
 
 	ResetBlueGreenTransientState(cluster.Status.BlueGreen)
+}
+
+// CaptureBlueGreenTarget records the target before any Green resources are created.
+func CaptureBlueGreenTarget(cluster *openbaov1alpha1.OpenBaoCluster) {
+	status := cluster.Status.BlueGreen
+	status.GreenVersion = cluster.Spec.Version
+	status.GreenImage = cluster.Spec.Image
+	status.GreenReplicas = cluster.Spec.Replicas
+	status.BlueReplicas = cluster.Spec.Replicas
+}
+
+// PromoteBlueGreenTarget retains the image and population that actually became stable.
+func PromoteBlueGreenTarget(cluster *openbaov1alpha1.OpenBaoCluster) {
+	status := cluster.Status.BlueGreen
+	if status.GreenImage != "" {
+		status.BlueImage = status.GreenImage
+	}
+	if status.GreenReplicas > 0 {
+		status.BlueReplicas = status.GreenReplicas
+	}
 }

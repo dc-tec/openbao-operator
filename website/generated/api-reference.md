@@ -418,6 +418,10 @@ _Appears in:_
 | `blueRevision` _string_ | BlueRevision is the hash/name of the currently active cluster. |  |  |
 | `blueControllerRevision` _string_ | BlueControllerRevision is the Kubernetes StatefulSet controller revision<br />of Blue. It identifies an unrevisioned rolling workload after switching to<br />BlueGreen without requiring the existing Pods to be restarted or relabeled. |  | Optional: \{\} <br /> |
 | `blueImage` _string_ | BlueImage is the container image used by the Blue cluster.<br />This ensures the Blue cluster is not actively upgraded when spec.image changes. |  |  |
+| `blueReplicas` _integer_ | BlueReplicas is the voter population captured when the upgrade starts.<br />It remains fixed until Green becomes the stable workload. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+| `greenImage` _string_ | GreenImage is the image selected for the in-flight target. |  | Optional: \{\} <br /> |
+| `greenVersion` _string_ | GreenVersion is the version selected for the in-flight target. |  | Optional: \{\} <br /> |
+| `greenReplicas` _integer_ | GreenReplicas is the replica count selected for the in-flight target. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `greenRevision` _string_ | GreenRevision is the hash/name of the next cluster (if upgrade in progress). |  |  |
 | `manualPromotionRequired` _boolean_ | ManualPromotionRequired snapshots whether the current in-flight blue/green<br />upgrade requires an explicit spec.upgrade.requests.promote request before<br />promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote<br />when the upgrade starts. |  | Optional: \{\} <br /> |
 | `startTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | StartTime is when the current phase began. |  |  |

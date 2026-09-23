@@ -82,6 +82,8 @@ func TestFinalizeBlueGreenTerminalState(t *testing.T) {
 		},
 	}
 
+	core.CaptureBlueGreenTarget(cluster)
+	cluster.Spec.Image = "openbao:2.6.2"
 	core.FinalizeBlueGreenTerminalState(cluster, true)
 
 	require.Equal(t, openbaov1alpha1.PhaseIdle, cluster.Status.BlueGreen.Phase)

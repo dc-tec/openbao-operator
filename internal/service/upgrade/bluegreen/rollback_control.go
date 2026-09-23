@@ -67,9 +67,35 @@ func isEarlyPhase(phase openbaov1alpha1.BlueGreenPhase) bool {
 	}
 }
 
+// isPastPointOfNoReturn returns true once Blue peer removal may have started.
+// Blue can no longer regain quorum from these phases, so the upgrade must roll forward.
+func isPastPointOfNoReturn(phase openbaov1alpha1.BlueGreenPhase) bool {
+	switch phase {
+	case openbaov1alpha1.PhaseCleanup, openbaov1alpha1.PhaseRestoringReadReplicas:
+		return true
+	default:
+		return false
+	}
+}
+
+// refuseRollback keeps the current phase so its executor Job retries under a new run ID.
+func (m *Manager) refuseRollback(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, reason string) recon.Result {
+	phase := cluster.Status.BlueGreen.Phase
+	logger.Info("Refusing rollback after Blue peer removal started; retrying current phase",
+		"phase", phase,
+		"reason", reason)
+	m.emitWarningEvent(cluster, ReasonRollbackRefused,
+		"Blue/green rollback refused in phase %s because Blue peer removal has started; retrying the phase: %s", phase, reason)
+	return requeueStandard()
+}
+
 // triggerRollbackOrAbort decides whether to abort early phases or trigger a full rollback in later phases.
 func (m *Manager) triggerRollbackOrAbort(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, reason string) (recon.Result, error) {
 	phase := cluster.Status.BlueGreen.Phase
+	if isPastPointOfNoReturn(phase) {
+		return m.refuseRollback(logger, cluster, reason), nil
+	}
+
 	logging.LogAuditEvent(logger, logging.EventUpgradeFailed, map[string]string{
 		"cluster_namespace": cluster.Namespace,
 		"cluster_name":      cluster.Name,
