@@ -13,8 +13,10 @@ import (
 )
 
 // checkAbortConditions checks if the upgrade should be aborted due to Green cluster failures.
+// Abort deletes the Green StatefulSet, so it only applies while Green holds no Raft votes.
+// Once promotion starts, Green failures must go through the rollback workflow instead.
 func (m *Manager) checkAbortConditions(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
-	if cluster.Status.BlueGreen == nil || cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle {
+	if cluster.Status.BlueGreen == nil || !isEarlyPhase(cluster.Status.BlueGreen.Phase) {
 		return false, nil
 	}
 

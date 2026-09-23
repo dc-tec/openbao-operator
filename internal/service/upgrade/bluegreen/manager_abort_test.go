@@ -192,6 +192,78 @@ func TestCheckAbortConditions_TableDriven(t *testing.T) {
 	})
 }
 
+func TestMaybeAbortUpgrade_OnlyDeletesGreenBeforePromotion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		phase     openbaov1alpha1.BlueGreenPhase
+		wantAbort bool
+	}{
+		{phase: openbaov1alpha1.PhaseDeployingGreen, wantAbort: true},
+		{phase: openbaov1alpha1.PhaseJoiningMesh, wantAbort: true},
+		{phase: openbaov1alpha1.PhaseSyncing, wantAbort: true},
+		{phase: openbaov1alpha1.PhasePromoting},
+		{phase: openbaov1alpha1.PhaseDemotingBlue},
+		{phase: openbaov1alpha1.PhaseCleanup},
+		{phase: openbaov1alpha1.PhaseRestoringReadReplicas},
+		{phase: openbaov1alpha1.PhaseRollingBack},
+		{phase: openbaov1alpha1.PhaseRollbackCleanup},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.phase), func(t *testing.T) {
+			t.Parallel()
+
+			scheme := newBlueGreenTestScheme(t)
+			cluster := newBlueGreenCluster()
+			cluster.Status.BlueGreen.Phase = tt.phase
+			cluster.Status.BlueGreen.GreenRevision = deploymentNameSuffix
+
+			pod := newGreenPod(cluster, deploymentNameSuffix, deploymentNameSuffix+"-0")
+			pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 137},
+				},
+			}}
+			greenStatefulSet := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cluster.Name + "-green",
+					Namespace: cluster.Namespace,
+				},
+			}
+
+			client := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+				WithObjects(cluster, pod, greenStatefulSet).
+				Build()
+
+			manager := &Manager{client: client, scheme: scheme}
+			handled, _, err := manager.maybeAbortUpgrade(context.Background(), logr.Discard(), cluster)
+			if err != nil {
+				t.Fatalf("maybeAbortUpgrade() error = %v", err)
+			}
+			if handled != tt.wantAbort {
+				t.Fatalf("maybeAbortUpgrade() handled = %t, want %t", handled, tt.wantAbort)
+			}
+
+			greenErr := client.Get(context.Background(), types.NamespacedName{Name: greenStatefulSet.Name, Namespace: greenStatefulSet.Namespace}, &appsv1.StatefulSet{})
+			if tt.wantAbort {
+				if greenErr == nil {
+					t.Fatal("green StatefulSet still exists after early-phase abort")
+				}
+				return
+			}
+			if greenErr != nil {
+				t.Fatalf("green StatefulSet deleted in phase %s: %v", tt.phase, greenErr)
+			}
+			if cluster.Status.BlueGreen.Phase != tt.phase {
+				t.Fatalf("phase = %s, want %s", cluster.Status.BlueGreen.Phase, tt.phase)
+			}
+		})
+	}
+}
+
 func TestMaybeAbortUpgrade_CleansUpGreenAndReleasesLock(t *testing.T) {
 	scheme := newBlueGreenTestScheme(t)
 	cluster := newBlueGreenCluster()
