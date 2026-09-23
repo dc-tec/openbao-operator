@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
@@ -145,6 +146,9 @@ func (m *Manager) reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	if handled, result, err := m.handleManualRollbackRequest(ctx, logger, cluster, acknowledgements); handled || err != nil {
 		return result, err
+	}
+	if err := portopenbao.ValidateSealPlugins(cluster); err != nil {
+		return recon.Result{}, operatorerrors.WrapPermanentConfig(err)
 	}
 
 	return m.reconcileBlueGreen(ctx, logger, cluster, verifiedImageDigest, acknowledgements)

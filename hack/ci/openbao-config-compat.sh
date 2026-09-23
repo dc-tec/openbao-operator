@@ -15,7 +15,7 @@ fi
 
 VERSIONS=("$@")
 if [ ${#VERSIONS[@]} -eq 0 ]; then
-  VERSIONS=("2.4.4" "2.5.5" "2.6.3")
+  VERSIONS=("2.4.4" "2.5.5" "2.6.3" "2.7.0")
 fi
 
 FILES=( "$ROOT_DIR"/internal/adapter/config/testdata/*.hcl )
@@ -46,14 +46,30 @@ for version in "${VERSIONS[@]}"; do
   tmpdir="$(mktemp -d)"
   trap 'rm -rf "$tmpdir"' EXIT
 
-  cat > "${tmpdir}/main.go" <<'GO'
+  module_path="github.com/openbao/openbao"
+  parser_path="command/server"
+  harness_module="tmp.example/openbao-config-compat"
+  IFS=. read -r major minor rest <<< "${version#v}"
+  if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]]; then
+    echo "error: expected an OpenBao semantic version, got $version" >&2
+    exit 1
+  fi
+  if (( major > 2 || (major == 2 && minor >= 7) )); then
+    module_path="github.com/openbao/openbao/v2"
+    parser_path="internal/command/server"
+    # Go permits internal imports from another module under the same import
+    # prefix. Keep this test harness isolated from the operator module.
+    harness_module="${module_path}/operator-config-compat"
+  fi
+
+  cat > "${tmpdir}/main.go" <<GO
 package main
 
 import (
 	"fmt"
 	"os"
 
-	serverconfig "github.com/openbao/openbao/command/server"
+	serverconfig "${module_path}/${parser_path}"
 )
 
 func main() {
@@ -85,7 +101,7 @@ GO
 
   (
     cd "${tmpdir}"
-    go mod init tmp.example/openbao-config-compat >/dev/null 2>&1
+    go mod init "${harness_module}" >/dev/null 2>&1
 
     # OpenBao tags submodules separately from the server module. Prefer the
     # exact SDK release tag when it exists, but use its VCS commit instead of
@@ -102,13 +118,16 @@ GO
         | sed -n 's/.*"Hash": "\([0-9a-f]\{40\}\)".*/\1/p' \
         | head -n 1
     )"
-    if [ -n "${sdk_tag_sha}" ]; then
+    # From 2.7 onward the internal parser and profiles must use the SDK
+    # from the server commit. The separately published 2.7.0 SDK tag predates
+    # the server's CEL module migration and cannot compile this parser.
+    if [ "${module_path}" = "github.com/openbao/openbao" ] && [ -n "${sdk_tag_sha}" ]; then
       sdk_ref="${sdk_tag_sha}"
     fi
 
     go_get_log="${tmpdir}/go-get.log"
     if ! GOFLAGS="${TMPMODULE_GOFLAGS}" go get \
-      "github.com/openbao/openbao@${sha}" \
+      "${module_path}@${sha}" \
       "github.com/openbao/openbao/sdk/v2@${sdk_ref}" >"${go_get_log}" 2>&1; then
       cat "${go_get_log}" >&2
       exit 1
@@ -117,10 +136,10 @@ GO
     GOFLAGS="${TMPMODULE_GOFLAGS}" go run . "${FILES[@]}"
 
     if [ "${REPORT_SCHEMA_DRIFT}" = "true" ]; then
-      moddir="$(GOFLAGS="${TMPMODULE_GOFLAGS}" go list -m -f '{{.Dir}}' github.com/openbao/openbao)"
+      moddir="$(GOFLAGS="${TMPMODULE_GOFLAGS}" go list -m -f '{{.Dir}}' "${module_path}")"
       (
         cd "${ROOT_DIR}"
-        GOFLAGS="${REPO_GOFLAGS}" go run ./hack/tools/openbao_config_schema -file "${moddir}/command/server/config.go"
+        GOFLAGS="${REPO_GOFLAGS}" go run ./hack/tools/openbao_config_schema -file "${moddir}/${parser_path}/config.go"
       ) > "${schema_tmp}/keys-${version}.txt"
     fi
   )
@@ -134,7 +153,7 @@ done
 if [ "${REPORT_SCHEMA_DRIFT}" = "true" ]; then
   echo
   echo "==> OpenBao config schema drift report"
-  echo "    Source: github.com/openbao/openbao/command/server/config.go (hcl struct tags)"
+  echo "    Source: upstream server/config.go (hcl struct tags; version-specific package layout)"
   echo
 
   any=false

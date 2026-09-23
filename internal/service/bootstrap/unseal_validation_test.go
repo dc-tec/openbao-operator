@@ -1034,3 +1034,14 @@ func newClientCertKeyPair() ([]byte, []byte, error) {
 func boolPtr(v bool) *bool {
 	return &v
 }
+
+func TestRemovedSealFailsBeforeCredentialLookup(t *testing.T) {
+	cluster := newMinimalCluster("removed-seal", "default")
+	cluster.Spec.Version = "2.7.0"
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{Type: "awskms"}
+	manager := &Manager{}
+	err := manager.validateUnsealPrerequisites(context.Background(), cluster)
+	if err == nil || !strings.Contains(err.Error(), "install the external KMS plugin") {
+		t.Fatalf("expected missing plugin prerequisite before credential lookup, got %v", err)
+	}
+}

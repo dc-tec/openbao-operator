@@ -482,18 +482,26 @@ type Plugin struct {
 	// Required if Image is not set. Conflicts with Image.
 	// +optional
 	Command string `json:"command,omitempty"`
-	// Version is the image version or tag.
+	// Version is the plugin version and, when Image has no tag, the image tag.
+	// OpenBao 2.7 and later can infer it from the image tag. Command-based KMS
+	// plugins on OpenBao 2.7 and later do not require a version.
 	// +kubebuilder:validation:MinLength=1
-	Version string `json:"version"`
+	// +optional
+	Version string `json:"version,omitempty"`
 	// BinaryName is the name of the plugin binary file within the OCI image.
+	// OpenBao 2.7 and later can infer it from the image ENTRYPOINT or CMD.
 	// +kubebuilder:validation:MinLength=1
-	BinaryName string `json:"binaryName"`
+	// +optional
+	BinaryName string `json:"binaryName,omitempty"`
 	// SHA256Sum is the expected SHA256 checksum of the plugin binary.
 	// Must be a 64-character hexadecimal string.
+	// OpenBao 2.7 and later allow omission for digest-pinned OCI images and
+	// command-based plugins. Earlier versions require this field.
 	// +kubebuilder:validation:MinLength=64
 	// +kubebuilder:validation:MaxLength=64
 	// +kubebuilder:validation:Pattern=`^[0-9a-fA-F]{64}$`
-	SHA256Sum string `json:"sha256sum"`
+	// +optional
+	SHA256Sum string `json:"sha256sum,omitempty"`
 	// Args are arguments to pass to the running plugin.
 	// Only used if plugin_auto_register=true is set.
 	// +optional

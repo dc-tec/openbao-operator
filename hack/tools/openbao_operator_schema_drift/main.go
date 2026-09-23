@@ -106,16 +106,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	upstreamServerDir, err := findUpstreamServerDir(upstreamModDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: locate upstream server package: %v\n", err)
+		os.Exit(1)
+	}
+
 	upstreamRoots := []rootSpec{
 		// Core server config fields.
-		{Prefix: "", Dir: filepath.Join(upstreamModDir, "command", "server"), Type: "Config"},
+		{Prefix: "", Dir: upstreamServerDir, Type: "Config"},
 
 		// Shared config fields (logging, telemetry block, etc).
 		{Prefix: "", Dir: upstreamConfigDir, Type: "SharedConfig"},
 
 		// Stanzas parsed manually (listener, audit). We still extract their hcl tag keys from structs.
 		{Prefix: "listener", Dir: upstreamConfigDir, Type: "Listener"},
-		{Prefix: "audit", Dir: filepath.Join(upstreamModDir, "command", "server"), Type: "AuditDevice"},
+		{Prefix: "audit", Dir: upstreamServerDir, Type: "AuditDevice"},
 	}
 
 	operatorRoots := []rootSpec{
@@ -244,11 +250,22 @@ func extractDefaultGeneratedKeySet() (map[string]struct{}, error) {
 	return keys, nil
 }
 
+func findUpstreamServerDir(upstreamModDir string) (string, error) {
+	return findUpstreamPackageDir([]string{
+		filepath.Join(upstreamModDir, "internal", "command", "server"),
+		filepath.Join(upstreamModDir, "command", "server"),
+	})
+}
+
 func findUpstreamConfigDir(upstreamModDir string) (string, error) {
-	candidates := []string{
+	return findUpstreamPackageDir([]string{
+		filepath.Join(upstreamModDir, "internal", "helper", "configutil"),
 		filepath.Join(upstreamModDir, "helper", "configutil"),
 		filepath.Join(upstreamModDir, "internalshared", "configutil"),
-	}
+	})
+}
+
+func findUpstreamPackageDir(candidates []string) (string, error) {
 	for _, candidate := range candidates {
 		info, err := os.Stat(candidate)
 		if err == nil && info.IsDir() {
@@ -258,10 +275,7 @@ func findUpstreamConfigDir(upstreamModDir string) (string, error) {
 			return "", fmt.Errorf("stat %s: %w", candidate, err)
 		}
 	}
-	return "", fmt.Errorf(
-		"neither helper/configutil nor internalshared/configutil exists under %s",
-		upstreamModDir,
-	)
+	return "", fmt.Errorf("none of the upstream package directories exist: %s", strings.Join(candidates, ", "))
 }
 
 func collectKeysFromHCLBody(out map[string]struct{}, prefix string, body *hclwrite.Body) {
@@ -546,29 +560,28 @@ func materializeUpstreamModuleDir(sha string) (string, error) {
 		return "", fmt.Errorf("go mod init: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 
-	// #nosec G204 -- sha is validated (40 hex); this is a developer tool.
-	cmd = exec.Command("go", "get", "github.com/openbao/openbao@"+sha)
-	cmd.Dir = mainModule
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("go get: %v: %s", err, strings.TrimSpace(string(out)))
+	var failures []string
+	for _, modulePath := range []string{"github.com/openbao/openbao/v2", "github.com/openbao/openbao"} {
+		// #nosec G204 -- sha is validated (40 hex); this is a developer tool.
+		cmd = exec.Command("go", "mod", "download", "-json", modulePath+"@"+sha)
+		cmd.Dir = mainModule
+		out, err := cmd.Output()
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v: %s", modulePath, err, strings.TrimSpace(string(out))))
+			continue
+		}
+		var mod struct {
+			Dir string `json:"Dir"`
+		}
+		if err := json.Unmarshal(out, &mod); err != nil {
+			return "", fmt.Errorf("decode go mod download output: %w", err)
+		}
+		if strings.TrimSpace(mod.Dir) == "" {
+			return "", fmt.Errorf("go mod download did not return .Dir for %s", modulePath)
+		}
+		return mod.Dir, nil
 	}
-
-	cmd = exec.Command("go", "list", "-m", "-json", "github.com/openbao/openbao")
-	cmd.Dir = mainModule
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("go list -m: %v: %s", err, strings.TrimSpace(string(out)))
-	}
-	var mod struct {
-		Dir string `json:"Dir"`
-	}
-	if err := json.Unmarshal(out, &mod); err != nil {
-		return "", fmt.Errorf("decode go list -m output: %w", err)
-	}
-	if strings.TrimSpace(mod.Dir) == "" {
-		return "", fmt.Errorf("go list -m did not return .Dir")
-	}
-	return mod.Dir, nil
+	return "", fmt.Errorf("download upstream module: %s", strings.Join(failures, "; "))
 }
 
 func writeGitHubSummary(

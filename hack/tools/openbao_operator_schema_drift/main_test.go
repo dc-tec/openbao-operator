@@ -14,6 +14,7 @@ func TestFindUpstreamConfigDir(t *testing.T) {
 		name string
 		dir  string
 	}{
+		{name: "2.7 internal layout", dir: filepath.Join("internal", "helper", "configutil")},
 		{name: "current layout", dir: filepath.Join("helper", "configutil")},
 		{name: "legacy layout", dir: filepath.Join("internalshared", "configutil")},
 	}
@@ -70,5 +71,24 @@ func TestFindUpstreamConfigDirRejectsUnknownLayout(t *testing.T) {
 	if !strings.Contains(err.Error(), "helper/configutil") ||
 		!strings.Contains(err.Error(), "internalshared/configutil") {
 		t.Fatalf("error %q does not name the supported layouts", err)
+	}
+}
+
+func TestFindUpstreamServerDir(t *testing.T) {
+	for _, dir := range []string{"command/server", "internal/command/server"} {
+		t.Run(dir, func(t *testing.T) {
+			root := t.TempDir()
+			want := filepath.Join(root, dir)
+			if err := os.MkdirAll(want, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			got, err := findUpstreamServerDir(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != want {
+				t.Fatalf("got %q, want %q", got, want)
+			}
+		})
 	}
 }

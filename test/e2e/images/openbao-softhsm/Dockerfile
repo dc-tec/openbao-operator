@@ -1,5 +1,9 @@
-ARG OPENBAO_HSM_BASE_IMAGE=openbao/openbao-hsm:2.6.2
-FROM ${OPENBAO_HSM_BASE_IMAGE}
+ARG OPENBAO_BASE_IMAGE=openbao/openbao:2.6.3
+ARG PKCS11_PLUGIN_IMAGE=ghcr.io/openbao/openbao-plugin-kms-pkcs11:v0.1.0@sha256:ba3229ef91ab1040122d1389f9d015f3f211076835cf6914977c09d3697b4697
+FROM ${PKCS11_PLUGIN_IMAGE} AS pkcs11-plugin
+FROM ${OPENBAO_BASE_IMAGE}
+
+COPY --from=pkcs11-plugin /openbao-plugin-kms-pkcs11 /openbao/plugins/openbao-plugin-kms-pkcs11
 
 USER root
 
@@ -29,6 +33,7 @@ RUN set -eux; \
     mv "${bao_path}" /usr/local/bin/bao.real; \
     ln -s /usr/local/bin/bao-softhsm-wrapper "${bao_path}"; \
     chmod 0755 /usr/local/bin/bao-softhsm-wrapper; \
+    sha256sum /openbao/plugins/openbao-plugin-kms-pkcs11 > /opt/openbao-softhsm/plugin.sha256; \
     chown -R 100:1000 /opt/openbao-softhsm; \
     chmod -R u=rwX,g=rX,o= /opt/openbao-softhsm
 

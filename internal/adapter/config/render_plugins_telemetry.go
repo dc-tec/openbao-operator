@@ -41,9 +41,9 @@ func buildPluginBlocks(plugins []openbaov1alpha1.Plugin) []*hclwrite.Block {
 			Image:   imagePtr,
 			Command: commandPtr,
 
-			Version:    plugin.Version,
-			BinaryName: plugin.BinaryName,
-			SHA256Sum:  plugin.SHA256Sum,
+			Version:    stringPtr(plugin.Version),
+			BinaryName: stringPtr(plugin.BinaryName),
+			SHA256Sum:  stringPtr(plugin.SHA256Sum),
 
 			Args: argsPtr,
 			Env:  envPtr,

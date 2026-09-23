@@ -8,6 +8,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
@@ -232,6 +233,12 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 func validateConfigVersionCompatibility(cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if cluster == nil {
 		return fmt.Errorf("cluster is required")
+	}
+	if err := portopenbao.ValidateSealPlugins(cluster); err != nil {
+		return err
+	}
+	if err := validatePluginVersionCompatibility(cluster); err != nil {
+		return err
 	}
 
 	if err := validateMetricsOnlyListenerCompatibility(cluster); err != nil {

@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
@@ -114,6 +115,9 @@ func (m *Manager) reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	if result, done := m.shouldSkipUpgradeReconcile(logger, cluster); done {
 		return result, nil
+	}
+	if err := portopenbao.ValidateSealPlugins(cluster); err != nil {
+		return recon.Result{}, operatorerrors.WrapPermanentConfig(err)
 	}
 
 	decision := decideUpgrade(cluster)

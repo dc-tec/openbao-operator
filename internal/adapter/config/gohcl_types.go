@@ -73,9 +73,9 @@ type hclPlugin struct {
 	Image   *string `hcl:"image"`
 	Command *string `hcl:"command"`
 
-	Version    string `hcl:"version"`
-	BinaryName string `hcl:"binary_name"`
-	SHA256Sum  string `hcl:"sha256sum"`
+	Version    *string `hcl:"version"`
+	BinaryName *string `hcl:"binary_name"`
+	SHA256Sum  *string `hcl:"sha256sum"`
 
 	Args *[]string `hcl:"args"`
 	Env  *[]string `hcl:"env"`

@@ -193,11 +193,11 @@ api-reference: crd-ref-docs ## Generate CRD API reference docs from api/v1alpha1
 
 .PHONY: verify-openbao-config-compat
 verify-openbao-config-compat: ## Validate generated HCL fixtures against upstream OpenBao config parser (semantic).
-	@bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.5 2.6.3
+	@bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.5 2.6.3 2.7.0
 
 .PHONY: report-openbao-config-schema-drift
 report-openbao-config-schema-drift: ## Report upstream OpenBao config schema drift across the supported range (non-failing).
-	@REPORT_SCHEMA_DRIFT=true bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.5 2.6.3
+	@REPORT_SCHEMA_DRIFT=true bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.5 2.6.3 2.7.0
 
 .PHONY: report-openbao-operator-schema-drift
 report-openbao-operator-schema-drift: ## Report operator-vs-upstream OpenBao config schema drift (non-failing).
