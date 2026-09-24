@@ -547,7 +547,12 @@ jobs:
       - name: Run unit tests
         run: make test
 
-      - name: Verify policy authorization and repair against OpenBao
+      - name: Verify policy authorization and repair against OpenBao 2.6.3
+        run: make test-policy-reconciliation-openbao
+
+      - name: Verify policy authorization and repair against OpenBao 2.7.0
+        env:
+          POLICY_TEST_OPENBAO_IMAGE: openbao/openbao:2.7.0
         run: make test-policy-reconciliation-openbao
 
   test-integration:

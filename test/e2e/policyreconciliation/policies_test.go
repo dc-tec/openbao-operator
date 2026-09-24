@@ -117,7 +117,7 @@ func startOpenBao(t *testing.T) (string, string) {
 	t.Helper()
 	image := os.Getenv("POLICY_TEST_OPENBAO_IMAGE")
 	if image == "" {
-		image = "openbao/openbao:2.6.2"
+		image = "openbao/openbao:2.6.3"
 	}
 	root := uuid.NewString()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)

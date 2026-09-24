@@ -55,4 +55,5 @@ Continue with [CI routing]({{< relref "/contribute/ci.md" >}}).
 Run `make test-policy-reconciliation-openbao` with Docker available. The test starts a disposable OpenBao dev server
 on loopback and exercises the production policy client and reconciliation manager. It checks exact-content authorization,
 rejected extra parameters and legacy paths, deleted-policy repair, unchanged-policy writes, independent backup readiness,
-and retry cooldown. The Unit Tests CI job runs this check. Set `POLICY_TEST_OPENBAO_IMAGE` to test another OpenBao image.
+and retry cooldown. The Unit Tests CI job runs this check against OpenBao 2.6.3 and 2.7.0.
+The local command defaults to 2.6.3. Set `POLICY_TEST_OPENBAO_IMAGE` to test another OpenBao image.

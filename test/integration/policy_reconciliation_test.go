@@ -58,8 +58,8 @@ func (r policyRepairObserver) Reconcile(_ context.Context, _ logr.Logger, cluste
 
 func TestPolicyReconciliationStatus(t *testing.T) {
 	cluster := newMinimalClusterObj(newTestNamespace(t), "policy-reconciliation")
+	waitForOpenBaoClusterAdmissionPolicies(t, cluster.Namespace)
 	cluster.Spec.ReconcilePolicies = true
-	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{Enabled: true, OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}}
 	require.NoError(t, k8sClient.Create(ctx, cluster))
 	cluster.Status.Initialized = true
 	require.NoError(t, k8sClient.Status().Update(ctx, cluster))
@@ -124,6 +124,7 @@ func TestPolicyReconciliationStatus(t *testing.T) {
 
 func TestPolicyReconciliationWithoutSelfInit(t *testing.T) {
 	cluster := newMinimalClusterObj(newTestNamespace(t), "manual-policy-enrollment")
+	waitForOpenBaoClusterAdmissionPolicies(t, cluster.Namespace)
 	cluster.Spec.SelfInit = nil
 	cluster.Spec.ReconcilePolicies = true
 	require.NoError(t, k8sClient.Create(ctx, cluster))
@@ -143,9 +144,13 @@ func TestPolicyApproverReferenceValidation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cluster := newMinimalClusterObj(newTestNamespace(t), "approver-reference")
+			waitForOpenBaoClusterAdmissionPolicies(t, cluster.Namespace)
 			cluster.Spec.ReconcilePolicies = tc.reconcile
 			cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{Enabled: true,
-				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true, PolicyApproverRef: &tc.ref}}
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true, PolicyApproverRef: &tc.ref},
+				Requests: []openbaov1alpha1.SelfInitRequest{{
+					Name: "health", Operation: openbaov1alpha1.SelfInitOperationRead, Path: "sys/health",
+				}}}
 			err := k8sClient.Create(ctx, cluster)
 			if tc.valid {
 				require.NoError(t, err)
