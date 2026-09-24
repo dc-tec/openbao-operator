@@ -61,6 +61,7 @@ func TestApprovedPolicyRepair(t *testing.T) {
 		data       map[string]any
 	}{
 		{"unapproved contents", "sys/policies/acl/openbao-operator", map[string]any{"policy": `path "*" { capabilities = ["sudo"] }`}},
+		{"unapproved upgrade contents", "sys/policies/acl/openbao-operator-upgrade", map[string]any{"policy": `path "*" { capabilities = ["sudo"] }`}},
 		{"extra key", "sys/policies/acl/openbao-operator", map[string]any{"policy": configbuilder.OperatorPolicies(cluster)[0].Policy, "cas_required": false}},
 		{"legacy path", "sys/policy/openbao-operator", map[string]any{"policy": configbuilder.OperatorPolicies(cluster)[0].Policy}},
 		{"other policy", "sys/policies/acl/application", map[string]any{"policy": configbuilder.OperatorPolicies(cluster)[0].Policy}},
@@ -92,9 +93,41 @@ func TestApprovedPolicyRepair(t *testing.T) {
 		require.Equal(t, policy.Policy, *actual)
 	}
 
-	cluster.Spec.Upgrade = &api.UpgradeConfig{Strategy: "BlueGreen"}
+	approval := configbuilder.OperatorPolicyApproval(cluster)
+	for _, strategy := range []api.UpdateStrategyType{api.UpdateStrategyBlueGreen, api.UpdateStrategyRollingUpdate} {
+		cluster.Spec.Upgrade = &api.UpgradeConfig{Strategy: strategy}
+		require.Equal(t, approval, configbuilder.OperatorPolicyApproval(cluster))
+		require.Error(t, configuration.RequirePolicyReady(cluster, portauth.PolicyNameUpgrade), "new operations wait for the selected variant")
+		store.writes = 0
+		_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
+		require.NoError(t, err, "either strategy is approved without administrator intervention")
+		require.Equal(t, 1, store.writes, "a strategy change bypasses the successful verification interval")
+		require.NoError(t, configuration.RequirePolicyReady(cluster, portauth.PolicyNameUpgrade))
+		for _, policy := range configbuilder.OperatorPolicies(cluster) {
+			if policy.Name != portauth.PolicyNameUpgrade {
+				continue
+			}
+			actual, err := admin.ReadACLPolicy(t.Context(), policy.Name)
+			require.NoError(t, err)
+			require.NotNil(t, actual)
+			require.Equal(t, policy.Policy, *actual, "install only the selected strategy's permissions")
+			status, _ := request(t, address, issued.Auth.Token, http.MethodPut, "sys/policies/acl/"+policy.Name,
+				map[string]any{"policy": policy.Policy + "\n"})
+			require.Equal(t, http.StatusForbidden, status, "approval still requires exact contents")
+		}
+		code, _ = request(t, address, root, http.MethodDelete, "sys/policies/acl/"+portauth.PolicyNameUpgrade, nil)
+		require.Equal(t, http.StatusNoContent, code)
+		cluster.Status.Workload.PolicyReconciliation.LastVerified.Time = time.Now().Add(-6 * time.Minute)
+		_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
+		require.NoError(t, err)
+		require.Equal(t, 2, store.writes, "either approved variant can be recreated after deletion")
+	}
+
+	code, _ = request(t, address, root, http.MethodDelete, "sys/policies/acl/"+portauth.PolicyNameApproval, nil)
+	require.Equal(t, http.StatusNoContent, code)
+	cluster.Spec.Upgrade = &api.UpgradeConfig{Strategy: api.UpdateStrategyBlueGreen}
 	result, err := manager.Reconcile(t.Context(), logr.Discard(), cluster)
-	require.Error(t, err, "old approval cannot authorize changed upgrade permissions")
+	require.Error(t, err, "revoked approval cannot authorize changed upgrade permissions")
 	require.Equal(t, 5*time.Minute, result.RequeueAfter)
 	require.Error(t, configuration.RequirePolicyReady(cluster, portauth.PolicyNameUpgrade))
 	require.NoError(t, configuration.RequirePolicyReady(cluster, portauth.PolicyNameBackup))

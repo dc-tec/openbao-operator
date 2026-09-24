@@ -237,6 +237,9 @@ func buildReleaseIndex(cfg args) (map[string]any, error) {
 	releaseFiles := make([]string, 0, 4+len(sboms))
 	releaseFiles = append(releaseFiles, cfg.installPath, cfg.crdsPath, cfg.checksumsPath, cfg.checksumsBundlePath)
 	releaseFiles = append(releaseFiles, sboms...)
+	for _, name := range []string{"operator-policy-approval.hcl", "operator-policy-approval-with-backup.hcl"} {
+		releaseFiles = append(releaseFiles, filepath.Join(filepath.Dir(cfg.checksumsPath), name))
+	}
 
 	checksumsSubjects, err := parseChecksumsFile(cfg.checksumsPath)
 	if err != nil {

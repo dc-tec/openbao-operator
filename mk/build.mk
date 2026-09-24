@@ -141,3 +141,7 @@ build-crds: manifests kustomize ## Generate a consolidated YAML containing CRDs 
 	@mkdir -p dist; \
 	out="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
 	if [ -n "$$out" ]; then echo "$$out" > dist/crds.yaml; else echo "No CRDs to export; skipping."; fi
+
+.PHONY: build-policy-approvals
+build-policy-approvals: ## Generate both release policy approval files from the built-in policies.
+	go run ./hack/tools/operator_policy_approval --output-dir dist

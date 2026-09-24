@@ -32,11 +32,17 @@ const policyVerificationInterval = 5 * time.Minute
 
 // PolicyRevision identifies the desired bundle, including its exact contents.
 func PolicyRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return policyDigest(configbuilder.OperatorPolicyApproval(policyConfiguration(cluster)))
+	// Approval permits both upgrade strategies, but verification must track the
+	// contents currently required by the workload, including an active upgrade.
+	hash := sha256.New()
+	for _, policy := range configbuilder.OperatorPolicies(policyConfiguration(cluster)) {
+		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00", policy.Name, policy.Policy)
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil))
 }
 
 // policyConfiguration retains the strategy permissions needed by an unfinished
-// upgrade. Administrator approval artifacts still describe the requested spec.
+// upgrade. Administrator approval permits both supported strategies.
 func policyConfiguration(cluster *openbaov1alpha1.OpenBaoCluster) *openbaov1alpha1.OpenBaoCluster {
 	upgradeActive := cluster.Status.Upgrade != nil ||
 		(cluster.Status.OperationLock != nil && cluster.Status.OperationLock.Operation == openbaov1alpha1.ClusterOperationUpgrade) ||

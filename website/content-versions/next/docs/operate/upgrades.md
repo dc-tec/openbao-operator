@@ -75,8 +75,13 @@ kubectl -n <namespace> get openbaocluster <name> \
 {{< /command >}}
 
 Before switching to `BlueGreen`, configure `spec.upgrade.jwtAuthRole` or use the default
-`openbao-operator-upgrade` role created by self-init OIDC bootstrap. A role created for a rolling-only cluster might
-need its policy expanded before the switch; self-init requests are not replayed later.
+`openbao-operator-upgrade` role created by self-init OIDC bootstrap. Without policy reconciliation, a role created for
+a rolling-only cluster might need its policy expanded before the switch; self-init requests are not replayed later.
+
+With [approved policy reconciliation](../operator-policies/), enrollment approves both supported strategies. The operator
+updates the built-in upgrade policy after a strategy change, without another approval. Wait for
+`PolicyReconciliationReady=True` as well as strategy acceptance before requesting the version change. Custom policies
+attached to a custom upgrade role remain administrator-managed.
 
 ## Request the version change
 

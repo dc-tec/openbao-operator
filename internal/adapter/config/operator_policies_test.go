@@ -38,10 +38,22 @@ func TestOperatorPolicyApproval(t *testing.T) {
 				require.NotContains(t, rule.Name, "custom-")
 				require.Equal(t, []string{"read", "update"}, rule.Capabilities)
 				require.Empty(t, rule.Required, "parameterless policy reads must be allowed")
-				require.Equal(t, map[string][]string{"policy": {policy.Policy}}, rule.Allowed)
+				contents := []string{policy.Policy}
+				if policy.Name == portauth.PolicyNameUpgrade {
+					contents = []string{jwtPolicyUpgradeRolling, jwtPolicyUpgradeBlueGreen}
+				}
+				require.Equal(t, map[string][]string{"policy": contents}, rule.Allowed)
 			}
 		})
 	}
+}
+
+func TestApprovalDoesNotChangeWithUpgradeStrategy(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	rolling := OperatorPolicyApproval(cluster)
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{Strategy: openbaov1alpha1.UpdateStrategyBlueGreen}
+	require.Equal(t, rolling, OperatorPolicyApproval(cluster))
+	require.NotContains(t, rolling, "sys/policies/acl/openbao-operator-backup")
 }
 
 func TestPolicyApprovalBootstrapIsOptIn(t *testing.T) {

@@ -58,7 +58,7 @@ Operator lifecycle access and human login are different contracts:
 
 - `spec.selfInit.oidc.enabled` bootstraps projected-JWT authentication for the controller and lifecycle Jobs.
 - `spec.selfInit.requests` must create at least one usable human authentication path before the root token is revoked.
-- Later OpenBao permission changes require administrator approval. [Approved policy reconciliation](../../operate/operator-policies/) can restore built-in policy contents after self-init.
+- Existing clusters own later OpenBao policy changes; self-init does not continuously reconcile them.
 
 Review [operator authentication](../operator-authentication/) and [operator authorization](../operator-authorization/)
 before a production bootstrap or any custom controller identity.

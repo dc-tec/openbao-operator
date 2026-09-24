@@ -68,8 +68,9 @@ Add at least one human authentication method and its usable role or policy to `s
 operator can maintain the cluster while people remain permanently locked out.
 {{< /callout >}}
 
-Self-init is one-shot. The operator uses the generated auth surface after initialization but does not continuously
-reconcile OpenBao policies. A human administrator must apply later policy changes required by an operator upgrade.
+Self-init is one-shot. Later policy changes require administrator action. Optional
+[approved policy reconciliation](../../operate/operator-policies/) can restore built-in policy contents within an
+administrator-approved grant. Auth methods and JWT roles remain administrator-managed after initialization.
 
 ## Configure a manual controller role
 

@@ -54,6 +54,12 @@ Continue with [CI routing]({{< relref "/contribute/ci.md" >}}).
 
 Run `make test-policy-reconciliation-openbao` with Docker available. The test starts a disposable OpenBao dev server
 on loopback and exercises the production policy client and reconciliation manager. It checks exact-content authorization,
-rejected extra parameters and legacy paths, deleted-policy repair, unchanged-policy writes, independent backup readiness,
-and retry cooldown. The Unit Tests CI job runs this check against OpenBao 2.6.3 and 2.7.0.
+rejected extra parameters and legacy paths, deleted-policy repair, unchanged-policy writes, switching upgrade strategies
+under one approval, independent backup readiness, and retry cooldown after revocation.
+The Unit Tests CI job runs this check against OpenBao 2.6.3 and 2.7.0.
 The local command defaults to 2.6.3. Set `POLICY_TEST_OPENBAO_IMAGE` to test another OpenBao image.
+
+Run `make build-policy-approvals` to generate both release approval files in `dist/`. The generator uses the same policy
+definitions as bootstrap and runtime reconciliation. For a specific manifest, run
+`go run ./hack/tools/operator_policy_approval --cluster cluster.yaml`. Operators use the release assets instead of
+building these tools.

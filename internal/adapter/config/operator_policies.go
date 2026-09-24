@@ -29,16 +29,21 @@ func OperatorPolicies(cluster *openbaov1alpha1.OpenBaoCluster) []OperatorPolicy 
 }
 
 // OperatorPolicyApproval renders an ACL that permits only the exact policy
-// contents for this cluster. Runtime reconciliation must never write this ACL.
+// contents for this cluster, including both supported upgrade strategies.
+// Runtime reconciliation must never write this ACL.
 func OperatorPolicyApproval(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	file := hclwrite.NewEmptyFile()
 	for _, policy := range OperatorPolicies(cluster) {
+		contents := []cty.Value{cty.StringVal(policy.Policy)}
+		if policy.Name == portauth.PolicyNameUpgrade {
+			contents = []cty.Value{cty.StringVal(jwtPolicyUpgradeRolling), cty.StringVal(jwtPolicyUpgradeBlueGreen)}
+		}
 		body := file.Body().AppendNewBlock("path", []string{pathSysPoliciesACLPrefix + policy.Name}).Body()
 		body.SetAttributeValue("capabilities", cty.ListVal([]cty.Value{cty.StringVal("read"), cty.StringVal("update")}))
 		// required_parameters would also block parameterless reads. The policy
 		// endpoint rejects missing contents; allowed_parameters restricts writes.
 		body.SetAttributeValue("allowed_parameters", cty.ObjectVal(map[string]cty.Value{
-			"policy": cty.ListVal([]cty.Value{cty.StringVal(policy.Policy)}),
+			"policy": cty.ListVal(contents),
 		}))
 	}
 	return string(file.Bytes())

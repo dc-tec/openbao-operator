@@ -226,12 +226,12 @@ func TestPolicyReconciliationDuringStrategyChange(t *testing.T) {
 			_, err := manager.Reconcile(t.Context(), logr.Discard(), cluster)
 			require.NoError(t, err)
 			activeRevision := cluster.Status.Workload.PolicyRevision
+			approval := configbuilder.OperatorPolicyApproval(cluster)
 			activePolicy := store.values[portauth.PolicyNameUpgrade]
 			require.Contains(t, activePolicy, "sys/storage/raft/remove-peer")
 
 			cluster.Spec.Upgrade.Strategy = openbaov1alpha1.UpdateStrategyRollingUpdate
-			requestedApproval := configbuilder.OperatorPolicyApproval(cluster)
-			require.NotContains(t, requestedApproval, "sys/storage/raft/promote", "administrator artifacts follow the request")
+			require.Equal(t, approval, configbuilder.OperatorPolicyApproval(cluster), "strategy changes need no new approval")
 			store.writes = nil
 			_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
 			require.NoError(t, err)

@@ -4,6 +4,8 @@ description: Verify managed container images, pin successful results by digest, 
 eyebrow: Security · Workload
 weight: 6
 verifiedBy:
+  - .github/workflows/release.yml
+  - hack/tools/operator_policy_approval/main.go
   - api/v1alpha1/openbaocluster_configuration_types.go
   - config/policy/openbao-enforce-managed-image-digests.yaml
   - config/policy/openbao-validate-openbaocluster.yaml
@@ -70,6 +72,30 @@ controller to resolve and verify a private image. In multi-tenant mode, the cont
 access only to the verification Secrets referenced in active tenant resources.
 
 See [Use private registries](../../configure/air-gapped/) before promoting images into a disconnected environment.
+
+## Verify policy approval files
+
+Release approval files are generated from the operator's built-in policy definitions. The release workflow checks
+their byte reproducibility and includes both files in its signed `checksums.txt` and provenance index.
+
+Use the GitHub CLI, Cosign, and `sha256sum` to download and verify the selected file. Set `OPERATOR_VERSION` to the
+intended release tag, such as `X.Y.Z`, and select the file for your backup configuration. Run in an empty directory.
+
+```sh
+OPERATOR_VERSION='<operator-release-tag>'
+APPROVAL_FILE='operator-policy-approval-with-backup.hcl'
+gh release download "$OPERATOR_VERSION" --repo dc-tec/openbao-operator \
+  --pattern "$APPROVAL_FILE" --pattern checksums.txt --pattern checksums.txt.bundle
+cosign verify-blob --new-bundle-format=true \
+  --bundle checksums.txt.bundle \
+  --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/$OPERATOR_VERSION" \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' checksums.txt
+awk -v name="$APPROVAL_FILE" '$2 == name' checksums.txt | sha256sum --check -
+```
+
+Require successful signature verification and an `OK` checksum result before reviewing and applying the file.
+Verification establishes the publisher and file integrity; an OpenBao administrator still reviews and approves the
+capabilities. See [policy enrollment](../../operate/operator-policies/#get-an-approval-file).
 
 ## Know what is not verified here
 

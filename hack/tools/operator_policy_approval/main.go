@@ -1,5 +1,5 @@
-// Command operator_policy_approval renders the independent OpenBao approval
-// policy for a reviewed cluster manifest and this operator source revision.
+// Command operator_policy_approval renders administrator approval from the
+// built-in policies for a cluster manifest or the two release configurations.
 package main
 
 import (
@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"sigs.k8s.io/yaml"
 
@@ -16,16 +17,23 @@ import (
 
 func main() {
 	manifest := flag.String("cluster", "", "Path to one OpenBaoCluster YAML manifest")
+	outputDir := flag.String("output-dir", "", "Write both release approval files instead of reading a manifest")
 	flag.Parse()
-	if err := run(*manifest, os.Stdout); err != nil {
+	if err := run(*manifest, *outputDir, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(path string, output io.Writer) error {
+func run(path, outputDir string, output io.Writer) error {
+	if outputDir != "" {
+		if path != "" {
+			return fmt.Errorf("--cluster and --output-dir are mutually exclusive")
+		}
+		return writeReleasePolicies(outputDir)
+	}
 	if path == "" {
-		return fmt.Errorf("--cluster is required")
+		return fmt.Errorf("--cluster or --output-dir is required")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -40,4 +48,19 @@ func run(path string, output io.Writer) error {
 	}
 	_, err = fmt.Fprint(output, configbuilder.OperatorPolicyApproval(&cluster))
 	return err
+}
+
+func writeReleasePolicies(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	for _, name := range []string{"operator-policy-approval.hcl", "operator-policy-approval-with-backup.hcl"} {
+		contents := []byte(configbuilder.OperatorPolicyApproval(cluster))
+		if err := os.WriteFile(filepath.Join(dir, name), contents, 0o644); err != nil {
+			return err
+		}
+		cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{}
+	}
+	return nil
 }
