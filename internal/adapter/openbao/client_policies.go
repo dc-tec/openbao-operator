@@ -11,6 +11,45 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
+// ReadACLPolicy returns the exact stored contents, or nil when the policy is missing.
+func (c *Client) ReadACLPolicy(ctx context.Context, name string) (*string, error) {
+	if err := c.requireAuth("ACL policy read"); err != nil {
+		return nil, err
+	}
+	if name == "" || strings.ContainsAny(name, "/?#%") {
+		return nil, fmt.Errorf("a policy name without path delimiters is required")
+	}
+	req, err := c.newRequest(ctx, http.MethodGet, "/v1/sys/policies/acl/"+name, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.authorize(req); err != nil {
+		return nil, err
+	}
+	status, response, err := c.doAndReadAll(req, nil, "read ACL policy")
+	if err != nil {
+		return nil, err
+	}
+	if status == http.StatusNotFound {
+		return nil, nil
+	}
+	if status != http.StatusOK {
+		return nil, portopenbao.NewAPIError("read ACL policy", status, response)
+	}
+	var envelope struct {
+		Data struct {
+			Policy *string `json:"policy"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response, &envelope); err != nil {
+		return nil, fmt.Errorf("decode ACL policy: %w", err)
+	}
+	if envelope.Data.Policy == nil {
+		return nil, fmt.Errorf("ACL policy response is missing policy contents")
+	}
+	return envelope.Data.Policy, nil
+}
+
 // WriteACLPolicy sends only the policy parameter so OpenBao can restrict its
 // exact value with allowed_parameters in a separate approval policy.
 func (c *Client) WriteACLPolicy(ctx context.Context, name, policy string) error {

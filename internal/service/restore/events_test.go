@@ -131,11 +131,12 @@ func TestHandlePending_EmitsValidationStartedEvent(t *testing.T) {
 	expectEventContains(t, recorder, "Normal", ReasonRestoreValidationStarted)
 }
 
-func TestCreateRestoreJob_EmitsJobCreatedEvent(t *testing.T) {
+func TestCreateRestoreJob_WithoutPolicyReadiness(t *testing.T) {
 	t.Parallel()
 
 	scheme := newRestoreEventScheme(t)
 	cluster := newRestoreEventCluster()
+	cluster.Spec.ReconcilePolicies = true // Recovery must work without policy reconciliation status.
 	restore := newRestoreEventResource()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
 	restore.Status.Execution = newRestoreExecutionStatus(restore)

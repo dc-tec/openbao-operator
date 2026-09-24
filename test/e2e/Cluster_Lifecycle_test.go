@@ -99,11 +99,11 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 						Enabled: true,
 						Image:   configInitImage,
 					},
+					ReconcilePolicies: true,
 					SelfInit: &openbaov1alpha1.SelfInitConfig{
 						Enabled: true,
 						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
-							Enabled:           true,
-							ReconcilePolicies: true,
+							Enabled: true,
 						},
 						Requests: append(
 							framework.DefaultAdminSelfInitRequests(),

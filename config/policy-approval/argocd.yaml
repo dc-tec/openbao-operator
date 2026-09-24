@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: example-policy
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/dc-tec/openbao-operator.git
+    targetRevision: REPLACE_WITH_REVIEWED_COMMIT
+    path: charts/openbao-policy-approval
+    helm:
+      releaseName: example-policy
+      valuesObject:
+        gitops: argocd
+        cluster:
+          name: example
+          namespace: bao
+        tls:
+          caConfigMapName: bao-ca
+        # Add image and approval.from/to for a later approval request.
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openbao-admin
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

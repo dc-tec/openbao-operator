@@ -175,12 +175,18 @@ resources:
         omission: generated JWT roles bind only their default local ServiceAccount subjects
         enforcement: [crd-schema, controller]
         rationale: Recovery-target identity bindings are additive and role-scoped; cross-control-plane JWT trust remains a separate configuration contract.
-      - path: spec.selfInit.oidc.reconcilePolicies
+      - path: spec.reconcilePolicies
         classification: additive-unfrozen
         owner: bootstrap-security
         omission: built-in operational policies are not reconciled after initialization
         enforcement: [crd-schema, controller]
         rationale: Opt-in ownership of fixed policies with exact contents approved independently in OpenBao; approval policies and auth configuration remain administrator-owned.
+      - path: spec.selfInit.oidc.policyApproverRef
+        classification: additive-unfrozen
+        owner: bootstrap-security
+        omission: no administrative policy approver is enrolled
+        enforcement: [crd-schema, controller]
+        rationale: Bootstrap-only binding of an administrator-managed ServiceAccount; the runtime operator does not own this identity or reconcile its approval authority.
       - path: spec.service
         classification: beta-stable
         owner: networking

@@ -147,7 +147,7 @@ jobs:
             grep -qE -f "$1" <<< "${changed}"
           }
 
-          if changed_matches '^(charts/openbao-operator/|config/(crd|policy|rbac)/|hack/helm(chart|values)/|hack/tools/edge_chart/|hack/ci/(test-edge-chart|test-publish-edge-chart|publish-edge-chart|helm-e2e-smoke)\.sh$|hack/dev/tool-versions\.env$)'; then
+          if changed_matches '^(charts/(openbao-operator|openbao-policy-approval)/|config/(crd|policy|policy-approval|rbac)/|test/manifests/policyapproval/|hack/helm(chart|values)/|hack/tools/(edge_chart|operator_policy_approval)/|hack/ci/(test-edge-chart|test-publish-edge-chart|publish-edge-chart|helm-e2e-smoke)\.sh$|hack/dev/tool-versions\.env$)'; then
             echo "chart=true" >> "${GITHUB_OUTPUT}"
           else
             echo "chart=false" >> "${GITHUB_OUTPUT}"
@@ -547,6 +547,9 @@ jobs:
       - name: Run unit tests
         run: make test
 
+      - name: Verify policy authorization and repair against OpenBao
+        run: make test-policy-reconciliation-openbao
+
   test-integration:
     name: Envtest Integration
     needs: changes
@@ -648,6 +651,11 @@ jobs:
 
       - name: Setup Helm
         uses: ./.github/actions/setup-helm
+
+      - name: Verify optional policy approval chart
+        run: |
+          helm lint charts/openbao-policy-approval --set cluster.name=example,cluster.namespace=bao
+          make test-policy-approval-chart
 
       - name: Lint
         run: helm lint charts/openbao-operator --namespace openbao-operator-system

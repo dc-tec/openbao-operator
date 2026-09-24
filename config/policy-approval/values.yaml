@@ -1,0 +1,11 @@
+cluster:
+  name: example
+  namespace: bao
+tls:
+  caConfigMapName: bao-ca
+# Set a full operator image digest containing /policy-approval before requesting a change.
+image: ""
+# Initial setup needs no Job. For a later permission change, add:
+# approval:
+#   from: v1/rolling-update
+#   to: v1/blue-green

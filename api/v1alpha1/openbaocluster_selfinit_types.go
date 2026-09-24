@@ -41,7 +41,6 @@ const (
 // When enabled, OpenBao initializes itself on first start using the configured
 // requests, and the root token is automatically revoked.
 // See: https://openbao.org/docs/configuration/self-init/
-// +kubebuilder:validation:XValidation:rule="!has(self.oidc) || !has(self.oidc.reconcilePolicies) || !self.oidc.reconcilePolicies || self.enabled",message="policy reconciliation requires selfInit.enabled=true"
 type SelfInitConfig struct {
 	// Enabled activates OpenBao's self-initialization feature.
 	// When true, the Operator injects initialize stanzas into config.hcl
@@ -276,18 +275,18 @@ type SelfInitPolicy struct {
 
 // SelfInitOIDCConfig configures OIDC identity for the cluster.
 // +kubebuilder:validation:XValidation:rule="!has(self.additionalSubjects) || self.enabled",message="spec.selfInit.oidc.additionalSubjects requires spec.selfInit.oidc.enabled=true"
-// +kubebuilder:validation:XValidation:rule="!has(self.reconcilePolicies) || !self.reconcilePolicies || self.enabled",message="policy reconciliation requires oidc.enabled=true"
 type SelfInitOIDCConfig struct {
 	// Enabled triggers the bootstrap logic.
 	Enabled bool `json:"enabled"`
 
-	// ReconcilePolicies restores the built-in operational policies after initialization.
-	// OpenBao must independently approve their exact contents through the
-	// openbao-operator-policy-approval policy. Bootstrap installs the initial approval;
-	// existing clusters and later permission changes require administrator approval.
-	// Auth methods, roles, and the approval policy are not reconciled.
+	// PolicyApproverRef enrolls a separate administrative ServiceAccount during
+	// initial bootstrap. Its JWT role can update the operator policy approval.
+	// The referenced namespace must be outside the runtime operator's write
+	// permissions. The operator does not create this ServiceAccount or reconcile
+	// its OpenBao role after initialization. Changing this reference on an existing
+	// cluster requires administrator enrollment in OpenBao.
 	// +optional
-	ReconcilePolicies bool `json:"reconcilePolicies,omitempty"`
+	PolicyApproverRef *PolicyApproverReference `json:"policyApproverRef,omitempty"`
 
 	// Audience, if set, must match the operator installation audience used for
 	// projected OpenBao auth tokens.
@@ -311,6 +310,21 @@ type SelfInitOIDCConfig struct {
 	// trust the target's projected ServiceAccount tokens.
 	// +optional
 	AdditionalSubjects *SelfInitOIDCAdditionalSubjects `json:"additionalSubjects,omitempty"`
+}
+
+// PolicyApproverReference identifies the administrator-managed Kubernetes identity
+// authorized to approve changes to the operator's OpenBao policies.
+type PolicyApproverReference struct {
+	// Namespace contains the administrative ServiceAccount.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	Namespace string `json:"namespace"`
+	// Name identifies the administrative ServiceAccount.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	Name string `json:"name"`
 }
 
 // KubernetesServiceAccountSubject is the exact subject claim in a projected

@@ -1,0 +1,37 @@
+# Install in an administration namespace outside the runtime operator's write permissions.
+cluster:
+  name: ""
+  namespace: ""
+  # Defaults to https://<name>.<namespace>.svc:8200.
+  address: ""
+
+serviceAccount:
+  create: true
+  # Defaults to <release-name>-approver. Match policyApproverRef in the cluster.
+  name: ""
+
+# Full digest-pinned operator image containing /policy-approval. Required only for a Job.
+image: ""
+
+tls:
+  # Empty uses the address hostname.
+  serverName: ""
+  # Supply public CA PEM or an existing ConfigMap in the administration namespace.
+  # Leave both empty to use system trust. Never mount a server private key.
+  caBundle: ""
+  caConfigMapName: ""
+  caConfigMapKey: ca.crt
+
+networkPolicy:
+  enabled: true
+
+# plain works with Flux and helm template. argocd adds Sync waves and Job hook annotations.
+gitops: plain
+
+approval:
+  # Leave both empty for initial setup: only the ServiceAccount and network rule are installed.
+  # For a change, select immutable bundle IDs, for example v1/rolling-update -> v1/blue-green.
+  from: ""
+  to: ""
+  # Change only for a deliberate rerun of the same request, such as after fixing connectivity.
+  retry: ""

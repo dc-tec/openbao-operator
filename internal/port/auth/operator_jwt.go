@@ -23,7 +23,14 @@ const (
 	PolicyNameUpgrade  = "openbao-operator-upgrade"
 	PolicyNameRestore  = "openbao-operator-restore"
 	PolicyNameApproval = "openbao-operator-policy-approval"
+	// PolicyApproverName is both the role and policy name for the independent approver.
+	PolicyApproverName = "openbao-operator-policy-approver"
 )
+
+// PolicyApproverAudience binds an approval token to one OpenBao target.
+func PolicyApproverAudience(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return "openbao-policy-approval:" + cluster.Namespace + ":" + cluster.Name
+}
 
 // OperatorJWTBootstrapEnabled reports whether the cluster is configured to let
 // the operator bootstrap JWT auth and the default executor roles through
@@ -39,7 +46,7 @@ func OperatorJWTBootstrapEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 // PolicyReconciliationEnabled reports whether the cluster opts into ownership
 // of the built-in operational policies.
 func PolicyReconciliationEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	return OperatorJWTBootstrapEnabled(cluster) && cluster.Spec.SelfInit.OIDC.ReconcilePolicies
+	return cluster != nil && cluster.Spec.ReconcilePolicies
 }
 
 // EffectiveJWTRole returns the configured role or a default when operator JWT

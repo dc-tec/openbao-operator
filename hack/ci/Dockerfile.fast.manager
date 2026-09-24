@@ -11,6 +11,7 @@ ARG BINARY
 ARG TARGET
 
 COPY ${BINARY} ${TARGET}
+COPY bin/linux_amd64/policy-approval /policy-approval
 
 USER 65532:65532
 ENTRYPOINT ["/manager"]

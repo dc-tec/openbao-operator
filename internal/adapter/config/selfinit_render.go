@@ -33,6 +33,9 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 	if err := validateInitialRecoveryKeysConfiguration(cluster); err != nil {
 		return nil, err
 	}
+	if err := validatePolicyApprover(cluster, bootstrapConfig); err != nil {
+		return nil, err
+	}
 
 	// If bootstrap config provided, render it first
 	if bootstrapConfig != nil {

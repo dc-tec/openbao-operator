@@ -8,20 +8,17 @@ verifiedBy:
   - test/integration/policy_reconciliation_test.go
 ---
 
-Set `spec.selfInit.oidc.reconcilePolicies: true` to let the operator restore its built-in operational policies.
-The feature is disabled by default and requires self-init with OIDC enabled.
+Set `spec.reconcilePolicies: true` to let the operator restore its built-in operational policies.
+The feature is disabled by default. It requires an administrator-enrolled controller JWT role and exact-content approval.
+It also works on clusters initialized without self-init.
 
 ```yaml
 spec:
-  selfInit:
-    enabled: true
-    oidc:
-      enabled: true
-      reconcilePolicies: true
+  reconcilePolicies: true
 ```
 
-This example shows only the relevant fields. Keep your human authentication configuration in
-`spec.selfInit.requests`; operator authentication does not provide administrator access.
+On new clusters, enable `selfInit.enabled` and `selfInit.oidc.enabled` to bootstrap the controller role and initial
+approval. Keep your human administrator authentication configuration; operator authentication does not provide administrator access.
 
 ## Ownership and approval
 
@@ -29,16 +26,23 @@ The operator owns the contents of `openbao-operator`, `openbao-operator-upgrade`
 It also owns `openbao-operator-backup` when backup is configured. Enabling this feature overwrites custom edits to
 these policies. Custom JWT role names do not add other policies to this set.
 
-A separate policy, `openbao-operator-policy-approval`, permits writes to these fixed names with exact approved
-contents. OpenBao checks the request's `policy` parameter. The controller cannot update this approval policy,
+A separate policy, `openbao-operator-policy-approval`, permits reading these fixed names and writing exact approved
+contents. OpenBao checks the write request's `policy` parameter. The controller cannot update this approval policy,
 change JWT roles, or repair an auth method through this grant. Keep other policies attached to the controller role
 free of broader policy-write permissions; another grant can defeat this restriction.
 
-New clusters install the initial approval during trusted self-initialization and attach it only to the controller
+New clusters with OIDC bootstrap install the initial approval during trusted self-initialization and attach it only to the controller
 role. Existing clusters require administrator enrollment. Later permission changes require a new approval, including
 changes from RollingUpdate to BlueGreen and policy changes introduced by an operator release.
 
+For Kubernetes GitOps, [configure an independent approver]({{< relref "/docs/operate/gitops-policy-approval.md" >}})
+with `policyApproverRef` before initialization. Bootstrap enrolls it automatically; later approvals select versioned bundles.
+
 ## Enroll an existing cluster or approve a change
+
+For a manually initialized cluster, first configure the `jwt-operator` auth mount to trust the operator installation's
+projected Kubernetes ServiceAccount token, and enroll its `openbao-operator` role with the correct subject and audience.
+Policy reconciliation does not create or repair this authentication configuration.
 
 1. Check out the source revision that matches the intended operator release. Save the intended `OpenBaoCluster`
    manifest as `cluster.yaml`.
@@ -63,24 +67,46 @@ changes from RollingUpdate to BlueGreen and policy changes introduced by an oper
 6. Enable `reconcilePolicies` and deploy the intended operator configuration. With standard JWT authentication,
    existing cached tokens might not include the new policy until they expire. Restart the controller to obtain new
    tokens if needed. Inline JWT authentication uses the updated role on its next request.
-7. Verify that `status.workload.policyRevision` is populated and `status.workload.lastError` is absent.
+7. Verify that `status.workload.policyRevision` is populated and `status.workload.policyReconciliation.lastError` is absent.
 
 Replace old approval contents rather than retaining multiple accepted versions. Every retained version remains
 available to the controller, including versions with permissions you intended to remove. An administrator can apply
 these artifacts through an existing fleet configuration workflow; approval does not depend on Kubernetes status.
 
+For Kubernetes GitOps fleets, use the optional
+[policy approval Job]({{< relref "/docs/operate/gitops-policy-approval.md" >}}) with a separate administrative identity.
+After that Job writes an approval, the policy requires compare-and-set (CAS). For a later manual update, read the
+current version and supply it with the reviewed policy:
+
+```sh
+bao read -field=version sys/policies/acl/openbao-operator-policy-approval
+bao write sys/policies/acl/openbao-operator-policy-approval \
+  policy=@policy-approval.hcl cas=REPLACE_WITH_VERSION cas_required=true
+```
+
+If the CAS check fails, read and review the current approval before retrying.
+
 ## Recovery behavior
 
-The workload controller reapplies the bundle during reconciliation and periodic refreshes. It can recreate a deleted
-operational policy while the approval policy and controller authentication still work. Writes are sequential. The
-operator records `policyRevision` only after the complete bundle succeeds and clears it after a failed write.
-New backup, upgrade, and restore operations wait for the intended revision. Running Jobs can finish and release
-their operation locks. Kubernetes status records progress; OpenBao ACLs enforce authorization.
+The workload controller reads each policy during reconciliation and periodic refreshes, approximately once per minute
+by default. It writes only missing or changed contents. A failed policy does not stop checks and repairs for the others,
+infrastructure reconciliation, or Autopilot configuration.
 
-`PolicyReconciliationFailed` in `status.workload.lastError` identifies an unsuccessful attempt. Check the underlying
-connection or permission error. An administrator must restore a missing approval policy, JWT role, or auth method.
-The controller does not fall back to a root token. Adding backup after initialization can also require administrator
-creation of the backup role; policy reconciliation does not create roles.
+`status.workload.policyReconciliation.revisions` records each policy's last verified digest. A missing or changed policy
+loses its entry until repaired. A failed read preserves the previous observation. OpenBao authorizes every operation;
+these observations do not grant access. New backup and upgrade operations check only their own policy. Running operations
+can finish and release their locks. Restore never waits for policy reconciliation; its configured OpenBao credentials must
+still authorize the restore.
+
+`status.workload.policyRevision` retains the last completely verified bundle. It is informational and does not gate operations.
+`status.workload.policyReconciliation.lastError` reports policy failures separately from other workload errors.
+Forbidden requests (403) and missing auth or write endpoints (404) retry after five minutes. Other failures retry after
+30 seconds. Unrelated reconciles respect `retryAfter`; a desired bundle change triggers a new attempt. A missing ACL policy
+on read is repaired immediately when approved.
+
+An administrator must restore a missing approval policy, JWT role, or auth method. The controller does not fall back to a
+root token. Adding backup after initialization can also require administrator creation of the backup role; policy
+reconciliation does not create roles.
 
 A restored snapshot can contain older approvals and auth configuration. Reapprove the intended bundle after recovery
 when needed. Removing a feature does not delete its old policy or role; retire these through administrator configuration.
@@ -88,7 +114,8 @@ when needed. Removing a feature does not delete its old policy or role; retire t
 ## Revoke policy management
 
 Delete `openbao-operator-policy-approval` in OpenBao and remove it from the controller role. Set
-`reconcilePolicies: false` to stop normal reconciliation attempts. Disabling the Kubernetes field alone does not revoke
+`spec.reconcilePolicies: false` to stop normal reconciliation attempts. Remove `policyApproverRef` from the bootstrap
+configuration if present; its validation requires reconciliation to be enabled. Disabling the Kubernetes field alone does not revoke
 permissions already granted in OpenBao. Revoking policy management does not revoke the controller's operational policy
 or lifecycle identities; revoke those separately if required.
 

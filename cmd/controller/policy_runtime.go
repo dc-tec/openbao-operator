@@ -21,7 +21,7 @@ func operatorPolicyClientFactory(
 	clientset kubernetes.Interface,
 	manager *openbao.ClientManager,
 ) configuration.PolicyClientFactory {
-	return func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (portopenbao.PolicyWriter, error) {
+	return func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (portopenbao.PolicyClient, error) {
 		trust, err := openbaotls.ReadClientTrustBundle(ctx, clientset, cluster)
 		if err != nil {
 			return nil, err

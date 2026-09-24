@@ -62,15 +62,38 @@ type ControllerErrorStatus struct {
 
 // WorkloadControllerStatus holds status owned by the workload controller.
 type WorkloadControllerStatus struct {
-	// PolicyRevision identifies the last complete built-in policy bundle written
-	// successfully. This records reconciliation progress, not authorization.
+	// PolicyRevision identifies the last complete built-in policy bundle verified
+	// or repaired successfully. This records reconciliation progress, not authorization.
 	// +optional
 	PolicyRevision string `json:"policyRevision,omitempty"`
+
+	// PolicyReconciliation records individual policy observations and retry scheduling.
+	// +optional
+	PolicyReconciliation *PolicyReconciliationStatus `json:"policyReconciliation,omitempty"`
 
 	// LastError is the last workload-controller error observed for this cluster.
 	// +optional
 	// +nullable
 	// +kubebuilder:validation:Nullable
+	LastError *ControllerErrorStatus `json:"lastError,omitempty"`
+}
+
+// PolicyReconciliationStatus records progress without granting OpenBao permissions.
+type PolicyReconciliationStatus struct {
+	// Revisions contains the last verified content digest for each built-in policy.
+	// An observed missing or different policy removes its entry until repaired.
+	// Failed reads retain the last observation; OpenBao still authorizes every operation.
+	// +optional
+	Revisions map[string]string `json:"revisions,omitempty"`
+	// AttemptedRevision identifies the bundle used for the last attempt.
+	// A desired bundle change bypasses the previous retry delay.
+	// +optional
+	AttemptedRevision string `json:"attemptedRevision,omitempty"`
+	// RetryAfter delays policy requests after a failure, including during unrelated reconciles.
+	// +optional
+	RetryAfter *metav1.Time `json:"retryAfter,omitempty"`
+	// LastError reports policy failures independently of infrastructure and Autopilot errors.
+	// +optional
 	LastError *ControllerErrorStatus `json:"lastError,omitempty"`
 }
 

@@ -2,7 +2,9 @@ package openbao
 
 import "context"
 
-// PolicyWriter updates ACL policies using independently granted credentials.
-type PolicyWriter interface {
+// PolicyClient reads and updates ACL policies using independently granted credentials.
+type PolicyClient interface {
+	// ReadACLPolicy returns nil when the policy does not exist.
+	ReadACLPolicy(context.Context, string) (*string, error)
 	WriteACLPolicy(context.Context, string, string) error
 }

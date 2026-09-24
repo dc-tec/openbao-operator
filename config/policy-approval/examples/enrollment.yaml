@@ -1,0 +1,28 @@
+# Existing clusters only: an administrator applies this policy and complete role through the OpenBao API.
+# New clusters use spec.selfInit.oidc.policyApproverRef; no manual requests are needed.
+spec:
+  selfInit:
+    requests:
+      - name: create-policy-approver
+        operation: update
+        path: sys/policies/acl/openbao-operator-policy-approver
+        policy:
+          policy: |
+            path "sys/policies/acl/openbao-operator-policy-approval" {
+              capabilities = ["read", "update"]
+            }
+      - name: bind-policy-approver
+        operation: update
+        path: auth/jwt-operator/role/openbao-operator-policy-approver
+        data:
+          role_type: jwt
+          user_claim: sub
+          bound_subject: system:serviceaccount:openbao-admin:example-policy-approver
+          bound_audiences:
+            - openbao-policy-approval:bao:example
+          token_policies:
+            - openbao-operator-policy-approver
+          token_no_default_policy: true
+          token_ttl: 5m
+          token_max_ttl: 5m
+          token_explicit_max_ttl: 5m

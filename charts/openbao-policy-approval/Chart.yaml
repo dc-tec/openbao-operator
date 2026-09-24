@@ -1,0 +1,9 @@
+apiVersion: v2
+name: openbao-policy-approval
+description: Independent GitOps Jobs for reviewed OpenBao operator policy approvals.
+type: application
+version: 0.1.0
+kubeVersion: '>=1.33.0-0'
+home: https://github.com/dc-tec/openbao-operator
+sources:
+  - https://github.com/dc-tec/openbao-operator

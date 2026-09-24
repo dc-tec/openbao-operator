@@ -3298,6 +3298,15 @@ spec:
                         type: object
                     type: object
                 type: object
+              reconcilePolicies:
+                description: |-
+                  ReconcilePolicies restores the built-in operational policies after initialization.
+                  Administrator-managed JWT authentication and exact-content approval are required.
+                  OpenBao must independently approve their exact contents through the
+                  openbao-operator-policy-approval policy. Bootstrap installs the initial approval;
+                  existing clusters and later permission changes require administrator approval.
+                  Auth methods, roles, and the approval policy are not reconciled.
+                type: boolean
               recoveryKeys:
                 description: |-
                   RecoveryKeys configures Operator-assisted recovery-key bootstrap surfaces.
@@ -3818,23 +3827,37 @@ spec:
                           Issuer overrides the auto-discovered K8s issuer URL.
                           Critical for scenarios where OpenBao sees a different K8s URL than the Operator.
                         type: string
-                      reconcilePolicies:
+                      policyApproverRef:
                         description: |-
-                          ReconcilePolicies restores the built-in operational policies after initialization.
-                          OpenBao must independently approve their exact contents through the
-                          openbao-operator-policy-approval policy. Bootstrap installs the initial approval;
-                          existing clusters and later permission changes require administrator approval.
-                          Auth methods, roles, and the approval policy are not reconciled.
-                        type: boolean
+                          PolicyApproverRef enrolls a separate administrative ServiceAccount during
+                          initial bootstrap. Its JWT role can update the operator policy approval.
+                          The referenced namespace must be outside the runtime operator's write
+                          permissions. The operator does not create this ServiceAccount or reconcile
+                          its OpenBao role after initialization. Changing this reference on an existing
+                          cluster requires administrator enrollment in OpenBao.
+                        properties:
+                          name:
+                            description: Name identifies the administrative ServiceAccount.
+                            maxLength: 253
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                            type: string
+                          namespace:
+                            description: Namespace contains the administrative ServiceAccount.
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                        required:
+                        - name
+                        - namespace
+                        type: object
                     required:
                     - enabled
                     type: object
                     x-kubernetes-validations:
                     - message: spec.selfInit.oidc.additionalSubjects requires spec.selfInit.oidc.enabled=true
                       rule: '!has(self.additionalSubjects) || self.enabled'
-                    - message: policy reconciliation requires oidc.enabled=true
-                      rule: '!has(self.reconcilePolicies) || !self.reconcilePolicies
-                        || self.enabled'
                   requests:
                     description: |-
                       Requests defines the API operations to execute during self-initialization.
@@ -4102,10 +4125,6 @@ spec:
                 required:
                 - enabled
                 type: object
-                x-kubernetes-validations:
-                - message: policy reconciliation requires selfInit.enabled=true
-                  rule: '!has(self.oidc) || !has(self.oidc.reconcilePolicies) || !self.oidc.reconcilePolicies
-                    || self.enabled'
               service:
                 description: Service configures the primary Service used to expose
                   OpenBao inside or outside the cluster.
@@ -5153,6 +5172,11 @@ spec:
             - message: spec.recoveryKeys.initial requires a non-static spec.unseal.type
               rule: '!has(self.recoveryKeys) || !has(self.recoveryKeys.initial) ||
                 (has(self.unseal) && self.unseal.type != ''static'')'
+            - message: policyApproverRef requires selfInit, oidc, and reconcilePolicies
+                enabled
+              rule: '!has(self.selfInit) || !has(self.selfInit.oidc) || !has(self.selfInit.oidc.policyApproverRef)
+                || (self.selfInit.enabled && self.selfInit.oidc.enabled && has(self.reconcilePolicies)
+                && self.reconcilePolicies)'
           status:
             description: Status defines the observed state of OpenBaoCluster.
             properties:
@@ -5761,10 +5785,50 @@ spec:
                           error.
                         type: string
                     type: object
+                  policyReconciliation:
+                    description: PolicyReconciliation records individual policy observations
+                      and retry scheduling.
+                    properties:
+                      attemptedRevision:
+                        description: |-
+                          AttemptedRevision identifies the bundle used for the last attempt.
+                          A desired bundle change bypasses the previous retry delay.
+                        type: string
+                      lastError:
+                        description: LastError reports policy failures independently
+                          of infrastructure and Autopilot errors.
+                        properties:
+                          at:
+                            description: At is when the error was observed (best-effort).
+                            format: date-time
+                            type: string
+                          message:
+                            description: Message is a human-readable error message
+                              (best-effort).
+                            type: string
+                          reason:
+                            description: Reason is a low-cardinality identifier for
+                              the error.
+                            type: string
+                        type: object
+                      retryAfter:
+                        description: RetryAfter delays policy requests after a failure,
+                          including during unrelated reconciles.
+                        format: date-time
+                        type: string
+                      revisions:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          Revisions contains the last verified content digest for each built-in policy.
+                          An observed missing or different policy removes its entry until repaired.
+                          Failed reads retain the last observation; OpenBao still authorizes every operation.
+                        type: object
+                    type: object
                   policyRevision:
                     description: |-
-                      PolicyRevision identifies the last complete built-in policy bundle written
-                      successfully. This records reconciliation progress, not authorization.
+                      PolicyRevision identifies the last complete built-in policy bundle verified
+                      or repaired successfully. This records reconciliation progress, not authorization.
                     type: string
                 type: object
             type: object

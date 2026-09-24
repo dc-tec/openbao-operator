@@ -1,0 +1,121 @@
+{{- include "approval.validate" . -}}
+{{- if .Values.approval.to -}}
+{{- $policy := include "approval.bundle" (dict "root" . "id" .Values.approval.to) -}}
+{{- $previous := "absent" -}}
+{{- if ne .Values.approval.from "absent" -}}
+{{- $previous = include "approval.bundle" (dict "root" . "id" .Values.approval.from) | sha256sum -}}
+{{- end -}}
+{{- $digest := $policy | sha256sum -}}
+{{- $request := dict "values" .Values "desired" $digest "previous" $previous "namespace" .Release.Namespace "chart" .Chart.Version | toJson | sha256sum | trunc 16 -}}
+{{- $name := printf "%s-approval-%s" (.Release.Name | trunc 37 | trimSuffix "-") $request -}}
+{{- $address := default (printf "https://%s.%s.svc:8200" .Values.cluster.name .Values.cluster.namespace) .Values.cluster.address -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  {{- include "approval.prerequisiteAnnotations" . | nindent 2 }}
+immutable: true
+data:
+  policy.hcl: |
+    {{- $policy | nindent 4 }}
+  {{- if .Values.tls.caBundle }}
+  ca.crt: |
+    {{- .Values.tls.caBundle | nindent 4 }}
+  {{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  {{- if eq .Values.gitops "argocd" }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+  {{- end }}
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openbao-policy-approval
+        openbao.org/approval-target: {{ include "approval.target" . | quote }}
+    spec:
+      serviceAccountName: {{ include "approval.serviceAccount" . }}
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: approval
+          image: {{ .Values.image | quote }}
+          command: [/policy-approval]
+          args:
+            - {{ printf "--address=%s" $address | quote }}
+            {{- if .Values.tls.serverName }}
+            - {{ printf "--tls-server-name=%s" .Values.tls.serverName | quote }}
+            {{- end }}
+            - --auth-mount=jwt-operator
+            - --role=openbao-operator-policy-approver
+            - --jwt-file=/var/run/approval/token
+            - --policy-file=/etc/approval/policy.hcl
+            {{- if .Values.tls.caBundle }}
+            - --ca-file=/etc/approval/ca.crt
+            {{- else if .Values.tls.caConfigMapName }}
+            - --ca-file=/etc/approval-trust/ca.crt
+            {{- end }}
+            - {{ printf "--sha256=%s" $digest | quote }}
+            - {{ printf "--expected-current-sha256=%s" $previous | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 32Mi
+          volumeMounts:
+            - name: inputs
+              mountPath: /etc/approval
+              readOnly: true
+            - name: identity
+              mountPath: /var/run/approval
+              readOnly: true
+            {{- if .Values.tls.caConfigMapName }}
+            - name: trust
+              mountPath: /etc/approval-trust
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: inputs
+          configMap:
+            name: {{ $name }}
+        - name: identity
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: {{ printf "openbao-policy-approval:%s:%s" .Values.cluster.namespace .Values.cluster.name | quote }}
+                  expirationSeconds: 600
+        {{- if .Values.tls.caConfigMapName }}
+        - name: trust
+          configMap:
+            name: {{ .Values.tls.caConfigMapName }}
+            items:
+              - key: {{ .Values.tls.caConfigMapKey }}
+                path: ca.crt
+        {{- end }}
+{{- end }}

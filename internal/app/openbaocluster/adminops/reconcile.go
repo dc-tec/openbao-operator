@@ -13,6 +13,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
@@ -105,32 +106,38 @@ func NewApplication(
 
 func (p reconcilerPlan) orderedFor(cluster *openbaov1alpha1.OpenBaoCluster) []subReconciler {
 	reconcilers := make([]subReconciler, 0, len(p.upgradeReconcilers)+1)
+	withPolicy := func(rec subReconciler, policy string) subReconciler {
+		if !portauth.PolicyReconciliationEnabled(cluster) {
+			return rec
+		}
+		return policyReadinessReconciler{inner: rec, policy: policy}
+	}
 	backupOwnsLock := cluster != nil &&
 		cluster.Status.OperationLock != nil &&
 		cluster.Status.OperationLock.Operation == openbaov1alpha1.ClusterOperationBackup
 
 	if backupOwnsLock && p.backupReconciler != nil {
-		reconcilers = append(reconcilers, p.backupReconciler)
+		reconcilers = append(reconcilers, withPolicy(p.backupReconciler, portauth.PolicyNameBackup))
 	}
-	reconcilers = append(reconcilers, p.upgradeReconcilers...)
+	for _, rec := range p.upgradeReconcilers {
+		reconcilers = append(reconcilers, withPolicy(rec, portauth.PolicyNameUpgrade))
+	}
 	if !backupOwnsLock && p.backupReconciler != nil {
-		reconcilers = append(reconcilers, p.backupReconciler)
-	}
-	if portauth.PolicyReconciliationEnabled(cluster) {
-		for i, rec := range reconcilers {
-			reconcilers[i] = policyReadinessReconciler{inner: rec}
-		}
+		reconcilers = append(reconcilers, withPolicy(p.backupReconciler, portauth.PolicyNameBackup))
 	}
 	return reconcilers
 }
 
-type policyReadinessReconciler struct{ inner subReconciler }
+type policyReadinessReconciler struct {
+	inner  subReconciler
+	policy string
+}
 
 func (r policyReadinessReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (upgrademanager.ReconcileResult, error) {
 	// Check before each reconciler: a preceding operation can release its lock
 	// during this pass. Running operations can still observe Jobs and finish.
 	if cluster.Status.OperationLock == nil {
-		if err := configuration.RequirePoliciesReady(cluster); err != nil {
+		if err := configuration.RequirePolicyReady(cluster, r.policy); err != nil {
 			return upgrademanager.ReconcileResult{}, err
 		}
 	}
@@ -147,10 +154,18 @@ func (a *Application) Reconcile(
 ) (recon.Result, error) {
 	ensureAdminOpsStatus(cluster)
 	var acknowledgements upgrademanager.RequestAcknowledgements
+	var policyError error
 
 	for _, rec := range a.plan.orderedFor(cluster) {
 		result, err := rec.Reconcile(ctx, logger, cluster)
 		acknowledgements.Merge(result.Acknowledgements)
+		if reason, _ := operatorerrors.Reason(err); reason == constants.ReasonPoliciesNotReady {
+			// A blocked upgrade must not suppress an independently approved backup.
+			if policyError == nil {
+				policyError = err
+			}
+			continue
+		}
 		if err != nil {
 			if recordError != nil {
 				recordError(err)
@@ -180,10 +195,13 @@ func (a *Application) Reconcile(
 		}
 
 		if result.RequeueAfter > 0 {
+			if policyError != nil {
+				result.RequeueAfter = min(result.RequeueAfter, time.Minute)
+			}
 			// A requeue without an error is a successful observation. Clear any
 			// error from an earlier pass before persisting the next poll time.
 			ensureAdminOpsStatus(cluster)
-			cluster.Status.AdminOps.LastError = nil
+			cluster.Status.AdminOps.LastError = a.errorStatus(policyError)
 			if a.patchStatus != nil {
 				if statusErr := a.patchStatus(ctx, logger, original, cluster, acknowledgements, "adminops-requeue"); statusErr != nil {
 					return recon.Result{}, statusErr
@@ -195,13 +213,16 @@ func (a *Application) Reconcile(
 
 	// Clear previous adminops error after a successful reconcile.
 	ensureAdminOpsStatus(cluster)
-	cluster.Status.AdminOps.LastError = nil
+	cluster.Status.AdminOps.LastError = a.errorStatus(policyError)
 	if a.patchStatus != nil {
 		if err := a.patchStatus(ctx, logger, original, cluster, acknowledgements, "adminops-complete"); err != nil {
 			return recon.Result{}, fmt.Errorf("failed to patch adminops owned fields: %w", err)
 		}
 	}
 
+	if policyError != nil {
+		return recon.Result{RequeueAfter: time.Minute}, nil
+	}
 	return recon.Result{}, nil
 }
 

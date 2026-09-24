@@ -180,6 +180,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.unseal) || self.unseal.type != 'ocikms' || !has(self.unseal.credentialsSecretRef) || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey) && self.unseal.ocikms.authTypeAPIKey == true)",message="spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true"
 // +kubebuilder:validation:XValidation:rule="!has(self.recoveryKeys) || !has(self.recoveryKeys.initial) || (has(self.selfInit) && self.selfInit.enabled)",message="spec.recoveryKeys.initial requires spec.selfInit.enabled=true"
 // +kubebuilder:validation:XValidation:rule="!has(self.recoveryKeys) || !has(self.recoveryKeys.initial) || (has(self.unseal) && self.unseal.type != 'static')",message="spec.recoveryKeys.initial requires a non-static spec.unseal.type"
+// +kubebuilder:validation:XValidation:rule="!has(self.selfInit) || !has(self.selfInit.oidc) || !has(self.selfInit.oidc.policyApproverRef) || (self.selfInit.enabled && self.selfInit.oidc.enabled && has(self.reconcilePolicies) && self.reconcilePolicies)",message="policyApproverRef requires selfInit, oidc, and reconcilePolicies enabled"
 type OpenBaoClusterSpec struct {
 	// Version is the semantic OpenBao version, used for upgrade orchestration.
 	// The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.
@@ -261,6 +262,15 @@ type OpenBaoClusterSpec struct {
 	// DeletionPolicy controls what happens to underlying resources when the CR is deleted.
 	// +optional
 	DeletionPolicy DeletionPolicy `json:"deletionPolicy,omitempty"`
+	// ReconcilePolicies restores the built-in operational policies after initialization.
+	// Administrator-managed JWT authentication and exact-content approval are required.
+	// OpenBao must independently approve their exact contents through the
+	// openbao-operator-policy-approval policy. Bootstrap installs the initial approval;
+	// existing clusters and later permission changes require administrator approval.
+	// Auth methods, roles, and the approval policy are not reconciled.
+	// +optional
+	ReconcilePolicies bool `json:"reconcilePolicies,omitempty"`
+
 	// SelfInit configures OpenBao's native self-initialization feature.
 	// When enabled, OpenBao initializes itself on first start using the configured
 	// requests, and the root token is automatically revoked.

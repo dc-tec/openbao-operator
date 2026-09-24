@@ -17,6 +17,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	"github.com/dc-tec/openbao-operator/internal/service/configuration"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
@@ -100,12 +101,14 @@ func AppendInitAndAutopilotReconcilers(
 type policyConfigReconciler struct{ manager *configuration.PolicyManager }
 
 func (r *policyConfigReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-	// The pre-infrastructure attempt handles initialized clusters. Only write
-	// here after initialization or when infrastructure repair permits a retry.
-	if configuration.RequirePoliciesReady(cluster) == nil {
+	// Initialized clusters were attempted before infrastructure. The persisted
+	// retry deadline also prevents a second attempt in this pass after failure.
+	if cluster.Status.Workload != nil && cluster.Status.Workload.PolicyReconciliation != nil &&
+		cluster.Status.Workload.PolicyReconciliation.AttemptedRevision == configuration.PolicyRevision(cluster) {
 		return recon.Result{}, nil
 	}
-	return r.manager.Reconcile(ctx, logger, cluster)
+	_, _ = r.manager.Reconcile(ctx, logger, cluster)
+	return recon.Result{}, nil
 }
 
 func reconcilePoliciesBeforeInfrastructure(
@@ -114,22 +117,28 @@ func reconcilePoliciesBeforeInfrastructure(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	policyReconciler SubReconciler,
 ) {
-	// Repair policies before infrastructure operations can return early (for
-	// example, scale-down requires the controller policy). A failed attempt must
-	// still allow infrastructure repair, such as recreating a deleted Service.
-	// The policy stage after initialization retries and reports any remaining error.
 	if cluster.Status.Initialized && policyReconciler != nil {
-		if _, err := policyReconciler.Reconcile(ctx, logger, cluster); err != nil {
-			if cluster.Status.Workload == nil {
-				cluster.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{}
-			}
-			cluster.Status.Workload.LastError = controllerErrorStatus(err)
-		} else if cluster.Status.Workload != nil && cluster.Status.Workload.LastError != nil &&
-			cluster.Status.Workload.LastError.Reason == "PolicyReconciliationFailed" {
-			cluster.Status.Workload.LastError = nil
+		// Policy errors have their own status and retry deadline. Infrastructure
+		// repair and Autopilot must still run when approval is unavailable.
+		_, _ = policyReconciler.Reconcile(ctx, logger, cluster)
+	}
+}
+
+func pendingPolicyResult(cluster *openbaov1alpha1.OpenBaoCluster, result recon.Result) recon.Result {
+	if !portauth.PolicyReconciliationEnabled(cluster) || cluster.Status.Workload.PolicyReconciliation == nil {
+		return result
+	}
+	status := cluster.Status.Workload.PolicyReconciliation
+	if cluster.Status.Workload.LastError == nil {
+		cluster.Status.Workload.LastError = status.LastError.DeepCopy()
+	}
+	if status.RetryAfter != nil {
+		delay := max(time.Second, time.Until(status.RetryAfter.Time))
+		if result.RequeueAfter <= 0 || delay < result.RequeueAfter {
+			result.RequeueAfter = delay
 		}
 	}
-
+	return result
 }
 
 // RunWorkloadReconcilers executes workload orchestration with consistent status patching.
@@ -168,6 +177,8 @@ func RunWorkloadReconcilers(
 		}
 
 		if result.RequeueAfter > 0 {
+			cluster.Status.Workload.LastError = nil
+			result = pendingPolicyResult(cluster, result)
 			if statusErr := PatchWorkloadOwnedFields(ctx, c, logger, original, cluster, "workload-requeue"); statusErr != nil {
 				return recon.Result{}, statusErr
 			}
@@ -177,11 +188,12 @@ func RunWorkloadReconcilers(
 
 	// Clear previous workload error after a successful reconcile.
 	cluster.Status.Workload.LastError = nil
+	result := pendingPolicyResult(cluster, recon.Result{})
 	if err := PatchWorkloadOwnedFields(ctx, c, logger, original, cluster, "workload-complete"); err != nil {
 		return recon.Result{}, err
 	}
 
-	return recon.Result{}, nil
+	return result, nil
 }
 
 func workloadResultForError(
