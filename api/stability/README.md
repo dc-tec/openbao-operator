@@ -82,11 +82,6 @@ It preserves which inputs are accepted and replaces a missing-key evaluation err
 message. The match includes the resource, schema path, rule text, and rule metadata. Other CEL changes still require
 semantic review. `TestCRD_OpenBaoCluster_TLSRotationPeriod` verifies the API-server behavior.
 
-The bootstrap guard for `policyApproverRef` is compatible only when that optional reference is new relative to
-the baseline and has no default. It accepts objects without the reference, including manually enrolled clusters
-that enable `spec.reconcilePolicies`. The checker matches the exact resource, path, rule, and metadata.
-The policy-reconciliation integration tests verify those API-server semantics.
-
 The `API Contract` job runs for API, CRD, checker, gate-test, dependency, build-rule,
 and gate-workflow changes, every push to `main`, and manual CI runs. `CI Required`
 includes its result. Edge candidate builds and release image builds also depend

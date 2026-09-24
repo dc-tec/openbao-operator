@@ -181,12 +181,6 @@ resources:
         omission: built-in operational policies are not reconciled after initialization
         enforcement: [crd-schema, controller]
         rationale: Opt-in ownership of fixed policies with exact contents approved independently in OpenBao; approval policies and auth configuration remain administrator-owned.
-      - path: spec.selfInit.oidc.policyApproverRef
-        classification: additive-unfrozen
-        owner: bootstrap-security
-        omission: no administrative policy approver is enrolled
-        enforcement: [crd-schema, controller]
-        rationale: Bootstrap-only binding of an administrator-managed ServiceAccount; the runtime operator does not own this identity or reconcile its approval authority.
       - path: spec.service
         classification: beta-stable
         owner: networking

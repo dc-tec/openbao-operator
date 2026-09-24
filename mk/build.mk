@@ -12,7 +12,6 @@ build: verify-trusted-root manifests generate fmt vet ## Build manager binary (d
 .PHONY: build-linux
 build-linux: verify-trusted-root manifests generate fmt vet ## Build all binaries for Linux/AMD64 (used by CI fast Dockerfiles).
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/linux_amd64/manager cmd/main.go
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/linux_amd64/policy-approval ./cmd/bao-policy-approval
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/linux_amd64/bao-init-config ./cmd/bao-config-init
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/linux_amd64/bao-wrapper ./cmd/bao-wrapper
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/linux_amd64/bao-probe ./cmd/bao-probe

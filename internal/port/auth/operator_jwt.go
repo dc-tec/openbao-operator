@@ -23,14 +23,7 @@ const (
 	PolicyNameUpgrade  = "openbao-operator-upgrade"
 	PolicyNameRestore  = "openbao-operator-restore"
 	PolicyNameApproval = "openbao-operator-policy-approval"
-	// PolicyApproverName is both the role and policy name for the independent approver.
-	PolicyApproverName = "openbao-operator-policy-approver"
 )
-
-// PolicyApproverAudience binds an approval token to one OpenBao target.
-func PolicyApproverAudience(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return "openbao-policy-approval:" + cluster.Namespace + ":" + cluster.Name
-}
 
 // OperatorJWTBootstrapEnabled reports whether the cluster is configured to let
 // the operator bootstrap JWT auth and the default executor roles through

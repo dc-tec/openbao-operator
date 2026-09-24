@@ -18,6 +18,7 @@ import (
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 )
 
 // PolicyClientFactory authenticates with the controller's JWT identity only.
@@ -29,7 +30,24 @@ type PolicyManager struct{ ClientFor PolicyClientFactory }
 
 // PolicyRevision identifies the desired bundle, including its exact contents.
 func PolicyRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return policyDigest(configbuilder.OperatorPolicyApproval(cluster))
+	return policyDigest(configbuilder.OperatorPolicyApproval(policyConfiguration(cluster)))
+}
+
+// policyConfiguration retains the strategy permissions needed by an unfinished
+// upgrade. Administrator approval artifacts still describe the requested spec.
+func policyConfiguration(cluster *openbaov1alpha1.OpenBaoCluster) *openbaov1alpha1.OpenBaoCluster {
+	upgradeActive := cluster.Status.Upgrade != nil ||
+		(cluster.Status.OperationLock != nil && cluster.Status.OperationLock.Operation == openbaov1alpha1.ClusterOperationUpgrade) ||
+		(cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase != "" && cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle)
+	if !upgradeActive || portworkload.EffectiveStrategy(cluster) == portworkload.DesiredStrategy(cluster) {
+		return cluster
+	}
+	active := cluster.DeepCopy()
+	if active.Spec.Upgrade == nil {
+		active.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{}
+	}
+	active.Spec.Upgrade.Strategy = portworkload.EffectiveStrategy(cluster)
+	return active
 }
 
 func policyDigest(contents string) string {
@@ -42,7 +60,7 @@ func RequirePolicyReady(cluster *openbaov1alpha1.OpenBaoCluster, name string) er
 	if !portauth.PolicyReconciliationEnabled(cluster) {
 		return nil
 	}
-	for _, policy := range configbuilder.OperatorPolicies(cluster) {
+	for _, policy := range configbuilder.OperatorPolicies(policyConfiguration(cluster)) {
 		if policy.Name != name {
 			continue
 		}
@@ -89,7 +107,7 @@ func (m *PolicyManager) Reconcile(ctx context.Context, _ logr.Logger, cluster *o
 	}
 	var failures []error
 	var delay time.Duration
-	for _, policy := range configbuilder.OperatorPolicies(cluster) {
+	for _, policy := range configbuilder.OperatorPolicies(policyConfiguration(cluster)) {
 		err := reconcilePolicy(ctx, client, policy, status.Revisions)
 		if err != nil {
 			failures = append(failures, fmt.Errorf("policy %s: %w", policy.Name, err))

@@ -35,9 +35,6 @@ New clusters with OIDC bootstrap install the initial approval during trusted sel
 role. Existing clusters require administrator enrollment. Later permission changes require a new approval, including
 changes from RollingUpdate to BlueGreen and policy changes introduced by an operator release.
 
-For Kubernetes GitOps, [configure an independent approver]({{< relref "/docs/operate/gitops-policy-approval.md" >}})
-with `policyApproverRef` before initialization. Bootstrap enrolls it automatically; later approvals select versioned bundles.
-
 ## Enroll an existing cluster or approve a change
 
 For a manually initialized cluster, first configure the `jwt-operator` auth mount to trust the operator installation's
@@ -54,7 +51,8 @@ Policy reconciliation does not create or repair this authentication configuratio
 
 3. Review the policy paths and capabilities in the artifact. The approval covers exact text, including formatting.
    Keep it in your administrator-managed configuration repository.
-4. Authenticate to the target OpenBao cluster as an administrator and apply the reviewed artifact:
+4. Authenticate to the target OpenBao cluster as an administrator and apply the reviewed artifact.
+   If the approval policy already requires CAS, follow [Update with compare-and-set](#update-with-compare-and-set) instead.
 
    ```sh
    bao policy write openbao-operator-policy-approval policy-approval.hcl
@@ -73,10 +71,19 @@ Replace old approval contents rather than retaining multiple accepted versions. 
 available to the controller, including versions with permissions you intended to remove. An administrator can apply
 these artifacts through an existing fleet configuration workflow; approval does not depend on Kubernetes status.
 
-For Kubernetes GitOps fleets, use the optional
-[policy approval Job]({{< relref "/docs/operate/gitops-policy-approval.md" >}}) with a separate administrative identity.
-After that Job writes an approval, the policy requires compare-and-set (CAS). For a later manual update, read the
-current version and supply it with the reviewed policy:
+Apply permission changes before deploying the operator release or cluster configuration that needs them. An operator
+upgrade with unchanged policy contents needs no new approval. For a shared operator, approve every affected cluster
+before upgrading it.
+
+Wait for an active upgrade to finish before changing the approved strategy. During an unfinished upgrade, runtime
+reconciliation retains the accepted strategy's policy contents, including when its operation lock must be recovered.
+It reconciles the requested strategy's policy after the upgrade finishes. Repairing a deleted policy during that
+interval still requires approval for the running strategy.
+
+### Update with compare-and-set
+
+On OpenBao 2.6 or later, administrators can use compare-and-set (CAS) to avoid overwriting concurrent approval changes.
+Read the current version, then supply it with the reviewed policy. For a missing approval policy, use `cas=-1` instead.
 
 ```sh
 bao read -field=version sys/policies/acl/openbao-operator-policy-approval
@@ -84,7 +91,8 @@ bao write sys/policies/acl/openbao-operator-policy-approval \
   policy=@policy-approval.hcl cas=REPLACE_WITH_VERSION cas_required=true
 ```
 
-If the CAS check fails, read and review the current approval before retrying.
+Setting `cas_required=true` requires CAS on later updates. If the CAS check fails, read and review the current approval
+before retrying. CAS protects writes; it does not guarantee a fresh read from a standby.
 
 ## Recovery behavior
 
@@ -114,8 +122,7 @@ when needed. Removing a feature does not delete its old policy or role; retire t
 ## Revoke policy management
 
 Delete `openbao-operator-policy-approval` in OpenBao and remove it from the controller role. Set
-`spec.reconcilePolicies: false` to stop normal reconciliation attempts. Remove `policyApproverRef` from the bootstrap
-configuration if present; its validation requires reconciliation to be enabled. Disabling the Kubernetes field alone does not revoke
+`spec.reconcilePolicies: false` to stop normal reconciliation attempts. Disabling the Kubernetes field alone does not revoke
 permissions already granted in OpenBao. Revoking policy management does not revoke the controller's operational policy
 or lifecycle identities; revoke those separately if required.
 

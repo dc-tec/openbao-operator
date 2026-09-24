@@ -61,7 +61,6 @@ type hclJWTRoleData struct {
 	TTL                  string               `hcl:"ttl"`
 	TokenTTL             string               `hcl:"token_ttl"`
 	TokenMaxTTL          string               `hcl:"token_max_ttl"`
-	TokenExplicitMaxTTL  *string              `hcl:"token_explicit_max_ttl,optional"`
 	TokenNoDefaultPolicy bool                 `hcl:"token_no_default_policy"`
 	ClockSkewLeeway      string               `hcl:"clock_skew_leeway"`
 	ExpirationLeeway     string               `hcl:"expiration_leeway"`
@@ -155,10 +154,6 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 		}
 		req.Body().AppendBlock(gohcl.EncodeAsBlock(role, "data"))
 		initBody.AppendBlock(req)
-	}
-
-	if portauth.PolicyReconciliationEnabled(cluster) {
-		appendPolicyApprover(initBody, cluster)
 	}
 
 	// 5. Auto-create backup policy and role if backup is configured (and OIDC enabled)

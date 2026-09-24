@@ -3826,31 +3826,6 @@ spec:
                           Issuer overrides the auto-discovered K8s issuer URL.
                           Critical for scenarios where OpenBao sees a different K8s URL than the Operator.
                         type: string
-                      policyApproverRef:
-                        description: |-
-                          PolicyApproverRef enrolls a separate administrative ServiceAccount during
-                          initial bootstrap. Its JWT role can update the operator policy approval.
-                          The referenced namespace must be outside the runtime operator's write
-                          permissions. The operator does not create this ServiceAccount or reconcile
-                          its OpenBao role after initialization. Changing this reference on an existing
-                          cluster requires administrator enrollment in OpenBao.
-                        properties:
-                          name:
-                            description: Name identifies the administrative ServiceAccount.
-                            maxLength: 253
-                            minLength: 1
-                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                            type: string
-                          namespace:
-                            description: Namespace contains the administrative ServiceAccount.
-                            maxLength: 63
-                            minLength: 1
-                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                            type: string
-                        required:
-                        - name
-                        - namespace
-                        type: object
                     required:
                     - enabled
                     type: object
@@ -5171,11 +5146,6 @@ spec:
             - message: spec.recoveryKeys.initial requires a non-static spec.unseal.type
               rule: '!has(self.recoveryKeys) || !has(self.recoveryKeys.initial) ||
                 (has(self.unseal) && self.unseal.type != ''static'')'
-            - message: policyApproverRef requires selfInit, oidc, and reconcilePolicies
-                enabled
-              rule: '!has(self.selfInit) || !has(self.selfInit.oidc) || !has(self.selfInit.oidc.policyApproverRef)
-                || (self.selfInit.enabled && self.selfInit.oidc.enabled && has(self.reconcilePolicies)
-                && self.reconcilePolicies)'
           status:
             description: Status defines the observed state of OpenBaoCluster.
             properties:

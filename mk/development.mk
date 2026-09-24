@@ -158,7 +158,6 @@ verify-vendor: ## Verify vendor/ is synchronized with go.mod/go.sum.
 
 .PHONY: verify-generated
 verify-generated: manifests generate api-reference ## Verify generated artifacts are up-to-date (does not modify tracked files).
-	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/operator_policy_approval --bundles-dir charts/openbao-policy-approval/bundles --check
 	@{ \
 		git diff --exit-code -- api/v1alpha1 config/crd/bases website/generated/api-reference.md; \
 	} || { \
@@ -275,16 +274,6 @@ verify-helm: helm-sync verify-helm-values ## Verify Helm chart is up-to-date (do
 .PHONY: helm-lint
 helm-lint: ## Lint the Helm chart.
 	@helm lint charts/openbao-operator
-	@helm lint charts/openbao-policy-approval --set cluster.name=example,cluster.namespace=bao
-
-.PHONY: test-policy-approval-chart
-test-policy-approval-chart: ## Verify approval bundles and render the optional GitOps chart.
-	@helm version --short
-	@GOFLAGS="$(GOFLAGS_VENDOR)" go test ./test/manifests/policyapproval ./hack/tools/operator_policy_approval
-
-.PHONY: policy-approval-bundles
-policy-approval-bundles: ## Generate immutable approval bundles for the current policy revision.
-	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/operator_policy_approval --bundles-dir charts/openbao-policy-approval/bundles
 
 .PHONY: verify-edge-chart
 verify-edge-chart: ## Test edge chart contents, reproducibility, and publication guards.

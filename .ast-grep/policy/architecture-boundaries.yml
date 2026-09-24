@@ -239,7 +239,6 @@ serviceBoundaries:
     ignores:
       - "**/*_test.go"
     allowServiceImports:
-      - internal/service/configuration
       - internal/service/opslifecycle
       - internal/service/workloadidentity
     allowAdapterImports:

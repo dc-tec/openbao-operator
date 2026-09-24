@@ -129,34 +129,3 @@ func TestPolicyReconciliationWithoutSelfInit(t *testing.T) {
 	cluster.Spec.ReconcilePolicies = true
 	require.NoError(t, k8sClient.Create(ctx, cluster))
 }
-
-func TestPolicyApproverReferenceValidation(t *testing.T) {
-	for _, tc := range []struct {
-		name      string
-		reconcile bool
-		ref       openbaov1alpha1.PolicyApproverReference
-		valid     bool
-	}{
-		{name: "valid", reconcile: true, ref: openbaov1alpha1.PolicyApproverReference{Namespace: "admin", Name: "approver"}, valid: true},
-		{name: "requires reconciliation", ref: openbaov1alpha1.PolicyApproverReference{Namespace: "admin", Name: "approver"}},
-		{name: "missing namespace", reconcile: true, ref: openbaov1alpha1.PolicyApproverReference{Name: "approver"}},
-		{name: "wildcard identity", reconcile: true, ref: openbaov1alpha1.PolicyApproverReference{Namespace: "admin", Name: "*"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cluster := newMinimalClusterObj(newTestNamespace(t), "approver-reference")
-			waitForOpenBaoClusterAdmissionPolicies(t, cluster.Namespace)
-			cluster.Spec.ReconcilePolicies = tc.reconcile
-			cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{Enabled: true,
-				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true, PolicyApproverRef: &tc.ref},
-				Requests: []openbaov1alpha1.SelfInitRequest{{
-					Name: "health", Operation: openbaov1alpha1.SelfInitOperationRead, Path: "sys/health",
-				}}}
-			err := k8sClient.Create(ctx, cluster)
-			if tc.valid {
-				require.NoError(t, err)
-			} else {
-				requireInvalidRequest(t, err)
-			}
-		})
-	}
-}

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -139,6 +140,72 @@ func TestPolicyAuthenticationBackoff(t *testing.T) {
 			cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{}
 			_, _ = manager.Reconcile(t.Context(), logr.Discard(), cluster)
 			require.Equal(t, 2, calls, "new desired permissions bypass the old retry deadline")
+		})
+	}
+}
+
+func TestPolicyReconciliationDuringStrategyChange(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		lock     bool
+		accepted openbaov1alpha1.UpdateStrategyType
+	}{
+		{name: "active upgrade", lock: true, accepted: openbaov1alpha1.UpdateStrategyBlueGreen},
+		{name: "lost operation lock", accepted: openbaov1alpha1.UpdateStrategyBlueGreen},
+		{name: "inferred strategy"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := &openbaov1alpha1.OpenBaoCluster{}
+			cluster.Spec.ReconcilePolicies, cluster.Status.Initialized = true, true
+			cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{Strategy: openbaov1alpha1.UpdateStrategyBlueGreen}
+			cluster.Status.AcceptedUpgradeStrategy = tc.accepted
+			cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{Phase: openbaov1alpha1.PhaseCleanup}
+			if tc.lock {
+				cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{Operation: openbaov1alpha1.ClusterOperationUpgrade}
+			}
+			store := &policyStore{values: map[string]string{}}
+			manager := &PolicyManager{ClientFor: func(context.Context, *openbaov1alpha1.OpenBaoCluster) (portopenbao.PolicyClient, error) {
+				return store, nil
+			}}
+			_, err := manager.Reconcile(t.Context(), logr.Discard(), cluster)
+			require.NoError(t, err)
+			activeRevision := cluster.Status.Workload.PolicyRevision
+			activePolicy := store.values[portauth.PolicyNameUpgrade]
+			require.Contains(t, activePolicy, "sys/storage/raft/remove-peer")
+
+			cluster.Spec.Upgrade.Strategy = openbaov1alpha1.UpdateStrategyRollingUpdate
+			requestedApproval := configbuilder.OperatorPolicyApproval(cluster)
+			require.NotContains(t, requestedApproval, "sys/storage/raft/promote", "administrator artifacts follow the request")
+			store.writes = nil
+			_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
+			require.NoError(t, err)
+			require.Empty(t, store.writes, "retain the policy used by the running upgrade")
+			require.Equal(t, activeRevision, cluster.Status.Workload.PolicyRevision)
+			require.NoError(t, RequirePolicyReady(cluster, portauth.PolicyNameUpgrade), "allow operation lock recovery")
+
+			delete(store.values, portauth.PolicyNameUpgrade)
+			_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
+			require.NoError(t, err)
+			require.Equal(t, []string{portauth.PolicyNameUpgrade}, store.writes)
+			require.Equal(t, activePolicy, store.values[portauth.PolicyNameUpgrade], "repair with the running strategy's contents")
+
+			delete(store.values, portauth.PolicyNameUpgrade)
+			store.deny = portauth.PolicyNameUpgrade
+			result, err := manager.Reconcile(t.Context(), logr.Discard(), cluster)
+			require.Error(t, err)
+			require.Equal(t, 5*time.Minute, result.RequeueAfter)
+			require.Error(t, RequirePolicyReady(cluster, portauth.PolicyNameUpgrade))
+
+			cluster.Status.OperationLock = nil
+			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
+			store.deny, store.writes = "", nil
+			_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
+			require.NoError(t, err)
+			require.Equal(t, []string{portauth.PolicyNameUpgrade}, store.writes, "completion bypasses the old bundle's cooldown")
+			require.NotContains(t, store.values[portauth.PolicyNameUpgrade], "sys/storage/raft/remove-peer")
+			require.NotEqual(t, activeRevision, cluster.Status.Workload.PolicyRevision)
+			require.NoError(t, RequirePolicyReady(cluster, portauth.PolicyNameUpgrade))
+			require.Equal(t, openbaov1alpha1.UpdateStrategyRollingUpdate, cluster.Spec.Upgrade.Strategy)
 		})
 	}
 }

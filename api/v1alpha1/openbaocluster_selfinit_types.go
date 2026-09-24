@@ -279,15 +279,6 @@ type SelfInitOIDCConfig struct {
 	// Enabled triggers the bootstrap logic.
 	Enabled bool `json:"enabled"`
 
-	// PolicyApproverRef enrolls a separate administrative ServiceAccount during
-	// initial bootstrap. Its JWT role can update the operator policy approval.
-	// The referenced namespace must be outside the runtime operator's write
-	// permissions. The operator does not create this ServiceAccount or reconcile
-	// its OpenBao role after initialization. Changing this reference on an existing
-	// cluster requires administrator enrollment in OpenBao.
-	// +optional
-	PolicyApproverRef *PolicyApproverReference `json:"policyApproverRef,omitempty"`
-
 	// Audience, if set, must match the operator installation audience used for
 	// projected OpenBao auth tokens.
 	// This field does not create a per-cluster TokenRequest audience override.
@@ -310,21 +301,6 @@ type SelfInitOIDCConfig struct {
 	// trust the target's projected ServiceAccount tokens.
 	// +optional
 	AdditionalSubjects *SelfInitOIDCAdditionalSubjects `json:"additionalSubjects,omitempty"`
-}
-
-// PolicyApproverReference identifies the administrator-managed Kubernetes identity
-// authorized to approve changes to the operator's OpenBao policies.
-type PolicyApproverReference struct {
-	// Namespace contains the administrative ServiceAccount.
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=63
-	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
-	Namespace string `json:"namespace"`
-	// Name identifies the administrative ServiceAccount.
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=253
-	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
-	Name string `json:"name"`
 }
 
 // KubernetesServiceAccountSubject is the exact subject claim in a projected

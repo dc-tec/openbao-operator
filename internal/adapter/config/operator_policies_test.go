@@ -6,7 +6,6 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/stretchr/testify/require"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -40,49 +39,6 @@ func TestOperatorPolicyApproval(t *testing.T) {
 				require.Equal(t, []string{"read", "update"}, rule.Capabilities)
 				require.Empty(t, rule.Required, "parameterless policy reads must be allowed")
 				require.Equal(t, map[string][]string{"policy": {policy.Policy}}, rule.Allowed)
-			}
-		})
-	}
-}
-
-func TestPolicyApproverBootstrap(t *testing.T) {
-	cluster := &openbaov1alpha1.OpenBaoCluster{}
-	cluster.Name, cluster.Namespace = "example", "bao"
-	cluster.Spec.ReconcilePolicies = true
-	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{Enabled: true,
-		OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true,
-			PolicyApproverRef: &openbaov1alpha1.PolicyApproverReference{Namespace: "openbao-admin", Name: "example-policy-approver"}}}
-	bootstrap := &OperatorBootstrapConfig{OIDCIssuerURL: "https://issuer.example", OIDCDiscoveryURL: "https://issuer.example",
-		OperatorNS: "operator", OperatorSA: "controller"}
-	file := hclwrite.NewEmptyFile()
-	appendPolicyApprover(file.Body(), cluster)
-	compareGolden(t, "policy_approver", file.Bytes())
-	generated, err := RenderSelfInitHCL(cluster, bootstrap)
-	require.NoError(t, err)
-	require.Contains(t, string(generated), `request "bind-policy-approver"`)
-	for _, tc := range []struct {
-		name      string
-		mutate    func(*openbaov1alpha1.OpenBaoCluster)
-		wantError string
-	}{
-		{name: "disabled", mutate: func(c *openbaov1alpha1.OpenBaoCluster) { c.Spec.SelfInit.OIDC.PolicyApproverRef = nil }},
-		{name: "reconciliation disabled", mutate: func(c *openbaov1alpha1.OpenBaoCluster) { c.Spec.ReconcilePolicies = false }, wantError: "requires policy reconciliation"},
-		{name: "managed namespace", mutate: func(c *openbaov1alpha1.OpenBaoCluster) {
-			c.Spec.SelfInit.OIDC.PolicyApproverRef.Namespace = c.Namespace
-		}, wantError: "outside the managed cluster"},
-		{name: "controller identity", mutate: func(c *openbaov1alpha1.OpenBaoCluster) {
-			c.Spec.SelfInit.OIDC.PolicyApproverRef = &openbaov1alpha1.PolicyApproverReference{Namespace: "operator", Name: "controller"}
-		}, wantError: "controller ServiceAccount"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			copy := cluster.DeepCopy()
-			tc.mutate(copy)
-			body, err := RenderSelfInitHCL(copy, bootstrap)
-			if tc.wantError != "" {
-				require.ErrorContains(t, err, tc.wantError)
-			} else {
-				require.NoError(t, err)
-				require.NotContains(t, string(body), `request "bind-policy-approver"`)
 			}
 		})
 	}

@@ -23,16 +23,12 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
   go build -a -mod=vendor -trimpath -buildvcs=false -ldflags="-buildid=" -o manager cmd/main.go && \
   touch -h -d "@${SOURCE_DATE_EPOCH}" manager
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-  go build -mod=vendor -trimpath -buildvcs=false -ldflags="-buildid=" -o policy-approval ./cmd/bao-policy-approval && \
-  touch -h -d "@${SOURCE_DATE_EPOCH}" policy-approval
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
 WORKDIR /
 COPY --from=builder /workspace/manager .
-COPY --from=builder /workspace/policy-approval .
 USER 65532:65532
 
 # Disable Docker-native healthchecks as we rely on Kubernetes Probes (Manager)

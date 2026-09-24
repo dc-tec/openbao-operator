@@ -455,24 +455,7 @@ func compareSnapshots(oldNodes, newNodes []schemaNode) []change {
 			))
 			continue
 		}
-		comparisonNode := newNode
-		if guard := newPolicyOptInGuard(oldNode, newNode, oldByKey, newByKey); guard != nil {
-			// Classify this one additive guard independently. All other CEL
-			// changes, including diagnostic rewrites, retain their normal checks.
-			comparisonNode.CEL = make([]celRule, 0, len(newNode.CEL)-1)
-			for _, rule := range newNode.CEL {
-				if !equalJSON(rule, *guard) {
-					comparisonNode.CEL = append(comparisonNode.CEL, rule)
-				}
-			}
-			if len(comparisonNode.CEL) == 0 {
-				comparisonNode.CEL = nil
-			}
-			changes = append(changes, newChange(impactCompatible, "cel-new-opt-in-guard", newNode,
-				"validation applies only to a newly introduced optional approver reference"))
-		}
-		nodeChanges := compareNode(oldNode, comparisonNode)
-		changes = append(changes, nodeChanges...)
+		changes = append(changes, compareNode(oldNode, newNode)...)
 	}
 	for key, newNode := range newByKey {
 		if _, ok := oldByKey[key]; ok {

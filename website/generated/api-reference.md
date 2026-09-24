@@ -1415,24 +1415,6 @@ _Appears in:_
 | `annotations` _object (keys:string, values:string)_ | Annotations are merged into the generated OpenBao Pod template annotations.<br />Operator-managed annotations take precedence if the same key is specified here. |  | Optional: \{\} <br /> |
 
 
-#### PolicyApproverReference
-
-
-
-PolicyApproverReference identifies the administrator-managed Kubernetes identity
-authorized to approve changes to the operator's OpenBao policies.
-
-
-
-_Appears in:_
-- [SelfInitOIDCConfig](#selfinitoidcconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `namespace` _string_ | Namespace contains the administrative ServiceAccount. |  | MaxLength: 63 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$` <br /> |
-| `name` _string_ | Name identifies the administrative ServiceAccount. |  | MaxLength: 253 <br />MinLength: 1 <br />Pattern: `^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$` <br /> |
-
-
 #### PolicyReconciliationStatus
 
 
@@ -1815,7 +1797,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled triggers the bootstrap logic. |  |  |
-| `policyApproverRef` _[PolicyApproverReference](#policyapproverreference)_ | PolicyApproverRef enrolls a separate administrative ServiceAccount during<br />initial bootstrap. Its JWT role can update the operator policy approval.<br />The referenced namespace must be outside the runtime operator's write<br />permissions. The operator does not create this ServiceAccount or reconcile<br />its OpenBao role after initialization. Changing this reference on an existing<br />cluster requires administrator enrollment in OpenBao. |  | Optional: \{\} <br /> |
 | `audience` _string_ | Audience, if set, must match the operator installation audience used for<br />projected OpenBao auth tokens.<br />This field does not create a per-cluster TokenRequest audience override. |  | Optional: \{\} <br /> |
 | `issuer` _string_ | Issuer overrides the auto-discovered K8s issuer URL.<br />Critical for scenarios where OpenBao sees a different K8s URL than the Operator. |  | Optional: \{\} <br /> |
 | `additionalSubjects` _[SelfInitOIDCAdditionalSubjects](#selfinitoidcadditionalsubjects)_ | AdditionalSubjects adds exact Kubernetes ServiceAccount subjects to the<br />generated Operator JWT roles. Use these bindings when a snapshot must<br />remain operable after restore to a target with different ServiceAccount<br />subjects. Configure the source cluster before self-initialization so the<br />bindings are present in each snapshot.<br />These bindings do not configure JWT issuer or signature verification for<br />another Kubernetes control plane. The jwt-operator auth method must also<br />trust the target's projected ServiceAccount tokens. |  | Optional: \{\} <br /> |
