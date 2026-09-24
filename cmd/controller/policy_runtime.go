@@ -26,7 +26,7 @@ func operatorPolicyClientFactory(
 		if err != nil {
 			return nil, err
 		}
-		token, err := os.ReadFile("/var/run/secrets/tokens/openbao-token")
+		token, err := os.ReadFile(constants.PathOperatorJWTToken)
 		if err != nil {
 			return nil, fmt.Errorf("read projected OpenBao JWT: %w", err)
 		}

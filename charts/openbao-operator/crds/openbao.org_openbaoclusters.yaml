@@ -5781,6 +5781,12 @@ spec:
                               the error.
                             type: string
                         type: object
+                      lastVerified:
+                        description: |-
+                          LastVerified is when the complete desired bundle was last verified or repaired.
+                          Unchanged successful observations are refreshed at most once every five minutes.
+                        format: date-time
+                        type: string
                       retryAfter:
                         description: RetryAfter delays policy requests after a failure,
                           including during unrelated reconciles.
@@ -5790,8 +5796,9 @@ spec:
                         additionalProperties:
                           type: string
                         description: |-
-                          Revisions contains the last verified content digest for each built-in policy.
-                          An observed missing or different policy removes its entry until repaired.
+                          Revisions contains the last verified content digest for each observed policy.
+                          An empty digest means the policy was observed missing or different and awaits repair.
+                          An absent entry means the policy has not been observed; it does not block operations.
                           Failed reads retain the last observation; OpenBao still authorizes every operation.
                         type: object
                     type: object

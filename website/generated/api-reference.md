@@ -1428,8 +1428,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `revisions` _object (keys:string, values:string)_ | Revisions contains the last verified content digest for each built-in policy.<br />An observed missing or different policy removes its entry until repaired.<br />Failed reads retain the last observation; OpenBao still authorizes every operation. |  | Optional: \{\} <br /> |
+| `revisions` _object (keys:string, values:string)_ | Revisions contains the last verified content digest for each observed policy.<br />An empty digest means the policy was observed missing or different and awaits repair.<br />An absent entry means the policy has not been observed; it does not block operations.<br />Failed reads retain the last observation; OpenBao still authorizes every operation. |  | Optional: \{\} <br /> |
 | `attemptedRevision` _string_ | AttemptedRevision identifies the bundle used for the last attempt.<br />A desired bundle change bypasses the previous retry delay. |  | Optional: \{\} <br /> |
+| `lastVerified` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastVerified is when the complete desired bundle was last verified or repaired.<br />Unchanged successful observations are refreshed at most once every five minutes. |  | Optional: \{\} <br /> |
 | `retryAfter` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | RetryAfter delays policy requests after a failure, including during unrelated reconciles. |  | Optional: \{\} <br /> |
 | `lastError` _[ControllerErrorStatus](#controllererrorstatus)_ | LastError reports policy failures independently of infrastructure and Autopilot errors. |  | Optional: \{\} <br /> |
 

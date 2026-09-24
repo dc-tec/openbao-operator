@@ -301,6 +301,7 @@ resources:
           - OpenBaoInitialized
           - OpenBaoLeader
           - OpenBaoSealed
+          - PolicyReconciliationReady
           - ProductionReady
           - RaftMembershipReady
           - ReadReplicaStorageConfigured

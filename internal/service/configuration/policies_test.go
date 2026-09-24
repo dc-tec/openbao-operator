@@ -83,6 +83,7 @@ func TestPolicyReconciliation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cluster.Status.Workload.PolicyReconciliation.RetryAfter = nil
+			cluster.Status.Workload.PolicyReconciliation.LastVerified = nil
 			if tc.change != nil {
 				tc.change()
 			}
@@ -144,6 +145,61 @@ func TestPolicyAuthenticationBackoff(t *testing.T) {
 	}
 }
 
+func TestPolicyEnrollmentObservations(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	cluster.Spec.ReconcilePolicies, cluster.Status.Initialized = true, true
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{}
+	store := &policyStore{values: map[string]string{}, readErr: portopenbao.NewAPIError("not enrolled", http.StatusForbidden, nil)}
+	manager := &PolicyManager{ClientFor: func(context.Context, *openbaov1alpha1.OpenBaoCluster) (portopenbao.PolicyClient, error) {
+		return store, nil
+	}}
+	_, err := manager.Reconcile(t.Context(), logr.Discard(), cluster)
+	require.Error(t, err)
+	for _, name := range []string{portauth.PolicyNameBackup, portauth.PolicyNameUpgrade} {
+		require.NoError(t, RequirePolicyReady(cluster, name), "an enrollment failure must not stop existing operations")
+	}
+	store.readErr, store.deny = nil, portauth.PolicyNameUpgrade
+	cluster.Status.Workload.PolicyReconciliation.RetryAfter = nil
+	_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
+	require.Error(t, err)
+	require.Empty(t, cluster.Status.Workload.PolicyRevision, "the complete bundle has never succeeded")
+	require.Error(t, RequirePolicyReady(cluster, portauth.PolicyNameUpgrade), "a known missing policy blocks its operation")
+	require.NoError(t, RequirePolicyReady(cluster, portauth.PolicyNameBackup))
+}
+
+func TestPolicyVerificationInterval(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	cluster.Spec.ReconcilePolicies, cluster.Status.Initialized = true, true
+	store := &policyStore{values: map[string]string{}}
+	logins := 0
+	manager := &PolicyManager{ClientFor: func(context.Context, *openbaov1alpha1.OpenBaoCluster) (portopenbao.PolicyClient, error) {
+		logins++
+		return store, nil
+	}}
+	_, err := manager.Reconcile(t.Context(), logr.Discard(), cluster)
+	require.NoError(t, err)
+	verified := cluster.Status.Workload.PolicyReconciliation.LastVerified.DeepCopy()
+	store.reads, store.writes = nil, nil
+	for range 3 {
+		result, err := manager.Reconcile(t.Context(), logr.Discard(), cluster)
+		require.NoError(t, err)
+		require.Greater(t, result.RequeueAfter, 4*time.Minute)
+	}
+	require.Equal(t, 1, logins)
+	require.Empty(t, store.reads)
+	require.Equal(t, verified, cluster.Status.Workload.PolicyReconciliation.LastVerified)
+	delete(store.values, portauth.PolicyNameUpgrade)
+	cluster.Status.Workload.PolicyReconciliation.LastVerified.Time = time.Now().Add(-6 * time.Minute)
+	_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
+	require.NoError(t, err)
+	require.Equal(t, []string{portauth.PolicyNameUpgrade}, store.writes)
+	require.Len(t, store.reads, 3)
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{}
+	_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
+	require.NoError(t, err)
+	require.Equal(t, 3, logins, "desired changes bypass the successful verification interval")
+}
+
 func TestPolicyReconciliationDuringStrategyChange(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -184,12 +240,14 @@ func TestPolicyReconciliationDuringStrategyChange(t *testing.T) {
 			require.NoError(t, RequirePolicyReady(cluster, portauth.PolicyNameUpgrade), "allow operation lock recovery")
 
 			delete(store.values, portauth.PolicyNameUpgrade)
+			cluster.Status.Workload.PolicyReconciliation.LastVerified = nil
 			_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
 			require.NoError(t, err)
 			require.Equal(t, []string{portauth.PolicyNameUpgrade}, store.writes)
 			require.Equal(t, activePolicy, store.values[portauth.PolicyNameUpgrade], "repair with the running strategy's contents")
 
 			delete(store.values, portauth.PolicyNameUpgrade)
+			cluster.Status.Workload.PolicyReconciliation.LastVerified = nil
 			store.deny = portauth.PolicyNameUpgrade
 			result, err := manager.Reconcile(t.Context(), logr.Discard(), cluster)
 			require.Error(t, err)

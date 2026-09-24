@@ -49,8 +49,6 @@ func (a *Applications) ReconcileWorkload(
 		return recon.Result{}, fmt.Errorf("workload application client is required")
 	}
 
-	reconcilePoliciesBeforeInfrastructure(ctx, logger, cluster, a.config.PolicyReconciler)
-
 	return RunWorkloadReconcilers(
 		ctx,
 		a.config.Client,
@@ -58,6 +56,7 @@ func (a *Applications) ReconcileWorkload(
 		original,
 		cluster,
 		a.config.WorkloadReconcilers,
+		a.config.PolicyReconciler,
 		recordError,
 		a.config.WorkloadPolicy,
 	)

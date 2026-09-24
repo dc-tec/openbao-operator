@@ -65,7 +65,8 @@ Policy reconciliation does not create or repair this authentication configuratio
 6. Enable `reconcilePolicies` and deploy the intended operator configuration. With standard JWT authentication,
    existing cached tokens might not include the new policy until they expire. Restart the controller to obtain new
    tokens if needed. Inline JWT authentication uses the updated role on its next request.
-7. Verify that `status.workload.policyRevision` is populated and `status.workload.policyReconciliation.lastError` is absent.
+7. Verify that `PolicyReconciliationReady=True` and inspect `status.workload.policyReconciliation.lastVerified`.
+   If readiness is false, inspect the condition message and warning events for enrollment or repair failures.
 
 Replace old approval contents rather than retaining multiple accepted versions. Every retained version remains
 available to the controller, including versions with permissions you intended to remove. An administrator can apply
@@ -96,21 +97,33 @@ before retrying. CAS protects writes; it does not guarantee a fresh read from a 
 
 ## Recovery behavior
 
-The workload controller reads each policy during reconciliation and periodic refreshes, approximately once per minute
-by default. It writes only missing or changed contents. A failed policy does not stop checks and repairs for the others,
-infrastructure reconciliation, or Autopilot configuration.
+The workload controller verifies policies after the workload reconciliation steps, including when a step fails or
+requests a retry. Policy verification does not delay the preceding infrastructure repair attempt. A failed policy does
+not stop checks and repairs for the others.
 
-`status.workload.policyReconciliation.revisions` records each policy's last verified digest. A missing or changed policy
-loses its entry until repaired. A failed read preserves the previous observation. OpenBao authorizes every operation;
-these observations do not grant access. New backup and upgrade operations check only their own policy. Running operations
-can finish and release their locks. Restore never waits for policy reconciliation; its configured OpenBao credentials must
-still authorize the restore.
+Successful verification is cached for five minutes, including across pod events and controller restarts. A change to
+the desired policy bundle triggers an immediate check. External drift can take up to five minutes to be detected while
+reconciliation and OpenBao are available. The controller writes only missing or changed contents.
+
+`status.workload.policyReconciliation.revisions` records each observed policy. A digest identifies verified contents;
+an empty value identifies a missing or changed policy awaiting repair. An absent entry means the policy has not been
+observed. Failed reads preserve the previous observation.
+
+Enabling reconciliation before enrollment does not block operations whose policies have never been observed.
+`PolicyReconciliationReady=False` and warning events report enrollment failures. Once a policy has been observed, new
+backup or upgrade operations wait if its digest differs from the required contents or repair is pending. Each operation
+checks only its own policy. Running operations can finish and release their locks. OpenBao authorizes every operation;
+these observations do not grant access. Restore never waits for policy reconciliation; its configured OpenBao credentials
+must still authorize the restore.
 
 `status.workload.policyRevision` retains the last completely verified bundle. It is informational and does not gate operations.
-`status.workload.policyReconciliation.lastError` reports policy failures separately from other workload errors.
+`status.workload.policyReconciliation.lastError` reports policy failures separately from `status.workload.lastError`.
+The `PolicyReconciliationReady` condition and the generic `Degraded` condition expose these failures. A warning event
+is emitted on the first failure and when its message changes. `lastVerified` records the last successful verification
+of the complete bundle.
 Forbidden requests (403) and missing auth or write endpoints (404) retry after five minutes. Other failures retry after
 30 seconds. Unrelated reconciles respect `retryAfter`; a desired bundle change triggers a new attempt. A missing ACL policy
-on read is repaired immediately when approved.
+is repaired when the next verification reads it, if its contents are approved.
 
 An administrator must restore a missing approval policy, JWT role, or auth method. The controller does not fall back to a
 root token. Adding backup after initialization can also require administrator creation of the backup role; policy

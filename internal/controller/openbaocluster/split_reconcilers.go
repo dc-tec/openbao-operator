@@ -119,11 +119,17 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		recordError,
 	)
 	if appErr == nil &&
-		appResult.RequeueAfter <= 0 &&
 		cluster.Status.Workload != nil &&
 		cluster.Status.Workload.LastError == nil &&
 		(!r.parent.SingleTenantMode || portauth.PolicyReconciliationEnabled(cluster)) {
-		appResult.RequeueAfter = steadyStateStatusRefreshRequeueAfter(time.Now())
+		refresh := steadyStateStatusRefreshRequeueAfter(time.Now())
+		if appResult.RequeueAfter <= 0 {
+			appResult.RequeueAfter = refresh
+		} else if !r.parent.SingleTenantMode && portauth.PolicyReconciliationEnabled(cluster) {
+			// Multi-tenant infrastructure relies on polling rather than child watches.
+			// The policy verification cache must not lengthen that repair interval.
+			appResult.RequeueAfter = min(appResult.RequeueAfter, refresh)
+		}
 	}
 	return ctrl.Result{RequeueAfter: appResult.RequeueAfter}, appErr
 }

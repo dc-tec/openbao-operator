@@ -21,7 +21,7 @@ func TestPolicyGateBeforeNewOperations(t *testing.T) {
 	reconcilers := plan.orderedFor(cluster)
 	require.Len(t, reconcilers, 1)
 	_, err := reconcilers[0].Reconcile(t.Context(), logr.Discard(), cluster)
-	require.Error(t, err)
+	require.NoError(t, err, "incomplete enrollment must preserve existing operation behavior")
 	cluster.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{
 		PolicyReconciliation: &openbaov1alpha1.PolicyReconciliationStatus{Revisions: map[string]string{}},
 	}
@@ -30,7 +30,7 @@ func TestPolicyGateBeforeNewOperations(t *testing.T) {
 	}
 	_, err = reconcilers[0].Reconcile(t.Context(), logr.Discard(), cluster)
 	require.NoError(t, err)
-	delete(cluster.Status.Workload.PolicyReconciliation.Revisions, portauth.PolicyNameUpgrade)
+	cluster.Status.Workload.PolicyReconciliation.Revisions[portauth.PolicyNameUpgrade] = ""
 	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{Operation: openbaov1alpha1.ClusterOperationUpgrade}
 	_, err = reconcilers[0].Reconcile(t.Context(), logr.Discard(), cluster)
 	require.NoError(t, err, "running operations must observe completion and release their lock")
@@ -59,6 +59,7 @@ func TestUnapprovedUpgradeDoesNotBlockBackup(t *testing.T) {
 					cluster.Status.Workload.PolicyReconciliation.Revisions[policy.Name] = fmt.Sprintf("%x", sha256.Sum256([]byte(policy.Policy)))
 				}
 			}
+			cluster.Status.Workload.PolicyReconciliation.Revisions[blocked] = ""
 			var calls []string
 			app := applicationForTest(reconcilerPlan{
 				upgradeReconcilers: []subReconciler{recordingSubReconciler{name: portauth.PolicyNameUpgrade, calls: &calls}},

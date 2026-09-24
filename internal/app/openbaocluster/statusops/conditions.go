@@ -18,6 +18,7 @@ func applyAllConditions(
 	now metav1.Time,
 ) {
 	gen := cluster.Generation
+	applyPolicyReconciliationCondition(cluster, now, "")
 
 	initCond := buildInitializedCondition(state.Initialized, state.InitializedKnown)
 	initCond.ObservedGeneration = gen

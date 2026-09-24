@@ -80,8 +80,9 @@ type WorkloadControllerStatus struct {
 
 // PolicyReconciliationStatus records progress without granting OpenBao permissions.
 type PolicyReconciliationStatus struct {
-	// Revisions contains the last verified content digest for each built-in policy.
-	// An observed missing or different policy removes its entry until repaired.
+	// Revisions contains the last verified content digest for each observed policy.
+	// An empty digest means the policy was observed missing or different and awaits repair.
+	// An absent entry means the policy has not been observed; it does not block operations.
 	// Failed reads retain the last observation; OpenBao still authorizes every operation.
 	// +optional
 	Revisions map[string]string `json:"revisions,omitempty"`
@@ -89,6 +90,10 @@ type PolicyReconciliationStatus struct {
 	// A desired bundle change bypasses the previous retry delay.
 	// +optional
 	AttemptedRevision string `json:"attemptedRevision,omitempty"`
+	// LastVerified is when the complete desired bundle was last verified or repaired.
+	// Unchanged successful observations are refreshed at most once every five minutes.
+	// +optional
+	LastVerified *metav1.Time `json:"lastVerified,omitempty"`
 	// RetryAfter delays policy requests after a failure, including during unrelated reconciles.
 	// +optional
 	RetryAfter *metav1.Time `json:"retryAfter,omitempty"`

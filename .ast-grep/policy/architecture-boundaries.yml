@@ -396,6 +396,7 @@ appBoundaries:
     ignores:
       - "**/*_test.go"
     allowServiceImports:
+      - internal/service/configuration
       - internal/service/networking
       - internal/service/upgrade
       - internal/service/workload

@@ -81,6 +81,7 @@ func TestApprovedPolicyRepair(t *testing.T) {
 	missing, err := admin.ReadACLPolicy(t.Context(), portauth.PolicyNameBackup)
 	require.NoError(t, err)
 	require.Nil(t, missing)
+	cluster.Status.Workload.PolicyReconciliation.LastVerified.Time = time.Now().Add(-6 * time.Minute)
 	_, err = manager.Reconcile(t.Context(), logr.Discard(), cluster)
 	require.NoError(t, err)
 	require.Equal(t, 1, store.writes)

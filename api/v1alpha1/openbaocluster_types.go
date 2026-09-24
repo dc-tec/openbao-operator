@@ -85,6 +85,10 @@ const (
 	// the backup Job's operator-known prerequisites such as auth references,
 	// storage credential Secret references, and hardened-profile egress rules.
 	ConditionBackupConfigurationReady ConditionType = "BackupConfigurationReady"
+
+	// ConditionPolicyReconciliationReady indicates whether the requested built-in
+	// policies have been verified and the last reconciliation attempt succeeded.
+	ConditionPolicyReconciliationReady ConditionType = "PolicyReconciliationReady"
 	// ConditionCloudUnsealIdentityReady indicates whether the operator can
 	// determine and validate the cloud KMS unseal authentication path for the
 	// main OpenBao Pods when using AWS KMS, GCP Cloud KMS, Azure Key Vault, or OCI KMS.

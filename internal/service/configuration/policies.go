@@ -28,6 +28,8 @@ type PolicyClientFactory func(context.Context, *openbaov1alpha1.OpenBaoCluster) 
 // the approval policy, JWT roles, or auth mount configuration.
 type PolicyManager struct{ ClientFor PolicyClientFactory }
 
+const policyVerificationInterval = 5 * time.Minute
+
 // PolicyRevision identifies the desired bundle, including its exact contents.
 func PolicyRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return policyDigest(configbuilder.OperatorPolicyApproval(policyConfiguration(cluster)))
@@ -64,8 +66,11 @@ func RequirePolicyReady(cluster *openbaov1alpha1.OpenBaoCluster, name string) er
 		if policy.Name != name {
 			continue
 		}
-		if cluster.Status.Workload != nil && cluster.Status.Workload.PolicyReconciliation != nil &&
-			cluster.Status.Workload.PolicyReconciliation.Revisions[name] == policyDigest(policy.Policy) {
+		if cluster.Status.Workload == nil || cluster.Status.Workload.PolicyReconciliation == nil {
+			return nil // Enrollment has not established any observations yet.
+		}
+		observed, known := cluster.Status.Workload.PolicyReconciliation.Revisions[name]
+		if !known || observed == policyDigest(policy.Policy) {
 			return nil
 		}
 		return operatorerrors.WithReason(constants.ReasonPoliciesNotReady, operatorerrors.WrapTransientClusterState(
@@ -88,8 +93,15 @@ func (m *PolicyManager) Reconcile(ctx context.Context, _ logr.Logger, cluster *o
 	}
 	status := cluster.Status.Workload.PolicyReconciliation
 	revision := PolicyRevision(cluster)
-	if status.AttemptedRevision == revision && status.RetryAfter != nil && time.Now().Before(status.RetryAfter.Time) {
-		return recon.Result{RequeueAfter: time.Until(status.RetryAfter.Time)}, nil
+	if status.AttemptedRevision == revision {
+		if status.RetryAfter != nil && time.Now().Before(status.RetryAfter.Time) {
+			return recon.Result{RequeueAfter: time.Until(status.RetryAfter.Time)}, nil
+		}
+		if status.LastError == nil && cluster.Status.Workload.PolicyRevision == revision && status.LastVerified != nil {
+			if remaining := time.Until(status.LastVerified.Add(policyVerificationInterval)); remaining > 0 {
+				return recon.Result{RequeueAfter: remaining}, nil
+			}
+		}
 	}
 	status.AttemptedRevision = revision
 	status.RetryAfter = nil
@@ -118,8 +130,10 @@ func (m *PolicyManager) Reconcile(ctx context.Context, _ logr.Logger, cluster *o
 		return recordPolicyFailure(status, errors.Join(failures...), delay)
 	}
 	status.LastError = nil
+	verified := metav1.Now()
+	status.LastVerified = &verified
 	cluster.Status.Workload.PolicyRevision = revision
-	return recon.Result{}, nil
+	return recon.Result{RequeueAfter: policyVerificationInterval}, nil
 }
 
 func reconcilePolicy(ctx context.Context, client portopenbao.PolicyClient, policy configbuilder.OperatorPolicy, revisions map[string]string) error {
@@ -128,7 +142,7 @@ func reconcilePolicy(ctx context.Context, client portopenbao.PolicyClient, polic
 		return fmt.Errorf("read: %w", err)
 	}
 	if current == nil || *current != policy.Policy {
-		delete(revisions, policy.Name)
+		revisions[policy.Name] = ""
 		if err := client.WriteACLPolicy(ctx, policy.Name, policy.Policy); err != nil {
 			return fmt.Errorf("write: %w", err)
 		}

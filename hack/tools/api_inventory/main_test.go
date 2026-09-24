@@ -312,6 +312,7 @@ func TestRepositoryInventoryTracksProducedConditionTypes(t *testing.T) {
 		string(openbaov1alpha1.ConditionOpenBaoInitialized),
 		string(openbaov1alpha1.ConditionOpenBaoLeader),
 		string(openbaov1alpha1.ConditionOpenBaoSealed),
+		string(openbaov1alpha1.ConditionPolicyReconciliationReady),
 		string(openbaov1alpha1.ConditionProductionReady),
 		string(openbaov1alpha1.ConditionRaftMembershipReady),
 		string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),

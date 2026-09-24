@@ -74,8 +74,8 @@ func TestPolicyReconciliationStatus(t *testing.T) {
 		WorkloadPolicy:   openbaocluster.DefaultWorkloadResultPolicy(),
 		WorkloadReconcilers: []openbaocluster.SubReconciler{policyRepairObserver{observe: func(c *openbaov1alpha1.OpenBaoCluster) {
 			observations++
-			if !store.readDenied && !store.writeDenied {
-				require.NoError(t, configuration.RequirePolicyReady(c, portauth.PolicyNameOperator), "repair precedes infrastructure operations")
+			if observations == 1 {
+				require.NoError(t, configuration.RequirePolicyReady(c, portauth.PolicyNameOperator), "unobserved policies do not block infrastructure")
 			}
 		}}},
 	})
@@ -85,6 +85,7 @@ func TestPolicyReconciliationStatus(t *testing.T) {
 		deletePolicy bool
 		writes       int
 	}{
+		{readDenied: true}, // Enabling before enrollment preserves existing operations.
 		{writes: 3},
 		{}, // A matching revision still reads live policies without rewriting them.
 		{readDenied: true},
@@ -94,23 +95,29 @@ func TestPolicyReconciliationStatus(t *testing.T) {
 	} {
 		if cluster.Status.Workload != nil && cluster.Status.Workload.PolicyReconciliation != nil {
 			cluster.Status.Workload.PolicyReconciliation.RetryAfter = nil
+			cluster.Status.Workload.PolicyReconciliation.LastVerified = nil
 		}
 		store.readDenied, store.writeDenied = step.readDenied, step.writeDenied
 		store.writes = 0
 		if step.deletePolicy {
 			delete(store.values, portauth.PolicyNameOperator)
 		}
+		hadVerified := cluster.Status.Workload != nil && cluster.Status.Workload.PolicyRevision != ""
 		result, err := applications.ReconcileWorkload(ctx, logr.Discard(), cluster.DeepCopy(), cluster, nil)
 		require.NoError(t, err)
 		require.Equal(t, step.writes, store.writes)
+		require.Nil(t, cluster.Status.Workload.LastError)
 		require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster))
 		if step.readDenied || step.writeDenied {
 			require.Positive(t, result.RequeueAfter)
-			require.NotEmpty(t, cluster.Status.Workload.PolicyRevision, "preserve the last complete observation")
-			require.Equal(t, "PolicyReconciliationFailed", cluster.Status.Workload.LastError.Reason)
+			if hadVerified {
+				require.NotEmpty(t, cluster.Status.Workload.PolicyRevision, "preserve the last complete observation")
+			}
+			require.Equal(t, "PolicyReconciliationFailed", cluster.Status.Workload.PolicyReconciliation.LastError.Reason)
 			if step.deletePolicy {
 				require.Error(t, configuration.RequirePolicyReady(cluster, portauth.PolicyNameOperator))
-				require.NotContains(t, cluster.Status.Workload.PolicyReconciliation.Revisions, portauth.PolicyNameOperator)
+				require.Contains(t, cluster.Status.Workload.PolicyReconciliation.Revisions, portauth.PolicyNameOperator)
+				require.Empty(t, cluster.Status.Workload.PolicyReconciliation.Revisions[portauth.PolicyNameOperator])
 			} else {
 				require.NoError(t, configuration.RequirePolicyReady(cluster, portauth.PolicyNameOperator))
 			}
@@ -119,7 +126,7 @@ func TestPolicyReconciliationStatus(t *testing.T) {
 			require.NoError(t, configuration.RequirePolicyReady(cluster, portauth.PolicyNameOperator))
 		}
 	}
-	require.Equal(t, 6, observations, "infrastructure repair still runs when OpenBao policy reads or writes fail")
+	require.Equal(t, 7, observations, "infrastructure repair still runs when OpenBao policy reads or writes fail")
 }
 
 func TestPolicyReconciliationWithoutSelfInit(t *testing.T) {

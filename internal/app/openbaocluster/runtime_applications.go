@@ -81,7 +81,7 @@ type RuntimeApplicationsConfig struct {
 func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
 	var policyReconciler SubReconciler
 	if config.OpenBao.PolicyManager != nil {
-		policyReconciler = config.OpenBao.PolicyManager
+		policyReconciler = &policyConfigReconciler{manager: config.OpenBao.PolicyManager, recorder: config.Kubernetes.Recorder}
 	}
 	clientForPod := config.OpenBao.ClientForPod
 	if clientForPod == nil {
@@ -147,7 +147,6 @@ func NewRuntimeApplications(config RuntimeApplicationsConfig) *Applications {
 	workloadReconcilers = AppendInitAndAutopilotReconcilers(
 		workloadReconcilers,
 		config.OpenBao.InitManager,
-		config.OpenBao.PolicyManager,
 		config.OpenBao.Raft,
 		config.Kubernetes.APIReader,
 		config.Kubernetes.Recorder,

@@ -1742,6 +1742,10 @@ func (in *PolicyReconciliationStatus) DeepCopyInto(out *PolicyReconciliationStat
 			(*out)[key] = val
 		}
 	}
+	if in.LastVerified != nil {
+		in, out := &in.LastVerified, &out.LastVerified
+		*out = (*in).DeepCopy()
+	}
 	if in.RetryAfter != nil {
 		in, out := &in.RetryAfter, &out.RetryAfter
 		*out = (*in).DeepCopy()

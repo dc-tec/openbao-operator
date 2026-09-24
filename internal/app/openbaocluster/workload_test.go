@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/configuration"
 	"github.com/go-logr/logr"
@@ -15,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -194,14 +197,14 @@ func TestPolicyFailureStillRunsAutopilot(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).
 		WithStatusSubresource(cluster).WithReturnManagedFields().Build()
 	attempts, autopilotCalls := 0, 0
+	recorder := events.NewFakeRecorder(10)
 	manager := &configuration.PolicyManager{ClientFor: func(context.Context, *openbaov1alpha1.OpenBaoCluster) (portopenbao.PolicyClient, error) {
 		attempts++
 		return nil, portopenbao.NewAPIError("login", 403, nil)
 	}}
 	app := NewApplications(ApplicationsConfig{
-		Client: c, PolicyReconciler: manager, WorkloadPolicy: DefaultWorkloadResultPolicy(),
+		Client: c, PolicyReconciler: &policyConfigReconciler{manager: manager, recorder: recorder}, WorkloadPolicy: DefaultWorkloadResultPolicy(),
 		WorkloadReconcilers: []SubReconciler{
-			&policyConfigReconciler{manager: manager},
 			&autopilotConfigReconciler{statefulSetReader: readerStub{}, autopilotRuntime: autopilotRuntimeStub{
 				reconcileFunc: func(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) error {
 					autopilotCalls++
@@ -215,8 +218,75 @@ func TestPolicyFailureStillRunsAutopilot(t *testing.T) {
 		require.NoError(t, err)
 		require.Greater(t, result.RequeueAfter, 4*time.Minute)
 		require.Equal(t, "PolicyReconciliationFailed", cluster.Status.Workload.PolicyReconciliation.LastError.Reason)
-		require.Equal(t, "PolicyReconciliationFailed", cluster.Status.Workload.LastError.Reason)
+		require.Nil(t, cluster.Status.Workload.LastError)
 	}
+	require.Len(t, recorder.Events, 1, "one warning on the failure transition, not on cooldown polls")
 	require.Equal(t, 2, autopilotCalls)
 	require.Equal(t, 1, attempts, "neither the second stage nor an unrelated reconcile bypasses cooldown")
+}
+
+type workloadStepFunc func(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) (recon.Result, error)
+
+func (f workloadStepFunc) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	return f(ctx, logger, cluster)
+}
+
+func TestPolicyCheckFollowsWorkloadAttempt(t *testing.T) {
+	const outcomeDisabled = "disabled"
+	const outcomeRequeue = "requeue"
+	for _, outcome := range []string{"complete", outcomeRequeue, "error", outcomeDisabled} {
+		t.Run(outcome, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+			cluster := &openbaov1alpha1.OpenBaoCluster{ObjectMeta: metav1.ObjectMeta{Name: "ordering", Namespace: "test"}}
+			cluster.Spec.ReconcilePolicies = outcome != outcomeDisabled
+			cluster.Status.Initialized = true
+			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).WithStatusSubresource(cluster).WithReturnManagedFields().Build()
+			original := cluster.DeepCopy()
+			cluster.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{LastError: &openbaov1alpha1.ControllerErrorStatus{Reason: "Previous"}}
+			require.NoError(t, PatchWorkloadOwnedFields(t.Context(), c, logr.Discard(), original, cluster, "test-setup"))
+			var calls []string
+			manager := &configuration.PolicyManager{ClientFor: func(context.Context, *openbaov1alpha1.OpenBaoCluster) (portopenbao.PolicyClient, error) {
+				require.Equal(t, []string{"infrastructure"}, calls, "infrastructure runs before an unavailable policy endpoint can delay it")
+				calls = append(calls, "policy")
+				return nil, portopenbao.NewAPIError("unavailable", 503, nil)
+			}}
+			app := NewApplications(ApplicationsConfig{Client: c, PolicyReconciler: manager, WorkloadPolicy: DefaultWorkloadResultPolicy(),
+				WorkloadReconcilers: []SubReconciler{workloadStepFunc(func(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+					calls = append(calls, "infrastructure")
+					switch outcome {
+					case outcomeRequeue, outcomeDisabled:
+						return recon.Result{RequeueAfter: time.Second}, nil
+					case "error":
+						return recon.Result{}, errors.New("infrastructure failed")
+					default:
+						return recon.Result{}, nil
+					}
+				})},
+			})
+			_, err := app.ReconcileWorkload(t.Context(), logr.Discard(), cluster.DeepCopy(), cluster, nil)
+			if outcome == "error" {
+				require.ErrorContains(t, err, "infrastructure failed")
+			} else {
+				require.NoError(t, err)
+			}
+			if outcome == outcomeDisabled {
+				require.Equal(t, []string{"infrastructure"}, calls)
+			} else {
+				require.Equal(t, []string{"infrastructure", "policy"}, calls)
+			}
+			if outcome == outcomeRequeue || outcome == outcomeDisabled {
+				require.Equal(t, "Previous", cluster.Status.Workload.LastError.Reason, "preserve pre-feature error handling")
+			}
+			persisted := &openbaov1alpha1.OpenBaoCluster{}
+			require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(cluster), persisted))
+			if outcome != outcomeDisabled {
+				require.Equal(t, "PolicyReconciliationFailed", persisted.Status.Workload.PolicyReconciliation.LastError.Reason)
+				require.NotNil(t, persisted.Status.Workload.PolicyReconciliation.RetryAfter)
+			}
+			if outcome == outcomeRequeue || outcome == outcomeDisabled {
+				require.Equal(t, "Previous", persisted.Status.Workload.LastError.Reason)
+			}
+		})
+	}
 }
