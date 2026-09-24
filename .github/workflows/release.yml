@@ -522,6 +522,12 @@ jobs:
           operator-version: ${{ needs.prepare.outputs.version }}
           output-dir: dist/rebuild
 
+      - name: Generate policy approval assets
+        run: |
+          set -euo pipefail
+          go run ./hack/tools/operator_policy_approval --output-dir dist/primary
+          go run ./hack/tools/operator_policy_approval --output-dir dist/rebuild
+
       - name: Package Helm chart (primary)
         env:
           CHART_VERSION: ${{ needs.prepare.outputs.chart_version }}
@@ -668,7 +674,7 @@ jobs:
             done
             (
               cd "${dir}"
-              sha256sum install.yaml crds.yaml "${sbom_names[@]}" > checksums.txt
+              sha256sum install.yaml crds.yaml operator-policy-approval.hcl operator-policy-approval-with-backup.hcl "${sbom_names[@]}" > checksums.txt
             )
           }
           generate_checksums dist/primary
@@ -689,6 +695,8 @@ jobs:
           REPRO_REQUIRED_FILES: >-
             install.yaml
             crds.yaml
+            operator-policy-approval.hcl
+            operator-policy-approval-with-backup.hcl
             checksums.txt
             openbao-operator-${{ needs.prepare.outputs.chart_version }}.tgz
             sbom-openbao-operator.spdx.json
@@ -760,6 +768,8 @@ jobs:
           emit "| :--- | :--- | :--- | :---: |"
           compare_file "install.yaml"
           compare_file "crds.yaml"
+          compare_file "operator-policy-approval.hcl"
+          compare_file "operator-policy-approval-with-backup.hcl"
           compare_file "checksums.txt"
           compare_file "openbao-operator-${CHART_VERSION}.tgz"
           compare_file "sbom-openbao-operator.spdx.json"
@@ -774,6 +784,8 @@ jobs:
           path: |
             dist/primary/install.yaml
             dist/primary/crds.yaml
+            dist/primary/operator-policy-approval.hcl
+            dist/primary/operator-policy-approval-with-backup.hcl
             dist/primary/checksums.txt
             dist/primary/openbao-operator-${{ needs.prepare.outputs.chart_version }}.tgz
             dist/primary/sbom-openbao-operator.spdx.json
@@ -789,6 +801,8 @@ jobs:
           path: |
             dist/rebuild/install.yaml
             dist/rebuild/crds.yaml
+            dist/rebuild/operator-policy-approval.hcl
+            dist/rebuild/operator-policy-approval-with-backup.hcl
             dist/rebuild/checksums.txt
             dist/rebuild/openbao-operator-${{ needs.prepare.outputs.chart_version }}.tgz
             dist/rebuild/sbom-openbao-operator.spdx.json
@@ -1052,6 +1066,8 @@ jobs:
           assets=(
             dist/install.yaml
             dist/crds.yaml
+            dist/operator-policy-approval.hcl
+            dist/operator-policy-approval-with-backup.hcl
             dist/checksums.txt
             dist/checksums.txt.bundle
             dist/checksums.txt.sigstore.json

@@ -85,6 +85,10 @@ const (
 	// the backup Job's operator-known prerequisites such as auth references,
 	// storage credential Secret references, and hardened-profile egress rules.
 	ConditionBackupConfigurationReady ConditionType = "BackupConfigurationReady"
+
+	// ConditionPolicyReconciliationReady indicates whether the requested built-in
+	// policies have been verified and the last reconciliation attempt succeeded.
+	ConditionPolicyReconciliationReady ConditionType = "PolicyReconciliationReady"
 	// ConditionCloudUnsealIdentityReady indicates whether the operator can
 	// determine and validate the cloud KMS unseal authentication path for the
 	// main OpenBao Pods when using AWS KMS, GCP Cloud KMS, Azure Key Vault, or OCI KMS.
@@ -261,6 +265,15 @@ type OpenBaoClusterSpec struct {
 	// DeletionPolicy controls what happens to underlying resources when the CR is deleted.
 	// +optional
 	DeletionPolicy DeletionPolicy `json:"deletionPolicy,omitempty"`
+	// ReconcilePolicies restores the built-in operational policies after initialization.
+	// Administrator-managed JWT authentication and exact-content approval are required.
+	// OpenBao must independently approve their exact contents through the
+	// openbao-operator-policy-approval policy. Bootstrap installs the initial approval;
+	// existing clusters and later permission changes require administrator approval.
+	// Auth methods, roles, and the approval policy are not reconciled.
+	// +optional
+	ReconcilePolicies bool `json:"reconcilePolicies,omitempty"`
+
 	// SelfInit configures OpenBao's native self-initialization feature.
 	// When enabled, OpenBao initializes itself on first start using the configured
 	// requests, and the root token is automatically revoked.

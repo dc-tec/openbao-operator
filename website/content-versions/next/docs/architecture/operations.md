@@ -5,6 +5,8 @@ eyebrow: Day 2 and recovery
 weight: 3
 verifiedBy:
   - internal/app/openbaocluster/adminops/reconcile.go
+  - internal/service/configuration/policies.go
+  - internal/app/openbaocluster/adminops/reconcile.go
   - internal/app/openbaocluster/patch_test.go
   - internal/app/openbaorestore/reconcile.go
   - internal/app/openbaorestore/reconcile_test.go
@@ -45,6 +47,19 @@ lock.
 
 The lock has its own server-side apply field manager. Backup and upgrade state share the AdminOps status plane, so those
 writers use a fresh read, mutate one concern, and apply the whole AdminOps plane to preserve sibling fields.
+
+## Check policy readiness per operation
+
+When policy reconciliation is enabled, a new backup or upgrade checks only its corresponding policy observation.
+An absent observation does not block the operation: enabling reconciliation before enrollment preserves existing
+operations. Enrollment failures remain visible through `PolicyReconciliationReady=False` and warning events.
+
+Once a policy has been observed, a missing policy or contents that differ from the required variant block new
+operations that need it until repair succeeds. Failed reads preserve earlier observations. A blocked upgrade does not
+block an independently approved backup. Running operations can finish and release their locks.
+
+Restore never waits for policy reconciliation. Its configured OpenBao credentials must still authorize the restore.
+Policy observations coordinate operations; OpenBao ACLs remain the authorization boundary.
 
 ## Back up without moving data through the controller
 

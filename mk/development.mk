@@ -1052,3 +1052,7 @@ bench-compare: benchstat ## Compare benchmark result files with benchstat. Set O
 		exit 1; \
 	fi
 	"$(BENCHSTAT)" "$(OLD)" "$(NEW)"
+
+.PHONY: test-policy-reconciliation-openbao
+test-policy-reconciliation-openbao: ## Test policy authorization and repair against a disposable OpenBao container (requires Docker).
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go test -tags=e2e ./test/e2e/policyreconciliation -count=1 -v

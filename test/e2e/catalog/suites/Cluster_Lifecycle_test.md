@@ -105,6 +105,7 @@ Recorded checkpoints:
 - waiting for OpenBaoCluster to be observed by the API server
 - waiting for StatefulSet to be created
 - triggering a reconcile and waiting for Available condition
+- verifying the approved policy bundle was reconciled
 - verifying reconcile metrics are emitted for the cluster
 - verifying Raft Autopilot is configured
 

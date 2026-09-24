@@ -150,7 +150,7 @@ The stable public distribution surface is:
 | --- | --- |
 | GHCR images | Version-tagged, digest-addressable, signed manager, init, backup, and upgrade images |
 | GHCR Helm OCI | Canonical signed chart at `ghcr.io/dc-tec/charts/openbao-operator` |
-| GitHub Release | Installer manifest, CRDs, checksums and signature bundles, SBOMs, and provenance index |
+| GitHub Release | Installer manifest, CRDs, policy approval files, checksums and signature bundles, SBOMs, and provenance index |
 | Artifact Hub | Discovery and metadata for the GHCR chart |
 
 OLM bundles remain repository and CI validation assets; public OperatorHub publication is not part of the supported
@@ -158,6 +158,11 @@ release procedure.
 
 `dist/install.yaml` and `dist/crds.yaml` are generated release outputs. Do not treat local copies as source-controlled
 publication artifacts.
+
+`make build-policy-approvals` generates `operator-policy-approval.hcl` and
+`operator-policy-approval-with-backup.hcl` in `dist/`. Both approve the two supported upgrade strategies; only the second
+includes backup policy management. The Release workflow generates and compares both files in its reproducibility
+check, includes them in signed checksums and the provenance index, and uploads them with the release.
 
 ## Verify the published release
 

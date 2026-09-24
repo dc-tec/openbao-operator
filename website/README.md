@@ -30,8 +30,11 @@ Open <http://127.0.0.1:1313/openbao-operator/>.
 devenv shell make docs-build
 ```
 
-The API sync reads each line's exact `sourceRef` from `data/version_lines.yaml` and splits its generated reference into
-one Hugo page per custom resource. The 0.4.x line retains three release-specific runtime errata; later lines publish
+The API sync reads each stable line's exact `sourceRef` from `data/version_lines.yaml` and splits its generated reference into
+one Hugo page per custom resource. The `next` line uses `sourceRef: HEAD` and reads the checked-out
+`generated/api-reference.md`, including local changes. Run `make api-reference` and
+`website/scripts/sync-api-reference.sh --line next` after API changes.
+The 0.4.x line retains three release-specific runtime errata; later lines publish
 their matching generated source directly. A first-stable line can declare a qualified `fallbackSourceRef` so pre-tag
 checks generate the final-tag pages before that tag exists. The tagged build uses `sourceRef` and must produce the same
 content. The generated site is written to `website/public/` and is ignored by Git.
@@ -49,9 +52,9 @@ declarative policy and validation instructions live under `redirects/`.
 - Patch releases update their existing minor line. A 0.5.1 release updates `0.5.x`; it does not create a `0.5.1`
   documentation route.
 
-Before publishing a minor release, copy the reviewed `next` contract into its stable minor line, replace the source
-commit with the final release tag, regenerate the API reference, and make that line the default. Afterward, advance
-`next` from `main` without changing the stable snapshot.
+Before publishing a minor release, copy the reviewed `next` contract into its stable minor line, pin that line's source
+to the final release tag, regenerate the API reference, and make that line the default. Keep `next` following the
+checked-out source without changing the stable snapshot.
 
 ## Source and publication boundary
 

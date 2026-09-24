@@ -4,6 +4,8 @@ description: How the workload path prepares TLS and infrastructure, initializes 
 eyebrow: Cluster lifecycle
 weight: 2
 verifiedBy:
+  - internal/app/openbaocluster/applications.go
+  - internal/service/configuration/policies.go
   - internal/app/openbaocluster/runtime_applications.go
   - internal/app/openbaocluster/infra.go
   - internal/app/openbaocluster/infra_operational_ordering_test.go
@@ -97,6 +99,29 @@ later Autopilot changes after initialization. It yields while an upgrade owns th
 Once initialization status is durable, the infrastructure path removes the one-pod cap. Additional voter and read
 replica pods join through the rendered Raft configuration. Safe scale-down and restart ordering are computed before the
 StatefulSets are applied.
+
+## Reconcile approved policies
+
+With `spec.reconcilePolicies: true`, the workload controller verifies built-in OpenBao policies after the workload
+steps, including when a step fails or requests a retry. A policy error does not prevent infrastructure repair or
+Autopilot reconciliation. The controller reads each policy and writes only missing or changed contents. Failure to
+repair one policy does not stop verification of the others.
+
+Successful verification is cached for five minutes across pod events and controller restarts. A change to the desired
+runtime policies bypasses this interval. The runtime revision tracks the selected strategy's policy, independently of
+the approval document that permits both strategies. During an unfinished upgrade, reconciliation retains the accepted
+strategy's permissions, including when its operation lock must be recovered. After completion it applies the requested
+strategy's policy.
+
+Forbidden requests (403) and missing auth or write endpoints (404) retry after five minutes. Other failures retry after
+30 seconds. Unrelated reconciles respect the persisted retry deadline; a desired policy change bypasses it.
+External drift is detected at the next verification while reconciliation and OpenBao are available.
+
+The workload status records individual policy observations and the last successful complete verification. Policy
+errors are separate from other workload errors and appear in `PolicyReconciliationReady`, `Degraded`, and warning
+events. A warning event is emitted on the first failure or when its message changes. See
+[status and events](../../reference/status-and-events/#policy-reconciliation-status) for the fields and
+[operation gating](../operations/#check-policy-readiness-per-operation) for their consumers.
 
 ## Preserve the handoff
 

@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/openbaotls"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
@@ -468,7 +469,7 @@ func (m *Manager) getClientTrustBundle(ctx context.Context, cluster *openbaov1al
 
 // getJWTToken retrieves a JWT token for the operator from the projected volume.
 func (m *Manager) getJWTToken(logger logr.Logger) (string, error) {
-	projectedTokenPath := "/var/run/secrets/tokens/openbao-token"
+	projectedTokenPath := constants.PathOperatorJWTToken
 	tokenBytes, err := os.ReadFile(projectedTokenPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read JWT token from projected volume at %s: %w (ensure operator deployment has projected volume mounted)", projectedTokenPath, err)

@@ -20,6 +20,7 @@ type BlockedPolicyInput struct {
 // reconciliation is paused.
 func ApplyPausedPolicy(input BlockedPolicyInput) {
 	cluster := input.Cluster
+	applyPolicyReconciliationCondition(cluster, input.Now, reasonPaused)
 	if cluster.Status.Phase == "" {
 		cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
 	}
@@ -104,6 +105,7 @@ func ApplyPausedPolicy(input BlockedPolicyInput) {
 // cluster profile is set.
 func ApplyProfileNotSetPolicy(input BlockedPolicyInput) {
 	cluster := input.Cluster
+	applyPolicyReconciliationCondition(cluster, input.Now, ReasonProfileNotSet)
 	if cluster.Status.Phase == "" {
 		cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
 	}

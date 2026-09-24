@@ -4,6 +4,9 @@ description: Assets, actors, trust boundaries, threats, and operator controls fo
 eyebrow: Security · Fundamentals
 weight: 1
 verifiedBy:
+  - internal/adapter/config/operator_policies.go
+  - internal/adapter/config/selfinit_gohcl.go
+  - test/e2e/policyreconciliation/policies_test.go
   - config/policy/openbao-validate-openbaocluster.yaml
   - internal/adapter/security/workload_labels.go
   - internal/platform/admission/check.go
@@ -56,6 +59,23 @@ Secrets, tokens, keys, or bootstrap material appear in logs, command arguments, 
 A mutable or malicious image, dependency, workflow action, or release artifact enters the runtime or publication path.
 
 **Control:** pinned dependencies, image verification, signed artifacts, provenance, and CI security gates.
+
+## Approved policy reconciliation
+
+`openbao-operator-policy-approval` grants the controller read and update access to fixed built-in policy names.
+`allowed_parameters` restricts writes to exact approved text. The grant excludes arbitrary policies, the legacy
+`sys/policy/` path, auth methods, JWT roles, and the approval policy itself. Broader grants attached to the controller
+can defeat this restriction.
+
+Approval authorizes both upgrade variants, including installing BlueGreen permissions on a RollingUpdate cluster.
+Runtime reconciliation selects the required variant. Changed policy contents require new administrator approval.
+
+Self-init can bootstrap approval; administrators own later approval changes and authentication repair. Only the
+controller role receives the approval grant. Executor roles retain their operation-specific policies.
+
+This feature does not contain a compromised controller: it remains trusted Kubernetes infrastructure with authority
+over workloads and their identities. See [tenant boundaries](../tenant-boundaries/) and
+[policy enrollment and revocation](../../operate/operator-policies/).
 
 ## Assumptions and exclusions
 

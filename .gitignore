@@ -51,6 +51,7 @@ website/public/
 # Release workflow outputs (generated locally during validation)
 dist/install.yaml
 dist/crds.yaml
+dist/operator-policy-approval*.hcl
 dist/checksums.txt
 dist/sbom-*.spdx.json
 dist/architecture/

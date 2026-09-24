@@ -17,6 +17,7 @@ import (
 type ApplicationsConfig struct {
 	Client                   client.Client
 	WorkloadReconcilers      []SubReconciler
+	PolicyReconciler         SubReconciler
 	WorkloadPolicy           WorkloadResultPolicy
 	AdminOpsApplication      *AdminOpsApplication
 	StatusDependencies       StatusDependencies
@@ -55,6 +56,7 @@ func (a *Applications) ReconcileWorkload(
 		original,
 		cluster,
 		a.config.WorkloadReconcilers,
+		a.config.PolicyReconciler,
 		recordError,
 		a.config.WorkloadPolicy,
 	)

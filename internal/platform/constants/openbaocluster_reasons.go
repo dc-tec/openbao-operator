@@ -1,5 +1,12 @@
 package constants
 
+const (
+	// ReasonPolicyReconciliationFailed reports an unsuccessful policy read or repair.
+	ReasonPolicyReconciliationFailed = "PolicyReconciliationFailed"
+	// ReasonPoliciesNotReady indicates an operation's required policy is not verified.
+	ReasonPoliciesNotReady = "PoliciesNotReady"
+)
+
 // Shared condition reasons used across app, service, and controller layers for
 // OpenBaoCluster workflows.
 const (

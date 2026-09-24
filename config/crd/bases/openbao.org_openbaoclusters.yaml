@@ -3297,6 +3297,15 @@ spec:
                         type: object
                     type: object
                 type: object
+              reconcilePolicies:
+                description: |-
+                  ReconcilePolicies restores the built-in operational policies after initialization.
+                  Administrator-managed JWT authentication and exact-content approval are required.
+                  OpenBao must independently approve their exact contents through the
+                  openbao-operator-policy-approval policy. Bootstrap installs the initial approval;
+                  existing clusters and later permission changes require administrator approval.
+                  Auth methods, roles, and the approval policy are not reconciled.
+                type: boolean
               recoveryKeys:
                 description: |-
                   RecoveryKeys configures Operator-assisted recovery-key bootstrap surfaces.
@@ -5745,6 +5754,58 @@ spec:
                           error.
                         type: string
                     type: object
+                  policyReconciliation:
+                    description: PolicyReconciliation records individual policy observations
+                      and retry scheduling.
+                    properties:
+                      attemptedRevision:
+                        description: |-
+                          AttemptedRevision identifies the bundle used for the last attempt.
+                          A desired bundle change bypasses the previous retry delay.
+                        type: string
+                      lastError:
+                        description: LastError reports policy failures independently
+                          of infrastructure and Autopilot errors.
+                        properties:
+                          at:
+                            description: At is when the error was observed (best-effort).
+                            format: date-time
+                            type: string
+                          message:
+                            description: Message is a human-readable error message
+                              (best-effort).
+                            type: string
+                          reason:
+                            description: Reason is a low-cardinality identifier for
+                              the error.
+                            type: string
+                        type: object
+                      lastVerified:
+                        description: |-
+                          LastVerified is when the complete desired bundle was last verified or repaired.
+                          Unchanged successful observations are refreshed at most once every five minutes.
+                        format: date-time
+                        type: string
+                      retryAfter:
+                        description: RetryAfter delays policy requests after a failure,
+                          including during unrelated reconciles.
+                        format: date-time
+                        type: string
+                      revisions:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          Revisions contains the last verified content digest for each observed policy.
+                          An empty digest means the policy was observed missing or different and awaits repair.
+                          An absent entry means the policy has not been observed; it does not block operations.
+                          Failed reads retain the last observation; OpenBao still authorizes every operation.
+                        type: object
+                    type: object
+                  policyRevision:
+                    description: |-
+                      PolicyRevision identifies the last complete built-in policy bundle verified
+                      or repaired successfully. This records reconciliation progress, not authorization.
+                    type: string
                 type: object
             type: object
         required:

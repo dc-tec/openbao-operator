@@ -83,6 +83,14 @@ func buildDegradedCondition(
 			Message: cluster.Status.AdminOps.LastError.Message,
 		}
 	}
+	if cluster.Spec.ReconcilePolicies && cluster.Status.Workload != nil && cluster.Status.Workload.PolicyReconciliation != nil {
+		if policyError := cluster.Status.Workload.PolicyReconciliation.LastError; policyError != nil {
+			return metav1.Condition{
+				Type: string(openbaov1alpha1.ConditionDegraded), Status: metav1.ConditionTrue,
+				Reason: policyError.Reason, Message: policyError.Message,
+			}
+		}
+	}
 
 	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
 	if !selfInitEnabled {

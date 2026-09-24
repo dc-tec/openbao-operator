@@ -22,6 +22,7 @@ const (
 	PolicyNameBackup   = "openbao-operator-backup"
 	PolicyNameUpgrade  = "openbao-operator-upgrade"
 	PolicyNameRestore  = "openbao-operator-restore"
+	PolicyNameApproval = "openbao-operator-policy-approval"
 )
 
 // OperatorJWTBootstrapEnabled reports whether the cluster is configured to let
@@ -33,6 +34,12 @@ func OperatorJWTBootstrapEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 		cluster.Spec.SelfInit.Enabled &&
 		cluster.Spec.SelfInit.OIDC != nil &&
 		cluster.Spec.SelfInit.OIDC.Enabled
+}
+
+// PolicyReconciliationEnabled reports whether the cluster opts into ownership
+// of the built-in operational policies.
+func PolicyReconciliationEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return cluster != nil && cluster.Spec.ReconcilePolicies
 }
 
 // EffectiveJWTRole returns the configured role or a default when operator JWT

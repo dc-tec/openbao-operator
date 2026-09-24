@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -25,11 +26,12 @@ import (
 )
 
 type workloadSubReconcilerStub struct {
-	err error
+	delay time.Duration
+	err   error
 }
 
 func (s workloadSubReconcilerStub) Reconcile(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-	return recon.Result{}, s.err
+	return recon.Result{RequeueAfter: s.delay}, s.err
 }
 
 func TestOpenBaoClusterAdminOpsReconcilerReconcile_UsesAPIReaderWhenAvailable(t *testing.T) {
@@ -79,20 +81,28 @@ func TestOpenBaoClusterWorkloadReconciler_MultiTenantSteadyStateRequeue(t *testi
 		operatorerrors.WrapPermanentConfig(errors.New("image version does not match spec.version")),
 	)
 	tests := []struct {
-		name        string
-		reconcilers []appopenbaocluster.SubReconciler
-		wantRequeue bool
-		wantReason  string
+		name         string
+		reconcilers  []appopenbaocluster.SubReconciler
+		wantDelay    time.Duration
+		enabled      bool
+		singleTenant bool
+		policyDelay  time.Duration
+		wantReason   string
 	}{
 		{
-			name:        "successful steady state requeues",
-			wantRequeue: true,
+			name:      "successful steady state requeues",
+			wantDelay: constants.RequeueStandard,
 		},
 		{
 			name:        "handled permanent error does not requeue",
 			reconcilers: []appopenbaocluster.SubReconciler{workloadSubReconcilerStub{err: permanentErr}},
 			wantReason:  constants.ReasonImageVersionMismatch,
 		},
+		{name: "policy interval preserves multi-tenant poll", enabled: true, policyDelay: 5 * time.Minute, wantDelay: constants.RequeueStandard},
+		{name: "policy interval preserves earlier workload retry", enabled: true, policyDelay: 5 * time.Minute,
+			reconcilers: []appopenbaocluster.SubReconciler{workloadSubReconcilerStub{delay: time.Second}}, wantDelay: time.Second},
+		{name: "single tenant uses policy interval", enabled: true, singleTenant: true, policyDelay: 5 * time.Minute, wantDelay: 5 * time.Minute},
+		{name: "feature disabled preserves explicit retry", reconcilers: []appopenbaocluster.SubReconciler{workloadSubReconcilerStub{delay: 5 * time.Minute}}, wantDelay: 5 * time.Minute},
 	}
 
 	for _, tt := range tests {
@@ -105,16 +115,19 @@ func TestOpenBaoClusterWorkloadReconciler_MultiTenantSteadyStateRequeue(t *testi
 					ResourceVersion: "1",
 				},
 			}
+			cluster.Spec.ReconcilePolicies = tt.enabled
 			fakeClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 				WithObjects(cluster.DeepCopy()).
 				Build()
 			parent := &OpenBaoClusterReconciler{
-				Client: fakeClient,
+				Client:            fakeClient,
+				ControllerRuntime: ControllerRuntime{SingleTenantMode: tt.singleTenant},
 				Applications: appopenbaocluster.NewApplications(appopenbaocluster.ApplicationsConfig{
 					Client:              fakeClient,
 					WorkloadReconcilers: tt.reconcilers,
+					PolicyReconciler:    workloadSubReconcilerStub{delay: tt.policyDelay},
 					WorkloadPolicy:      appopenbaocluster.DefaultWorkloadResultPolicy(),
 				}),
 			}
@@ -128,11 +141,8 @@ func TestOpenBaoClusterWorkloadReconciler_MultiTenantSteadyStateRequeue(t *testi
 			if err != nil {
 				t.Fatalf("reconcileCluster() error = %v", err)
 			}
-			if tt.wantRequeue && result.RequeueAfter != constants.RequeueStandard {
-				t.Fatalf("reconcileCluster() requeueAfter = %s, want %s", result.RequeueAfter, constants.RequeueStandard)
-			}
-			if !tt.wantRequeue && result.RequeueAfter != 0 {
-				t.Fatalf("reconcileCluster() requeueAfter = %s, want 0", result.RequeueAfter)
+			if result.RequeueAfter != tt.wantDelay {
+				t.Fatalf("reconcileCluster() requeueAfter = %s, want %s", result.RequeueAfter, tt.wantDelay)
 			}
 			if cluster.Status.Workload == nil {
 				t.Fatal("reconcileCluster() did not initialize workload status")

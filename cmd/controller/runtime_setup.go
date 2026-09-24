@@ -25,6 +25,7 @@ import (
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
+	"github.com/dc-tec/openbao-operator/internal/service/configuration"
 	initmanager "github.com/dc-tec/openbao-operator/internal/service/init"
 )
 
@@ -118,6 +119,7 @@ func buildControllerProcessRuntime(
 		openBaoRuntime: appopenbaocluster.RuntimeOpenBaoConfig{
 			TLSReload:         reloadSignaler,
 			InitManager:       initMgr,
+			PolicyManager:     &configuration.PolicyManager{ClientFor: operatorPolicyClientFactory(clientset, clientMgr)},
 			Raft:              raftMgr,
 			SmartClientConfig: smartClientConfig,
 			ClientForPod: openBaoClusterPodClientFactory(

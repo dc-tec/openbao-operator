@@ -92,6 +92,25 @@ func AppendInitAndAutopilotReconcilers(
 	return reconcilers
 }
 
+// policyConfigReconciler reports failures without stopping workload reconciliation.
+type policyConfigReconciler struct {
+	manager  SubReconciler
+	recorder events.EventRecorder
+}
+
+func (r *policyConfigReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	var previous *openbaov1alpha1.ControllerErrorStatus
+	if cluster.Status.Workload != nil && cluster.Status.Workload.PolicyReconciliation != nil {
+		previous = cluster.Status.Workload.PolicyReconciliation.LastError
+	}
+	result, err := r.manager.Reconcile(ctx, logger, cluster)
+	if err != nil && r.recorder != nil && (previous == nil || previous.Message != err.Error()) {
+		r.recorder.Eventf(cluster, nil, corev1.EventTypeWarning, constants.ReasonPolicyReconciliationFailed,
+			"ReconcilePolicies", "%s", err.Error())
+	}
+	return result, err
+}
+
 // RunWorkloadReconcilers executes workload orchestration with consistent status patching.
 func RunWorkloadReconcilers(
 	ctx context.Context,
@@ -100,13 +119,36 @@ func RunWorkloadReconcilers(
 	original *openbaov1alpha1.OpenBaoCluster,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	reconcilers []SubReconciler,
+	policyReconciler SubReconciler,
 	recordError ErrorRecorder,
 	policy WorkloadResultPolicy,
 ) (recon.Result, error) {
 	if cluster.Status.Workload == nil {
 		cluster.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{}
 	}
+	result, err := runWorkloadSteps(ctx, logger, cluster, reconcilers, recordError, policy)
+	// Run policy repair even when infrastructure or Autopilot returned early.
+	// Otherwise missing operational permissions could prevent their own repair.
+	if policyReconciler != nil {
+		policyResult, _ := policyReconciler.Reconcile(ctx, logger, cluster)
+		if policyResult.RequeueAfter > 0 && (result.RequeueAfter <= 0 || policyResult.RequeueAfter < result.RequeueAfter) {
+			result.RequeueAfter = policyResult.RequeueAfter
+		}
+	}
+	if statusErr := PatchWorkloadOwnedFields(ctx, c, logger, original, cluster, "workload-reconcile"); statusErr != nil {
+		return recon.Result{}, statusErr
+	}
+	return result, err
+}
 
+func runWorkloadSteps(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	reconcilers []SubReconciler,
+	recordError ErrorRecorder,
+	policy WorkloadResultPolicy,
+) (recon.Result, error) {
 	for _, rec := range reconcilers {
 		result, err := rec.Reconcile(ctx, logger, cluster)
 		if err != nil {
@@ -114,33 +156,17 @@ func RunWorkloadReconcilers(
 				recordError(err)
 			}
 			cluster.Status.Workload.LastError = controllerErrorStatus(err)
-
-			// Persist status changes before returning to avoid losing in-memory updates.
-			if statusErr := PatchWorkloadOwnedFields(ctx, c, logger, original, cluster, "workload-error"); statusErr != nil {
-				return recon.Result{}, statusErr
-			}
-
 			if handled, ok := workloadResultForError(err, cluster.Status.Workload.LastError, policy); ok {
 				return handled, nil
 			}
-
 			return recon.Result{}, err
 		}
-
 		if result.RequeueAfter > 0 {
-			if statusErr := PatchWorkloadOwnedFields(ctx, c, logger, original, cluster, "workload-requeue"); statusErr != nil {
-				return recon.Result{}, statusErr
-			}
-			return recon.Result{RequeueAfter: result.RequeueAfter}, nil
+			return result, nil
 		}
 	}
-
-	// Clear previous workload error after a successful reconcile.
+	// Clear previous workload error only after a complete successful pass.
 	cluster.Status.Workload.LastError = nil
-	if err := PatchWorkloadOwnedFields(ctx, c, logger, original, cluster, "workload-complete"); err != nil {
-		return recon.Result{}, err
-	}
-
 	return recon.Result{}, nil
 }
 

@@ -110,8 +110,9 @@ Apply a behavior change only to the lines that contain it:
 - update an existing stable line for supported patch behavior; and
 - keep release history in release notes instead of preserving obsolete instructions in task pages.
 
-Pin generated API content through `website/data/version_lines.yaml`. Never generate a stable reference from a newer
-schema or copy a `next` claim into stable documentation without release evidence.
+Pin stable generated API content through `website/data/version_lines.yaml`. The `next` line uses `sourceRef: HEAD`
+to follow the checked-out generated API source. Never generate a stable reference from a newer schema or copy a
+`next` claim into stable documentation without release evidence.
 
 ## Use the smallest useful presentation
 

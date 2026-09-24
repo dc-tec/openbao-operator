@@ -85,7 +85,13 @@ generate_line() {
     read_ref="${fallback_source_ref}"
   fi
 
-  if git -C "${REPO_DIR}" cat-file -e "${read_ref}:website/generated/api-reference.md" 2>/dev/null; then
+  if [[ "${line}" == "next" && "${source_ref}" == "HEAD" ]]; then
+    # Unreleased API docs follow the checked-out generated source, including
+    # local changes. Stable lines always read their pinned release source.
+    source_location="website/generated/api-reference.md"
+    source_marker='<!-- BEGIN RESOURCE '
+    source_end_marker='<!-- END RESOURCE -->'
+  elif git -C "${REPO_DIR}" cat-file -e "${read_ref}:website/generated/api-reference.md" 2>/dev/null; then
     source_location="website/generated/api-reference.md"
     source_marker='<!-- BEGIN RESOURCE '
     source_end_marker='<!-- END RESOURCE -->'
@@ -100,7 +106,11 @@ generate_line() {
     echo "generated API source not found at ${read_ref} for ${line}" >&2
     return 1
   fi
-  git -C "${REPO_DIR}" show "${read_ref}:${source_location}" > "${source_path}"
+  if [[ "${line}" == "next" && "${source_ref}" == "HEAD" ]]; then
+    cp "${REPO_DIR}/${source_location}" "${source_path}"
+  else
+    git -C "${REPO_DIR}" show "${read_ref}:${source_location}" > "${source_path}"
+  fi
 
   if [[ "${line}" == "0.4.x" ]]; then
     apply_errata="true"

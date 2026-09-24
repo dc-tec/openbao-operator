@@ -614,6 +614,7 @@ can translate into high-level conditions.
 
 _Appears in:_
 - [AdminOpsControllerStatus](#adminopscontrollerstatus)
+- [PolicyReconciliationStatus](#policyreconciliationstatus)
 - [UpgradeProgress](#upgradeprogress)
 - [WorkloadControllerStatus](#workloadcontrollerstatus)
 
@@ -1160,6 +1161,7 @@ _Appears in:_
 | `backup` _[BackupSchedule](#backupschedule)_ | Backup configures scheduled backups for the cluster. |  | Optional: \{\} <br /> |
 | `restore` _[RestoreConfig](#restoreconfig)_ | Restore configures optional restore authentication bootstrap for the cluster. |  | Optional: \{\} <br /> |
 | `deletionPolicy` _[DeletionPolicy](#deletionpolicy)_ | DeletionPolicy controls what happens to underlying resources when the CR is deleted. |  | Enum: [Retain DeletePVCs DeleteAll] <br />Optional: \{\} <br /> |
+| `reconcilePolicies` _boolean_ | ReconcilePolicies restores the built-in operational policies after initialization.<br />Administrator-managed JWT authentication and exact-content approval are required.<br />OpenBao must independently approve their exact contents through the<br />openbao-operator-policy-approval policy. Bootstrap installs the initial approval;<br />existing clusters and later permission changes require administrator approval.<br />Auth methods, roles, and the approval policy are not reconciled. |  | Optional: \{\} <br /> |
 | `selfInit` _[SelfInitConfig](#selfinitconfig)_ | SelfInit configures OpenBao's native self-initialization feature.<br />When enabled, OpenBao initializes itself on first start using the configured<br />requests, and the root token is automatically revoked.<br />See: https://openbao.org/docs/configuration/self-init/ |  | Optional: \{\} <br /> |
 | `recoveryKeys` _[RecoveryKeysConfig](#recoverykeysconfig)_ | RecoveryKeys configures Operator-assisted recovery-key bootstrap surfaces.<br />The Operator creates recovery keys only during initial self-initialization;<br />recovery share custody and proof ceremonies remain user-owned processes. |  | Optional: \{\} <br /> |
 | `gateway` _[GatewayConfig](#gatewayconfig)_ | Gateway configures Kubernetes Gateway API access (alternative to Ingress).<br />When enabled, the Operator creates an HTTPRoute that routes traffic through<br />a user-managed Gateway resource. |  | Optional: \{\} <br /> |
@@ -1411,6 +1413,26 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `labels` _object (keys:string, values:string)_ | Labels are merged into the generated OpenBao Pod template labels.<br />Operator-managed labels take precedence if the same key is specified here. |  | Optional: \{\} <br /> |
 | `annotations` _object (keys:string, values:string)_ | Annotations are merged into the generated OpenBao Pod template annotations.<br />Operator-managed annotations take precedence if the same key is specified here. |  | Optional: \{\} <br /> |
+
+
+#### PolicyReconciliationStatus
+
+
+
+PolicyReconciliationStatus records progress without granting OpenBao permissions.
+
+
+
+_Appears in:_
+- [WorkloadControllerStatus](#workloadcontrollerstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `revisions` _object (keys:string, values:string)_ | Revisions contains the last verified content digest for each observed policy.<br />An empty digest means the policy was observed missing or different and awaits repair.<br />An absent entry means the policy has not been observed; it does not block operations.<br />Failed reads retain the last observation; OpenBao still authorizes every operation. |  | Optional: \{\} <br /> |
+| `attemptedRevision` _string_ | AttemptedRevision identifies the bundle used for the last attempt.<br />A desired bundle change bypasses the previous retry delay. |  | Optional: \{\} <br /> |
+| `lastVerified` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastVerified is when the complete desired bundle was last verified or repaired.<br />Unchanged successful observations are refreshed at most once every five minutes. |  | Optional: \{\} <br /> |
+| `retryAfter` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | RetryAfter delays policy requests after a failure, including during unrelated reconciles. |  | Optional: \{\} <br /> |
+| `lastError` _[ControllerErrorStatus](#controllererrorstatus)_ | LastError reports policy failures independently of infrastructure and Autopilot errors. |  | Optional: \{\} <br /> |
 
 
 #### Profile
@@ -2336,6 +2358,8 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `policyRevision` _string_ | PolicyRevision identifies the last complete built-in policy bundle verified<br />or repaired successfully. This records reconciliation progress, not authorization. |  | Optional: \{\} <br /> |
+| `policyReconciliation` _[PolicyReconciliationStatus](#policyreconciliationstatus)_ | PolicyReconciliation records individual policy observations and retry scheduling. |  | Optional: \{\} <br /> |
 | `lastError` _[ControllerErrorStatus](#controllererrorstatus)_ | LastError is the last workload-controller error observed for this cluster. |  | Optional: \{\} <br /> |
 
 
