@@ -36,6 +36,44 @@ func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
 	}
 }
 
+func TestStatefulSet_TLSReloadWatcherByVersion(t *testing.T) {
+	tests := []struct {
+		name        string
+		version     string
+		mode        openbaov1alpha1.TLSMode
+		wantWatcher bool
+	}{
+		{name: "wrapper before 2.7", version: "2.6.3", wantWatcher: true},
+		{name: "native operator managed", version: "2.7.0"},
+		{name: "native external", version: "2.7.0", mode: openbaov1alpha1.TLSModeExternal},
+		{name: "ACME", version: "2.7.0", mode: openbaov1alpha1.TLSModeACME},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalCluster("tls-reload", "default")
+			cluster.Spec.Version = tt.version
+			cluster.Spec.Image = "openbao/openbao:" + tt.version
+			cluster.Spec.TLS.Mode = tt.mode
+			if tt.mode == openbaov1alpha1.TLSModeACME {
+				cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+					DirectoryURL: "https://acme.example.com/directory", Domains: []string{"bao.example.com"},
+				}
+			}
+
+			statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
+			if err != nil {
+				t.Fatalf("buildStatefulSet() error = %v", err)
+			}
+			args := statefulSet.Spec.Template.Spec.Containers[0].Args
+			watcher := slices.Contains(args, "-watch-file="+constants.PathTLS+"/tls.crt")
+			if watcher != tt.wantWatcher {
+				t.Fatalf("watcher configured = %t, want %t; args=%v", watcher, tt.wantWatcher, args)
+			}
+		})
+	}
+}
+
 func TestStatefulSet_ACMEMode_NoTLSVolume(t *testing.T) {
 	cluster := newMinimalCluster("acme-cluster", "default")
 	cluster.Spec.Replicas = 1

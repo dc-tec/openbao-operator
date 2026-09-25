@@ -323,13 +323,14 @@ func newTLSReadinessTestSecrets(t *testing.T) (*corev1.Secret, *corev1.Secret) {
 		t.Fatalf("MarshalECPrivateKey() error = %v", err)
 	}
 
-	return &corev1.Secret{
+	caSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "example" + constants.SuffixTLSCA,
 			Namespace: "default",
 		},
 		Data: map[string][]byte{"ca.crt": caPEM},
-	}, &corev1.Secret{
+	}
+	serverSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "example" + constants.SuffixTLSServer,
 			Namespace: "default",
@@ -340,4 +341,5 @@ func newTLSReadinessTestSecrets(t *testing.T) (*corev1.Secret, *corev1.Secret) {
 			"ca.crt":  caPEM,
 		},
 	}
+	return caSecret, serverSecret
 }

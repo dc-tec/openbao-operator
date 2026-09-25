@@ -25,6 +25,7 @@ import (
 	clusterpkg "github.com/dc-tec/openbao-operator/internal/adapter/cluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -46,8 +47,8 @@ type Manager struct {
 	reloader ReloadSignaler
 }
 
-// ReloadSignaler is responsible for triggering a TLS reload when the server certificate changes.
-// Implementations may annotate pods or StatefulSets and send SIGHUP to OpenBao processes.
+// ReloadSignaler requests a TLS reload for OpenBao versions before 2.7 when
+// the server certificate changes. OpenBao 2.7 and later watch the files directly.
 type ReloadSignaler interface {
 	SignalReload(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, certHash string) error
 }
@@ -75,11 +76,11 @@ func NewManagerWithReloader(c client.Client, scheme *runtime.Scheme, r ReloadSig
 // Reconcile ensures TLS assets are aligned with the desired state for the given OpenBaoCluster.
 //
 // It bootstraps a per-cluster CA Secret and server certificate Secret, evaluates
-// rotation based on the configured rotation window, and triggers hot-reload via the
-// ReloadSignaler whenever a new server certificate is issued.
+// rotation based on the configured rotation window, and requests a reload via
+// the ReloadSignaler for OpenBao versions before 2.7.
 //
 // When Mode is External, the operator does not generate or rotate certificates.
-// It only waits for external Secrets to exist and triggers hot-reload when they change.
+// It waits for external Secrets and requests a reload before OpenBao 2.7 when they change.
 // When Mode is ACME, OpenBao manages certificates internally via its native ACME client.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	if !cluster.Spec.TLS.Enabled {
@@ -495,6 +496,9 @@ func shouldRotateServerCert(cert *x509.Certificate, now time.Time, rotationPerio
 }
 
 func (m *Manager) signalReloadIfNeeded(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, certPEM []byte) error {
+	if portopenbao.UsesNativeTLSAutoReload(cluster) {
+		return nil
+	}
 	if len(certPEM) == 0 {
 		return nil
 	}

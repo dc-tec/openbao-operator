@@ -627,6 +627,58 @@ func TestRenderHCLWithAllNodeMetricsListener(t *testing.T) {
 	}
 }
 
+func TestRenderHCLNativeTLSAutoReload(t *testing.T) {
+	tests := []struct {
+		name          string
+		version       string
+		mode          openbaov1alpha1.TLSMode
+		metrics       bool
+		disableAPITLS bool
+		wantListeners int
+	}{
+		{name: "OpenBao 2.6", version: "2.6.3"},
+		{name: "OpenBao 2.7 operator managed", version: "2.7.0", wantListeners: 1},
+		{name: "OpenBao 2.7 external", version: "2.7.0", mode: openbaov1alpha1.TLSModeExternal, wantListeners: 1},
+		{name: "OpenBao 2.7 API and metrics", version: "2.7.0", metrics: true, wantListeners: 2},
+		{name: "OpenBao 2.7 TLS disabled on API listener", version: "2.7.0", disableAPITLS: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalCluster("native-tls-reload", "default")
+			cluster.Spec.Version = tt.version
+			cluster.Spec.Image = "openbao/openbao:" + tt.version
+			cluster.Spec.TLS.Mode = tt.mode
+			if tt.disableAPITLS {
+				cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{Listener: &openbaov1alpha1.ListenerConfig{
+					TLSDisable: &tt.disableAPITLS,
+				}}
+			}
+			if tt.metrics {
+				cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{Metrics: &openbaov1alpha1.MetricsConfig{
+					Enabled: true, ScrapeProfile: configScrapeProfileAllNodes,
+				}}
+			}
+
+			got, err := RenderHCL(cluster, InfrastructureDetails{
+				HeadlessServiceName: cluster.Name, Namespace: cluster.Namespace, APIPort: 8200, ClusterPort: 8201,
+			})
+			if err != nil {
+				t.Fatalf("RenderHCL() error = %v", err)
+			}
+			if count := strings.Count(string(got), "tls_auto_reload          = true"); count != tt.wantListeners {
+				t.Fatalf("tls_auto_reload count = %d, want %d:\n%s", count, tt.wantListeners, got)
+			}
+			if count := strings.Count(string(got), `tls_auto_reload_interval = "10s"`); count != tt.wantListeners {
+				t.Fatalf("tls_auto_reload_interval count = %d, want %d:\n%s", count, tt.wantListeners, got)
+			}
+			if tt.metrics {
+				compareGolden(t, "render_hcl_tls_native_reload_metrics", got)
+			}
+		})
+	}
+}
+
 func TestRenderHCLWithMetricsOnlyListenerRejectsUnsupportedVersions(t *testing.T) {
 	tests := []struct {
 		name          string

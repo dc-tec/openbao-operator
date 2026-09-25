@@ -69,6 +69,7 @@ func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Bloc
 		listener.TLSCertFile = stringPtr(openBaoPathTLSServerCert)
 		listener.TLSKeyFile = stringPtr(openBaoPathTLSServerKey)
 		listener.TLSClientCAFile = stringPtr(openBaoPathTLSCACert)
+		configureNativeTLSAutoReload(&listener, cluster)
 	}
 
 	block := gohcl.EncodeAsBlock(listener, "listener")
@@ -98,6 +99,7 @@ func buildMetricsOnlyListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hc
 		TLSKeyFile:         stringPtr(openBaoPathTLSServerKey),
 		TLSClientCAFile:    stringPtr(openBaoPathTLSCACert),
 	}
+	configureNativeTLSAutoReload(&listener, cluster)
 
 	block := gohcl.EncodeAsBlock(listener, "listener")
 	block.Body().AppendBlock(gohcl.EncodeAsBlock(hclListenerTelemetry{
@@ -105,6 +107,13 @@ func buildMetricsOnlyListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hc
 		MetricsOnly:                  boolPtrValue(true),
 	}, "telemetry"))
 	return block, nil
+}
+
+func configureNativeTLSAutoReload(listener *hclListenerTCP, cluster *openbaov1alpha1.OpenBaoCluster) {
+	if listener.TLSDisable == 0 && portopenbao.UsesNativeTLSAutoReload(cluster) {
+		listener.TLSAutoReload = boolPtrValue(true)
+		listener.TLSAutoReloadInterval = stringPtr(portopenbao.NativeTLSAutoReloadInterval)
+	}
 }
 
 func workloadMetricsEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {

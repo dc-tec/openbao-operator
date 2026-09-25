@@ -250,7 +250,7 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 
 // buildContainers builds the container list for the OpenBao pod.
 // The OpenBao container uses a wrapper binary as the entrypoint that manages
-// the OpenBao process and watches for TLS certificate changes.
+// the OpenBao process and watches for TLS certificate changes before OpenBao 2.7.
 func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec, renderedConfigDir string, probes probeExecActions) []corev1.Container {
 	// Add utils volume mount (Read-Only for security)
 	mainVolumeMounts := buildContainerVolumeMounts(cluster, renderedConfigDir)
@@ -262,8 +262,8 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSp
 	// Configure wrapper args
 	args := []string{}
 
-	// If not using ACME, watch the TLS certificate
-	if !usesACMEMode(cluster) {
+	// OpenBao 2.7 and later watch certificate and key files without SIGHUP.
+	if !usesACMEMode(cluster) && !portopenbao.UsesNativeTLSAutoReload(cluster) {
 		args = append(args, fmt.Sprintf("-watch-file=%s/tls.crt", constants.PathTLS))
 	}
 

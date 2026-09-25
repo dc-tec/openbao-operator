@@ -5,9 +5,13 @@ package e2e
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
+	"net"
+	"os/exec"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -26,6 +30,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
@@ -232,6 +237,39 @@ var _ = Describe("Cluster TLS Lifecycle", Label("tls", "cluster", "lifecycle"), 
 
 		initialPodUID := initialPod.UID
 		initialRestartCount := openBaoRestartCount(initialPod)
+		caSecret := &corev1.Secret{}
+		Expect(c.Get(ctx, tlsCAKey, caSecret)).To(Succeed())
+		roots := x509.NewCertPool()
+		Expect(roots.AppendCertsFromPEM(caSecret.Data["ca.crt"])).To(BeTrue())
+		forwardedAddr, stopForward, err := startTLSPodPortForward(f.Namespace, podKey.Name)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(stopForward)
+		servedLeafSerial := func() (string, error) {
+			dialer := &net.Dialer{Timeout: 3 * time.Second}
+			conn, dialErr := tls.DialWithDialer(dialer, "tcp", forwardedAddr, &tls.Config{
+				RootCAs: roots, ServerName: "localhost", MinVersion: tls.VersionTLS12,
+			})
+			if dialErr != nil {
+				return "", dialErr
+			}
+			defer func() { _ = conn.Close() }()
+			if len(conn.ConnectionState().PeerCertificates) == 0 {
+				return "", fmt.Errorf("TLS listener did not serve a certificate")
+			}
+			return conn.ConnectionState().PeerCertificates[0].SerialNumber.String(), nil
+		}
+		By("verifying the pod serves the initial certificate")
+		Eventually(servedLeafSerial, framework.DefaultWaitTimeout, framework.DefaultPollInterval).
+			Should(Equal(initialLeafCert.SerialNumber.String()))
+
+		nativeTLSReload, err := platformsemver.AtLeast(openBaoVersion, 2, 7, 0)
+		Expect(err).NotTo(HaveOccurred())
+		wrapperWatchFile := "-watch-file=" + constants.PathTLS + "/tls.crt"
+		if nativeTLSReload {
+			Expect(initialPod.Spec.Containers[0].Args).NotTo(ContainElement(wrapperWatchFile))
+		} else {
+			Expect(initialPod.Spec.Containers[0].Args).To(ContainElement(wrapperWatchFile))
+		}
 		initialCertHash := ""
 		if initialPod.Annotations != nil {
 			initialCertHash = initialPod.Annotations[tlsCertHashAnnotation]
@@ -308,17 +346,23 @@ var _ = Describe("Cluster TLS Lifecycle", Label("tls", "cluster", "lifecycle"), 
 			updatedLeafCert = parsed
 		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-		By("verifying the pod receives a new TLS reload hash without restarting")
+		By("verifying the pod stays ready without restarting")
 		Eventually(func(g Gomega) {
 			pod := &corev1.Pod{}
 			g.Expect(c.Get(ctx, podKey, pod)).To(Succeed())
 			g.Expect(pod.UID).To(Equal(initialPodUID))
 			g.Expect(isPodReady(pod)).To(BeTrue())
 			g.Expect(openBaoRestartCount(pod)).To(Equal(initialRestartCount))
-			g.Expect(pod.Annotations).NotTo(BeNil())
-			g.Expect(pod.Annotations[tlsCertHashAnnotation]).NotTo(BeEmpty())
-			g.Expect(pod.Annotations[tlsCertHashAnnotation]).NotTo(Equal(initialCertHash))
+			if !nativeTLSReload {
+				g.Expect(pod.Annotations).NotTo(BeNil())
+				g.Expect(pod.Annotations[tlsCertHashAnnotation]).NotTo(BeEmpty())
+				g.Expect(pod.Annotations[tlsCertHashAnnotation]).NotTo(Equal(initialCertHash))
+			}
 		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+		By("verifying the pod serves the rotated certificate")
+		Eventually(servedLeafSerial, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).
+			Should(Equal(updatedLeafCert.SerialNumber.String()))
 
 		By("reconfirming cluster readiness and stability after server Secret regeneration")
 		Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
@@ -378,3 +422,28 @@ var _ = Describe("Cluster TLS Lifecycle", Label("tls", "cluster", "lifecycle"), 
 		Expect(c.Get(ctx, clusterKey, &openbaov1alpha1.OpenBaoCluster{})).To(Succeed())
 	})
 })
+
+func startTLSPodPortForward(namespace, podName string) (string, func(), error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", nil, fmt.Errorf("allocate TLS port-forward port: %w", err)
+	}
+	addr := listener.Addr().String()
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		return "", nil, fmt.Errorf("close TLS port reservation: %w", err)
+	}
+
+	cmd := exec.Command("kubectl", "-n", namespace, "port-forward", "pod/"+podName,
+		fmt.Sprintf("%d:8200", port)) // #nosec G204 -- test harness port-forwards to an operator-owned Pod
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if err := cmd.Start(); err != nil {
+		return "", nil, fmt.Errorf("start TLS port-forward: %w", err)
+	}
+	stop := func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}
+	return addr, stop, nil
+}
