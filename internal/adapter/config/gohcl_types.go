@@ -27,6 +27,8 @@ type hclListenerTCP struct {
 	TLSCertFile                 *string   `hcl:"tls_cert_file"`
 	TLSKeyFile                  *string   `hcl:"tls_key_file"`
 	TLSClientCAFile             *string   `hcl:"tls_client_ca_file"`
+	TLSAutoReload               *bool     `hcl:"tls_auto_reload"`
+	TLSAutoReloadInterval       *string   `hcl:"tls_auto_reload_interval"`
 	TLSACMECADir                *string   `hcl:"tls_acme_ca_directory"`
 	TLSACMEDomains              *[]string `hcl:"tls_acme_domains"`
 	TLSACMEEmail                *string   `hcl:"tls_acme_email"`

@@ -482,6 +482,33 @@ func (r *recordingReloadSignaler) SignalReload(_ context.Context, _ logr.Logger,
 	return nil
 }
 
+func TestSignalReloadIfNeededUsesVersionedReloadPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		version    string
+		wantSignal bool
+	}{
+		{name: "wrapper before 2.7", version: "2.6.3", wantSignal: true},
+		{name: "native from 2.7", version: "2.7.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reloader := &recordingReloadSignaler{}
+			manager := &Manager{reloader: reloader}
+			cluster := &openbaov1alpha1.OpenBaoCluster{Spec: openbaov1alpha1.OpenBaoClusterSpec{
+				Version: tt.version, TLS: openbaov1alpha1.TLSConfig{Enabled: true},
+			}}
+			if err := manager.signalReloadIfNeeded(context.Background(), logr.Discard(), cluster, []byte("cert")); err != nil {
+				t.Fatalf("signalReloadIfNeeded() error = %v", err)
+			}
+			if reloader.called != tt.wantSignal {
+				t.Fatalf("reloader called = %t, want %t", reloader.called, tt.wantSignal)
+			}
+		})
+	}
+}
+
 func TestReconcileTriggersReloadOnNewServerCert(t *testing.T) {
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {

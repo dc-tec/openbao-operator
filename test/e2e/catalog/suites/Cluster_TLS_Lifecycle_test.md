@@ -28,9 +28,11 @@ Recorded checkpoints:
 - writing a secret through the JWT-authenticated test role
 - reading the secret over TLS with explicit CA validation
 - recording the initial certificate and pod reload state
+- verifying the pod serves the initial certificate
 - deleting the managed tls-server Secret as the operator controller
 - verifying the OpenBao pod stays ready without being recreated while the secret is reissued
 - triggering reconcile and waiting for the tls-server Secret to be reissued
-- verifying the pod receives a new TLS reload hash without restarting
+- verifying the pod stays ready without restarting
+- verifying the pod serves the rotated certificate
 - reconfirming cluster readiness and stability after server Secret regeneration
 - re-reading the secret over TLS with CA validation after regeneration

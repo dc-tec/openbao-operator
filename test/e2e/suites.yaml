@@ -479,8 +479,8 @@ suites:
       - tls-lifecycle
       - tls-verification
     runtime:
-      observed: 1m31.439s
-      budget: 2m20s
+      observed: 2m21.576s
+      budget: 4m
     ci:
       lanes:
         - security
