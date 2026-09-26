@@ -341,6 +341,31 @@ suites:
     nightly:
       policy: primary-version-full
 
+  - id: controller-jwt
+    title: "Controller JWT lifecycle"
+    owner: security
+    riskTier: critical
+    isolation: serial
+    files:
+      - test/e2e/Controller_JWT_test.go
+    labels:
+      - lifecycle
+      - controller-jwt
+      - slow
+    coverage:
+      - controller-jwt-renewal
+      - controller-jwt-migration
+      - controller-jwt-recovery
+    runtime:
+      observed: 15m34.397s
+      budget: 25m
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
   - id: cluster-profile-hardened
     title: "Hardened profile (External TLS + Transit auto-unseal + SelfInit)"
     owner: hardening

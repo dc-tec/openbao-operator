@@ -576,7 +576,7 @@ test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests agains
 			mkdir -p "$$(dirname "$$report")"; \
 		fi; \
 	done; \
-	GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
+	GO_TEST_FLAGS="-tags=e2e -timeout=$(E2E_TIMEOUT) -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=\"$(E2E_FOCUS)\""; \
 	fi; \
