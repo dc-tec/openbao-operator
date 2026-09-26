@@ -62,7 +62,8 @@ func buildControllerProcessRuntime(
 	}
 
 	clientMgr := openbao.NewClientManager(smartClientConfig)
-	raftMgr := raft.NewManager(clientset, raftClientFactoryProvider{clientManager: clientMgr})
+	tokens := auth.NewControllerTokenSource(clientset)
+	raftMgr := raft.NewManager(clientset, raftClientFactoryProvider{clientManager: clientMgr}, tokens)
 	initMgr, err := initmanager.NewManager(
 		config,
 		clientset,
@@ -117,9 +118,11 @@ func buildControllerProcessRuntime(
 			DiscoveryStatusCode: portauth.DiscoveryStatusCode,
 		},
 		openBaoRuntime: appopenbaocluster.RuntimeOpenBaoConfig{
-			TLSReload:         reloadSignaler,
-			InitManager:       initMgr,
-			PolicyManager:     &configuration.PolicyManager{ClientFor: operatorPolicyClientFactory(clientset, clientMgr)},
+			TLSReload:   reloadSignaler,
+			InitManager: initMgr,
+			PolicyManager: &configuration.PolicyManager{
+				ClientFor: operatorPolicyClientFactory(clientset, clientMgr, tokens),
+			},
 			Raft:              raftMgr,
 			SmartClientConfig: smartClientConfig,
 			ClientForPod: openBaoClusterPodClientFactory(

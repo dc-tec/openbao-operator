@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/zclconf/go-cty/cty"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -49,7 +50,13 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 			return nil, fmt.Errorf("operator service account name is required to render operator bootstrap")
 		}
 
-		body.AppendBlock(buildSelfInitBootstrapInitializeBlock(cluster, *bootstrapConfig))
+		audience, err := portauth.ControllerJWTAudience(cluster, bootstrapConfig.JWTAuthAudience)
+		if err != nil {
+			return nil, err
+		}
+		config := *bootstrapConfig
+		config.ControllerJWTAudience = audience
+		body.AppendBlock(buildSelfInitBootstrapInitializeBlock(cluster, config))
 	}
 
 	if initialRecoveryKeys := initialRecoveryKeysConfig(cluster); initialRecoveryKeys != nil {

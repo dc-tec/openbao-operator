@@ -111,6 +111,10 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	initBlock := buildInitializeBlock("operator-bootstrap")
 	initBody := initBlock.Body()
 	jwtAudiences := jwtAuthAudiences(config)
+	controllerAudiences := jwtAudiences
+	if config.ControllerJWTAudience != "" {
+		controllerAudiences = []string{config.ControllerJWTAudience}
+	}
 	bootstrapEnabled := portauth.OperatorJWTBootstrapEnabled(cluster)
 	additionalSubjects := selfInitOIDCAdditionalSubjects(cluster)
 
@@ -147,7 +151,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	{
 		subject := fmt.Sprintf("system:serviceaccount:%s:%s", config.OperatorNS, config.OperatorSA)
 		req := buildInitializeRequestBlock(reqCreateOperatorRole, opUpdate, fmt.Sprintf("%s%s", pathAuthJWTRolePrefix, authRoleNameOperator), false)
-		role := operatorJWTRoleData(subject, additionalSubjects.Operator, authPolicyNameOperator, jwtAudiences)
+		role := operatorJWTRoleData(subject, additionalSubjects.Operator, authPolicyNameOperator, controllerAudiences)
 		if portauth.PolicyReconciliationEnabled(cluster) {
 			role.TokenPolicies = append(role.TokenPolicies, portauth.PolicyNameApproval)
 			role.Policies = &role.TokenPolicies

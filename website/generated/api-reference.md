@@ -625,6 +625,24 @@ _Appears in:_
 | `at` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | At is when the error was observed (best-effort). |  | Optional: \{\} <br /> |
 
 
+#### ControllerJWTMode
+
+_Underlying type:_ _string_
+
+ControllerJWTMode selects shared or target-specific controller credentials.
+
+_Validation:_
+- Enum: [Shared Target]
+
+_Appears in:_
+- [OpenBaoClusterSpec](#openbaoclusterspec)
+
+| Field | Description |
+| --- | --- |
+| `Shared` | ControllerJWTModeShared uses the installation's projected ServiceAccount JWT.<br /> |
+| `Target` | ControllerJWTModeTarget requests a JWT for this OpenBaoCluster's UID.<br /> |
+
+
 #### DeletionPolicy
 
 _Underlying type:_ _string_
@@ -1162,6 +1180,7 @@ _Appears in:_
 | `restore` _[RestoreConfig](#restoreconfig)_ | Restore configures optional restore authentication bootstrap for the cluster. |  | Optional: \{\} <br /> |
 | `deletionPolicy` _[DeletionPolicy](#deletionpolicy)_ | DeletionPolicy controls what happens to underlying resources when the CR is deleted. |  | Enum: [Retain DeletePVCs DeleteAll] <br />Optional: \{\} <br /> |
 | `reconcilePolicies` _boolean_ | ReconcilePolicies restores the built-in operational policies after initialization.<br />Administrator-managed JWT authentication and exact-content approval are required.<br />OpenBao must independently approve their exact contents through the<br />openbao-operator-policy-approval policy. Bootstrap installs the initial approval;<br />existing clusters and later permission changes require administrator approval.<br />Auth methods, roles, and the approval policy are not reconciled. |  | Optional: \{\} <br /> |
+| `controllerJWTMode` _[ControllerJWTMode](#controllerjwtmode)_ | ControllerJWTMode selects the credential used by the controller for OpenBao.<br />Shared (also the behavior when omitted) preserves the installation-wide<br />projected JWT. Target requests a short-lived JWT whose sole audience is<br />urn:openbao:controller:&lt;metadata.uid&gt;. Prepare the OpenBao controller role<br />before switching an initialized cluster to Target. Target never falls back<br />to the shared JWT. Target requires self-init and self-init OIDC to be enabled.<br />Executor Job authentication is unchanged.<br />Enforced admission prevents removal or downgrade after selecting Target. |  | Enum: [Shared Target] <br />Optional: \{\} <br /> |
 | `selfInit` _[SelfInitConfig](#selfinitconfig)_ | SelfInit configures OpenBao's native self-initialization feature.<br />When enabled, OpenBao initializes itself on first start using the configured<br />requests, and the root token is automatically revoked.<br />See: https://openbao.org/docs/configuration/self-init/ |  | Optional: \{\} <br /> |
 | `recoveryKeys` _[RecoveryKeysConfig](#recoverykeysconfig)_ | RecoveryKeys configures Operator-assisted recovery-key bootstrap surfaces.<br />The Operator creates recovery keys only during initial self-initialization;<br />recovery share custody and proof ceremonies remain user-owned processes. |  | Optional: \{\} <br /> |
 | `gateway` _[GatewayConfig](#gatewayconfig)_ | Gateway configures Kubernetes Gateway API access (alternative to Ingress).<br />When enabled, the Operator creates an HTTPRoute that routes traffic through<br />a user-managed Gateway resource. |  | Optional: \{\} <br /> |

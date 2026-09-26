@@ -15,6 +15,13 @@ replacements:
       fieldPath: metadata.name
     targets:
       - select:
+          group: rbac.authorization.k8s.io
+          version: v1
+          kind: Role
+          name: openbao-operator-controller-token
+        fieldPaths:
+          - rules.0.resourceNames.0
+      - select:
           group: apps
           version: v1
           kind: Deployment

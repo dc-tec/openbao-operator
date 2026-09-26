@@ -1,0 +1,30 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-controller-token
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: [{{ include "openbao-operator.controllerServiceAccountName" . | quote }}]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-controller-token
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "openbao-operator.fullname" . }}-controller-token
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "openbao-operator.controllerServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}

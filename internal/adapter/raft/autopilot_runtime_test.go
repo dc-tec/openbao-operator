@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -135,7 +134,7 @@ func TestGetClientTrustBundle(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster-a-tls-ca", Namespace: "tenant-ns"},
 			Data:       map[string][]byte{"ca.crt": []byte("pem-data")},
 		})
-		mgr := NewManager(clientset, nil)
+		mgr := NewManager(clientset, nil, nil)
 
 		trust, err := mgr.getClientTrustBundle(context.Background(), cluster)
 		if err != nil {
@@ -169,7 +168,7 @@ func TestGetClientTrustBundle(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "seal-creds", Namespace: "tenant-ns"},
 			Data:       map[string][]byte{"pki-ca.crt": []byte("pki-ca-data")},
 		})
-		mgr := NewManager(clientset, nil)
+		mgr := NewManager(clientset, nil, nil)
 
 		trust, err := mgr.getClientTrustBundle(context.Background(), acmeCluster)
 		if err != nil {
@@ -184,7 +183,7 @@ func TestGetClientTrustBundle(t *testing.T) {
 	})
 
 	t.Run("missing secret", func(t *testing.T) {
-		mgr := NewManager(k8sfake.NewClientset(), nil)
+		mgr := NewManager(k8sfake.NewClientset(), nil, nil)
 		_, err := mgr.getClientTrustBundle(context.Background(), cluster)
 		if err == nil || !strings.Contains(err.Error(), "failed to get OpenBao trust Secret") {
 			t.Fatalf("expected missing secret error, got %v", err)
@@ -195,7 +194,7 @@ func TestGetClientTrustBundle(t *testing.T) {
 		clientset := k8sfake.NewClientset(&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster-a-tls-ca", Namespace: "tenant-ns"},
 		})
-		mgr := NewManager(clientset, nil)
+		mgr := NewManager(clientset, nil, nil)
 		_, err := mgr.getClientTrustBundle(context.Background(), cluster)
 		if err == nil || !strings.Contains(err.Error(), `missing "ca.crt" key`) {
 			t.Fatalf("expected missing key error, got %v", err)
@@ -207,7 +206,7 @@ func TestGetClientTrustBundle(t *testing.T) {
 		clientset.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, apierrors.NewForbidden(schema.GroupResource{Group: "", Resource: "secrets"}, "cluster-a-tls-ca", errors.New("forbidden"))
 		})
-		mgr := NewManager(clientset, nil)
+		mgr := NewManager(clientset, nil, nil)
 		_, err := mgr.getClientTrustBundle(context.Background(), cluster)
 		if err == nil {
 			t.Fatalf("expected forbidden error")
@@ -218,25 +217,11 @@ func TestGetClientTrustBundle(t *testing.T) {
 	})
 }
 
-func TestGetJWTToken_MissingProjectedVolume(t *testing.T) {
-	t.Parallel()
-
-	if _, err := os.Stat("/var/run/secrets/tokens/openbao-token"); err == nil {
-		t.Skip("projected token path exists on this environment; missing-file assertion not deterministic")
-	}
-
-	mgr := &Manager{}
-	_, err := mgr.getJWTToken(logr.Discard())
-	if err == nil || !strings.Contains(err.Error(), "failed to read JWT token from projected volume") {
-		t.Fatalf("expected projected token read error, got %v", err)
-	}
-}
-
 func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 	t.Parallel()
 
 	t.Run("cluster not initialized is no-op", func(t *testing.T) {
-		mgr := NewManager(k8sfake.NewClientset(), nil)
+		mgr := NewManager(k8sfake.NewClientset(), nil, nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
 			Spec:       openbaov1alpha1.OpenBaoClusterSpec{Replicas: 3},
@@ -248,7 +233,7 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 	})
 
 	t.Run("missing root token secret is skipped", func(t *testing.T) {
-		mgr := NewManager(k8sfake.NewClientset(), nil)
+		mgr := NewManager(k8sfake.NewClientset(), nil, nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
 			Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -264,7 +249,7 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 
 	t.Run("root token secret without token is skipped", func(t *testing.T) {
 		clientset := k8sfake.NewClientset(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "cluster-root-token", Namespace: "ns"}})
-		mgr := NewManager(clientset, nil)
+		mgr := NewManager(clientset, nil, nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
 			Spec:       openbaov1alpha1.OpenBaoClusterSpec{Replicas: 3},
@@ -276,7 +261,7 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 	})
 
 	t.Run("self-init without operator jwt bootstrap is skipped", func(t *testing.T) {
-		mgr := NewManager(k8sfake.NewClientset(), nil)
+		mgr := NewManager(k8sfake.NewClientset(), nil, nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
 			Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -297,7 +282,7 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster-root-token", Namespace: "ns"},
 			Data:       map[string][]byte{"token": []byte("root-token")},
 		})
-		mgr := NewManager(clientset, nil)
+		mgr := NewManager(clientset, nil, nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
 			Spec:       openbaov1alpha1.OpenBaoClusterSpec{Replicas: 3},
@@ -432,7 +417,7 @@ func TestPrepareScaleDown_RemovesFollowerAndUpdatesAutopilot(t *testing.T) {
 		},
 	)
 
-	mgr := NewManager(clientset, provider)
+	mgr := NewManager(clientset, provider, nil)
 	err := mgr.PrepareScaleDown(context.Background(), logr.Discard(), cluster, "cluster", 3, 2)
 	if err != nil {
 		t.Fatalf("PrepareScaleDown() error = %v", err)
@@ -505,7 +490,7 @@ func TestPrepareScaleDown_StepsDownLeaderVictim(t *testing.T) {
 		},
 	)
 
-	mgr := NewManager(clientset, &fakeScaleDownFactoryProvider{factory: &fakeScaleDownFactory{client: client}})
+	mgr := NewManager(clientset, &fakeScaleDownFactoryProvider{factory: &fakeScaleDownFactory{client: client}}, nil)
 	err := mgr.PrepareScaleDown(context.Background(), logr.Discard(), cluster, "cluster", 3, 2)
 	if err == nil || !strings.Contains(err.Error(), "waiting for leader step-down on cluster-2 to complete") {
 		t.Fatalf("expected step-down wait error, got %v", err)
@@ -559,7 +544,7 @@ func TestPrepareReadReplicaScaleDown_RemovesNonVoter(t *testing.T) {
 		},
 	)
 
-	mgr := NewManager(clientset, &fakeScaleDownFactoryProvider{factory: &fakeScaleDownFactory{client: client}})
+	mgr := NewManager(clientset, &fakeScaleDownFactoryProvider{factory: &fakeScaleDownFactory{client: client}}, nil)
 	err := mgr.PrepareReadReplicaScaleDown(context.Background(), logr.Discard(), cluster, "cluster-read", 2, 1)
 	if err != nil {
 		t.Fatalf("PrepareReadReplicaScaleDown() error = %v", err)
@@ -752,7 +737,7 @@ func newMaintenanceTestManager(client *fakeScaleDownClient) (*Manager, *openbaov
 			Data:       map[string][]byte{"ca.crt": []byte("pem-data")},
 		},
 	)
-	return NewManager(clientset, &fakeScaleDownFactoryProvider{factory: &fakeScaleDownFactory{client: client}}), cluster
+	return NewManager(clientset, &fakeScaleDownFactoryProvider{factory: &fakeScaleDownFactory{client: client}}, nil), cluster
 }
 
 func TestWrapScaleDownPermissionError_SelfInitClusterRequiresUpdatedPolicy(t *testing.T) {
@@ -860,4 +845,49 @@ func TestAutopilotReconcileReadsBeforeWriting(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A malformed Target object must not select legacy root-token authentication,
+// even when admission enforcement is disabled or an old object bypassed it.
+func TestTargetJWT_IssuanceFailureNeverUsesRootToken(t *testing.T) {
+	t.Parallel()
+	for _, selfInit := range []*openbaov1alpha1.SelfInitConfig{nil, {Enabled: true}} {
+		cluster := &openbaov1alpha1.OpenBaoCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+			Spec: openbaov1alpha1.OpenBaoClusterSpec{
+				ControllerJWTMode: openbaov1alpha1.ControllerJWTModeTarget,
+				SelfInit:          selfInit, Replicas: 3, TLS: openbaov1alpha1.TLSConfig{Enabled: true},
+			},
+			Status: openbaov1alpha1.OpenBaoClusterStatus{Initialized: true},
+		}
+		clientset := k8sfake.NewClientset(
+			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "cluster-root-token", Namespace: "ns"},
+				Data: map[string][]byte{"token": []byte("root-token")}},
+			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "cluster-tls-ca", Namespace: "ns"},
+				Data: map[string][]byte{"ca.crt": []byte("pem-data")}},
+		)
+		factory := &fakeScaleDownFactory{}
+		issuanceErr := errors.New("target issuance unavailable")
+		provider := controllerTokenProviderFunc(func(context.Context, *openbaov1alpha1.OpenBaoCluster) (string, error) {
+			return "", issuanceErr
+		})
+		mgr := NewManager(clientset, &fakeScaleDownFactoryProvider{factory: factory}, provider)
+		_, err := mgr.newScaleDownClient(context.Background(), cluster)
+		if !errors.Is(err, issuanceErr) {
+			t.Fatalf("scale-down error = %v, want issuance error", err)
+		}
+		err = mgr.ReconcileAutopilotConfig(context.Background(), logr.Discard(), cluster)
+		if !errors.Is(err, issuanceErr) {
+			t.Fatalf("Autopilot error = %v, want issuance error", err)
+		}
+		if factory.newWithToken != 0 {
+			t.Fatal("Target authentication fell back to the root token")
+		}
+	}
+}
+
+type controllerTokenProviderFunc func(context.Context, *openbaov1alpha1.OpenBaoCluster) (string, error)
+
+func (f controllerTokenProviderFunc) Token(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	return f(ctx, cluster)
 }

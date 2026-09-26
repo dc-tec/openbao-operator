@@ -63,3 +63,11 @@ Run `make build-policy-approvals` to generate both release approval files in `di
 definitions as bootstrap and runtime reconciliation. For a specific manifest, run
 `go run ./hack/tools/operator_policy_approval --cluster cluster.yaml`. Operators use the release assets instead of
 building these tools.
+
+## Controller JWT isolation
+
+Run `make test-controller-jwt-openbao` with Docker available. The test starts an EnvTest API server and two disposable
+OpenBao servers on loopback. It verifies Pod-bound token issuance, the controller's ServiceAccount permission boundary,
+mode migration, and rejected cross-target and shared JWT replay with both inline and standard authentication.
+The Envtest Integration CI job runs this check against OpenBao 2.6.3 and 2.7.0. The local command defaults to 2.6.3;
+set `OPENBAO_JWT_TEST_IMAGE` to select another image. The test removes its containers when it finishes.

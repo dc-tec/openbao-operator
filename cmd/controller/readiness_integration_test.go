@@ -103,7 +103,7 @@ func readinessControllerRuntime(t *testing.T, mgr ctrl.Manager, singleTenant boo
 	clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
 	require.NoError(t, err)
 	clientManager := openbao.NewClientManager(portopenbao.ClientConfig{})
-	raftManager := raft.NewManager(clientset, raftClientFactoryProvider{clientManager: clientManager})
+	raftManager := raft.NewManager(clientset, raftClientFactoryProvider{clientManager: clientManager}, nil)
 	initialization, err := initmanager.NewManager(mgr.GetConfig(), clientset, clientManager, raftManager)
 	require.NoError(t, err)
 	return controllerProcessRuntime{

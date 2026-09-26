@@ -79,6 +79,12 @@ resources:
       - path: spec.deletionPolicy
         classification: beta-stable
         owner: lifecycle
+      - path: spec.controllerJWTMode
+        classification: additive-unfrozen
+        owner: authentication
+        enforcement: [crd-schema, admission-policy, controller]
+        omission: installation-scoped Shared controller JWT authentication
+        rationale: Target mode requires administrator preparation of existing JWT roles; executor identities are unchanged.
       - path: spec.gateway
         classification: additive-unfrozen
         owner: networking

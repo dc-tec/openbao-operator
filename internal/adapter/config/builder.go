@@ -49,15 +49,16 @@ path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }`
 
 // OperatorBootstrapConfig holds configuration for operator bootstrap.
 type OperatorBootstrapConfig struct {
-	OIDCIssuerURL      string
-	OIDCDiscoveryURL   string
-	OIDCDiscoveryCAPEM string
-	OIDCJWKSURL        string
-	OIDCJWKSCAPEM      string
-	JWTKeysPEM         []string
-	OperatorNS         string
-	OperatorSA         string
-	JWTAuthAudience    string
+	OIDCIssuerURL         string
+	OIDCDiscoveryURL      string
+	OIDCDiscoveryCAPEM    string
+	OIDCJWKSURL           string
+	OIDCJWKSCAPEM         string
+	JWTKeysPEM            []string
+	OperatorNS            string
+	OperatorSA            string
+	JWTAuthAudience       string
+	ControllerJWTAudience string
 }
 
 func shouldUseDynamicOIDCDiscovery(config OperatorBootstrapConfig) bool {

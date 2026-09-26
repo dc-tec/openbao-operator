@@ -1,10 +1,36 @@
 package auth
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
+
+// ControllerTokenProvider supplies the credential selected for one target.
+type ControllerTokenProvider interface {
+	Token(context.Context, *openbaov1alpha1.OpenBaoCluster) (string, error)
+}
+
+// ControllerJWTAudience resolves the controller audience without accepting a
+// tenant-selected target identifier. Recreating a CR produces a new audience.
+func ControllerJWTAudience(cluster *openbaov1alpha1.OpenBaoCluster, installationAudience string) (string, error) {
+	if cluster == nil {
+		return "", fmt.Errorf("cluster is required for controller JWT authentication")
+	}
+	switch cluster.Spec.ControllerJWTMode {
+	case "", openbaov1alpha1.ControllerJWTModeShared:
+		return OperatorJWTAudience(installationAudience), nil
+	case openbaov1alpha1.ControllerJWTModeTarget:
+		if cluster.UID == "" {
+			return "", fmt.Errorf("cluster UID is required for target-specific controller JWT authentication")
+		}
+		return "urn:openbao:controller:" + string(cluster.UID), nil
+	default:
+		return "", fmt.Errorf("unsupported controller JWT mode %q", cluster.Spec.ControllerJWTMode)
+	}
+}
 
 const (
 	// TokenAudienceOpenBaoInternal is the default Kubernetes projected
