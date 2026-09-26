@@ -155,7 +155,7 @@ aligned:
 
 - The operator ServiceAccount must be allowed to read the Kubernetes OIDC discovery and JWKS non-resource URLs.
 - `selfInit.oidc.audience`, when set, must match the installation-scoped `OPENBAO_JWT_AUDIENCE`. It cannot define a
-  per-cluster audience. Use `spec.controllerJWTMode: Target` for target-specific controller credentials.
+  per-cluster audience.
 - Manually managed roles must bind the rendered controller and Job ServiceAccount identities, not guessed defaults.
 
 Review [operator authentication](../../get-started/operator-authentication/) and

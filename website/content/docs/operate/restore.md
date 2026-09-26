@@ -230,19 +230,3 @@ spec:
 After a forced restore, verify `bao status`, `bao operator raft list-peers`, declared replica readiness, client login,
 and representative application data before returning traffic. If the target remains sealed or leaderless, continue
 with the corresponding recovery page.
-
-## Restore controller authentication
-
-A snapshot restores the source's JWT roles. A snapshot taken before controller JWT migration can restore acceptance
-of the shared audience and reject the destination's target-specific JWT. The operator does not change authentication
-mode or repair JWT roles after restore.
-
-Before restoring a Target-mode cluster, prepare controller trust for the destination UID in the source before taking
-the snapshot, or provide an administrator authentication path usable in the restored state. Reapply the destination's
-role binding and verify rejection of unrelated audiences before resuming lifecycle management. Preauthorizing source
-and destination audiences places both in the same recovery authentication domain. Do not add unrelated tenant audiences.
-See [controller JWT migration](../controller-jwt-migration/) for the role update and verification sequence.
-
-Deleting and recreating an OpenBaoCluster changes its UID and controller audience even when the namespace and name
-are unchanged. Preserve the CR where possible. Treat recreation and older-snapshot restore as authentication recovery
-operations; `additionalSubjects` alone does not establish trust in the destination audience or issuer.
