@@ -2,6 +2,15 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.6.0](https://github.com/dc-tec/openbao-operator/compare/0.5.1...0.6.0) (2026-09-26)
+
+
+### Features
+
+* **auth:** isolate controller JWTs by target ([#768](https://github.com/dc-tec/openbao-operator/issues/768)) ([b3bd17a](https://github.com/dc-tec/openbao-operator/commit/b3bd17a8f18e5f70ceafe3cf941586a47062922a))
+* **certs:** use native TLS certificate reload on OpenBao 2.7 ([#767](https://github.com/dc-tec/openbao-operator/issues/767)) ([867c613](https://github.com/dc-tec/openbao-operator/commit/867c613203f7ffa80f70f97843c0b312d95ff74e))
+* **policies:** reconcile administrator-approved OpenBao policies ([#765](https://github.com/dc-tec/openbao-operator/issues/765)) ([4822e59](https://github.com/dc-tec/openbao-operator/commit/4822e595eed80af436eebb314aaa9f01c09da223))
+
 ## [0.5.1](https://github.com/dc-tec/openbao-operator/compare/0.5.0...0.5.1) (2026-09-23)
 
 
