@@ -1,0 +1,14 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: controller-token
+  namespace: system
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["controller"]
+    verbs: ["create"]

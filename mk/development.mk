@@ -576,7 +576,7 @@ test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests agains
 			mkdir -p "$$(dirname "$$report")"; \
 		fi; \
 	done; \
-	GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
+	GO_TEST_FLAGS="-tags=e2e -timeout=$(E2E_TIMEOUT) -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=\"$(E2E_FOCUS)\""; \
 	fi; \
@@ -1056,3 +1056,10 @@ bench-compare: benchstat ## Compare benchmark result files with benchstat. Set O
 .PHONY: test-policy-reconciliation-openbao
 test-policy-reconciliation-openbao: ## Test policy authorization and repair against a disposable OpenBao container (requires Docker).
 	@GOFLAGS="$(GOFLAGS_VENDOR)" go test -tags=e2e ./test/e2e/policyreconciliation -count=1 -v
+
+.PHONY: test-controller-jwt-openbao
+OPENBAO_JWT_TEST_IMAGE ?= openbao/openbao:2.6.3
+test-controller-jwt-openbao: setup-envtest ## Test target JWT issuance and cross-target replay against disposable OpenBao containers.
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
+		OPENBAO_JWT_TEST_IMAGE="$(OPENBAO_JWT_TEST_IMAGE)" GOFLAGS="$(GOFLAGS_VENDOR)" \
+		go test -tags=integration ./test/integration -run '^TestControllerJWT' -count=1 -v

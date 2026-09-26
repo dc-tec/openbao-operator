@@ -94,3 +94,23 @@ The model also assumes the Kubernetes API, storage encryption, node security, cl
 - confirm images and release artifacts are pinned and verifiable
 - rehearse loss of leadership, sealed state, and restore without relying on bootstrap credentials
 {{< /checklist >}}
+
+## Controller credentials across targets
+
+The controller remains trusted infrastructure with Kubernetes authority over its assigned targets. Target-specific
+JWT authentication limits replay of credentials captured at a managed OpenBao endpoint. It does not contain a
+compromised controller or Kubernetes administrator.
+
+With `spec.controllerJWTMode: Target`, the controller sends a JWT whose sole audience identifies the cluster CR UID.
+The target's controller role must accept only its designated audience and expected subject. The bootstrap supplies
+these bindings for new clusters. Administrators own later role changes. Successful login alone does not prove that
+another accepted audience was removed; verify rejection during [migration](../../operate/controller-jwt-migration/).
+
+Shared mode permits replay between reachable targets that trust the same issuer, subject, and installation audience.
+Mixed installations retain this exposure among legacy targets. Use Target mode with verified role bindings before
+claiming credential isolation between mutually untrusted tenants. Separate operator installations with distinct
+identities and scoped permissions remain an alternative deployment boundary.
+
+JWT validation through OIDC or static keys does not check whether the bound Pod still exists. A deleted Pod's JWT can
+remain valid at OpenBao until expiration plus the role's validation leeway. Standard-login OpenBao tokens have their
+own lifetimes. Pod binding and short issuance periods do not replace role restrictions or session revocation during an incident.

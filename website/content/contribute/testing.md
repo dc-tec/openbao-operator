@@ -63,3 +63,31 @@ Run `make build-policy-approvals` to generate both release approval files in `di
 definitions as bootstrap and runtime reconciliation. For a specific manifest, run
 `go run ./hack/tools/operator_policy_approval --cluster cluster.yaml`. Operators use the release assets instead of
 building these tools.
+
+## Controller JWT isolation
+
+Run `make test-controller-jwt-openbao` with Docker available. The test starts an EnvTest API server and two disposable
+OpenBao servers on loopback. It verifies Pod-bound token issuance, the controller's ServiceAccount permission boundary,
+mode migration, and rejected cross-target and shared JWT replay with both inline and standard authentication.
+The Envtest Integration CI job runs this check against OpenBao 2.6.3 and 2.7.0. The local command defaults to 2.6.3;
+set `OPENBAO_JWT_TEST_IMAGE` to select another image. The test removes its containers when it finishes.
+
+The `controller-jwt` E2E scenario runs the deployed controller against self-initialized OpenBao Pods. It verifies the
+generated controller role, Raft Autopilot repair, and approved policy repair after the original ten-minute JWT expires,
+with the same controller Pod and process. It also migrates an initialized Shared cluster, restores its pre-migration Raft
+snapshot, and repairs the restored audience restrictions through an independent administrator login.
+
+```sh
+make test-e2e-ci \
+  E2E_LABEL_FILTER=controller-jwt \
+  E2E_TIMEOUT=35m \
+  E2E_FAIL_ON_EMPTY=true \
+  E2E_JUNIT_REPORT=dist/test/controller-jwt/junit.xml \
+  E2E_JSON_REPORT=dist/test/controller-jwt/ginkgo.json
+```
+
+This serial scenario uses the default inline transport and takes at least eleven minutes to cross the real JWT lifetime.
+Allow up to 25 minutes for setup, reconciliation, and recovery. The snapshot operation uses the Raft API on the same CR;
+object storage, the OpenBaoRestore Job, and recovery into a different CR UID require their own E2E coverage.
+When using `test-e2e-existing` with an isolated test cluster, set both `E2E_OPENBAO_VERSION` and `E2E_OPENBAO_IMAGE`,
+and configure its API-server egress addresses through `E2E_API_SERVER_CIDR` and `E2E_API_SERVER_ENDPOINT_IPS`.

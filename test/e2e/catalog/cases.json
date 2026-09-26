@@ -915,6 +915,50 @@
     "suiteTitle": ""
   },
   {
+    "id": "controller-jwt-renewal-migration-recovery",
+    "generatedId": "controller-jwt-renews-target-credentials-and-recovers-an-d3ad7cce",
+    "caseLabel": "controller-jwt-renewal-migration-recovery",
+    "coverage": [
+      "controller-jwt-renewal",
+      "controller-jwt-migration",
+      "controller-jwt-recovery"
+    ],
+    "file": "test/e2e/Controller_JWT_test.go",
+    "type": "It",
+    "name": "renews Target credentials and recovers an initialized migration from an older snapshot",
+    "path": [
+      "Controller JWT lifecycle",
+      "renews Target credentials and recovers an initialized migration from an older snapshot"
+    ],
+    "labels": [
+      "lifecycle",
+      "controller-jwt",
+      "slow",
+      "case:controller-jwt-renewal-migration-recovery",
+      "covers:controller-jwt-renewal",
+      "covers:controller-jwt-migration",
+      "covers:controller-jwt-recovery"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "controller-jwt",
+      "slow"
+    ],
+    "steps": [
+      "bootstrapping Target mode with the operator-generated roles and policy approval",
+      "initializing an existing-style Shared cluster and saving its actual Raft snapshot",
+      "preparing the existing role, switching the CR, then removing shared trust",
+      "restoring the pre-migration snapshot while the CR remains in Target mode",
+      "repairing restored audience trust through the independent administrator login",
+      "keeping the same controller process alive beyond the initial JWT's ten-minute lifetime",
+      "repairing a deleted operational policy using the renewed Target credential"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "manager-leader-failover",
     "generatedId": "manager-resilience-fails-over-leader-election-and-continues-2baefc75",
     "caseLabel": "manager-leader-failover",

@@ -11,10 +11,10 @@ Notes:
 
 ## Summary
 
-- Files: `20`
-- Specs: `85`
-- Explicit case IDs: `37`
-- Coverage tags: `51`
+- Files: `21`
+- Specs: `86`
+- Explicit case IDs: `38`
+- Coverage tags: `54`
 
 ## Suites
 
@@ -28,6 +28,7 @@ Notes:
 | [Cluster TLS Lifecycle](suites/Cluster_TLS_Lifecycle_test.md) | 1 | 1 | 0 | `tls`, `cluster`, `lifecycle` | `test/e2e/Cluster_TLS_Lifecycle_test.go` |
 | [Cluster KMIP Unseal](suites/Cluster_Unseal_KMIP_test.md) | 1 | 0 | 0 | `cluster`, `lifecycle`, `unseal`, `kmip`, `hsm` | `test/e2e/Cluster_Unseal_KMIP_test.go` |
 | [Cluster PKCS#11 Unseal](suites/Cluster_Unseal_PKCS11_test.md) | 1 | 0 | 0 | `cluster`, `lifecycle`, `unseal`, `pkcs11`, `hsm` | `test/e2e/Cluster_Unseal_PKCS11_test.go` |
+| [Controller JWT lifecycle](suites/Controller_JWT_test.md) | 1 | 1 | 0 | `lifecycle`, `controller-jwt`, `slow` | `test/e2e/Controller_JWT_test.go` |
 | [Manager Resilience](suites/Manager_Resilience_test.md) | 3 | 3 | 0 | `manager`, `cluster`, `e2e-anchor` | `test/e2e/Manager_Resilience_test.go` |
 | [Manager](suites/Operator_Manager_test.md) | 1 | 1 | 0 | `manager`, `critical`, `smoke` | `test/e2e/Operator_Manager_test.go` |
 | [OpenShift Platform](suites/Platform_OpenShift_test.md) | 2 | 0 | 0 | `openshift`, `platform` | `test/e2e/Platform_OpenShift_test.go` |
@@ -62,6 +63,9 @@ Notes:
 | `cert-replacement` | 1 |
 | `configmap-protection` | 1 |
 | `controller-failover` | 1 |
+| `controller-jwt-migration` | 1 |
+| `controller-jwt-recovery` | 1 |
+| `controller-jwt-renewal` | 1 |
 | `controller-outage` | 1 |
 | `controller-restart` | 1 |
 | `data-plane-isolation` | 1 |

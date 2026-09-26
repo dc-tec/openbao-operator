@@ -25,7 +25,7 @@ func TestSetupControllersRequiresRaftRuntime(t *testing.T) {
 func TestSetupControllersRequiresInitializationManager(t *testing.T) {
 	err := setupControllers(nil, controllerProcessRuntime{
 		openBaoRuntime: appopenbaocluster.RuntimeOpenBaoConfig{
-			Raft: raft.NewManager(kubernetesfake.NewClientset(), nil),
+			Raft: raft.NewManager(kubernetesfake.NewClientset(), nil, nil),
 		},
 	})
 

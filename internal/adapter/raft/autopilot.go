@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/openbaotls"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
@@ -51,21 +49,22 @@ type ClientFactoryProvider interface {
 type Manager struct {
 	clientset             kubernetes.Interface
 	clientFactoryProvider ClientFactoryProvider
+	tokens                portauth.ControllerTokenProvider
 }
 
 // NewManager creates a new Raft Autopilot Manager.
-func NewManager(clientset kubernetes.Interface, clientFactoryProvider ClientFactoryProvider) *Manager {
+func NewManager(clientset kubernetes.Interface, clientFactoryProvider ClientFactoryProvider, tokens portauth.ControllerTokenProvider) *Manager {
 	return &Manager{
 		clientset:             clientset,
 		clientFactoryProvider: clientFactoryProvider,
+		tokens:                tokens,
 	}
 }
 
 // ReconcileAutopilotConfig reconciles Raft Autopilot configuration for an initialized cluster.
 // This is called during Day 2 operations (e.g., when replicas or autopilot config changes).
 // It handles authentication via root token (non-SelfInit) or JWT (SelfInit).
-// For JWT authentication, it reads the install-scoped projected token from the
-// controller Pod's `openbao-token` volume. There is no TokenRequest fallback.
+// JWT authentication uses the cluster's selected shared or target-specific mode.
 func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	// Only reconcile if cluster is initialized
 	if !cluster.Status.Initialized {
@@ -94,17 +93,18 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 	// For SelfInit clusters, use ClientManager which handles JWT authentication
 	// For non-SelfInit clusters, use root token from Secret
 	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
+	targetJWT := cluster.Spec.ControllerJWTMode == openbaov1alpha1.ControllerJWTModeTarget
 	var client Client
 	var err error
 
-	if selfInitEnabled {
-		if !portauth.OperatorJWTBootstrapEnabled(cluster) {
+	if selfInitEnabled || targetJWT {
+		if !portauth.OperatorJWTBootstrapEnabled(cluster) && !targetJWT {
 			logger.V(1).Info("Skipping autopilot config reconciliation for self-init cluster without operator JWT bootstrap")
 			return nil
 		}
 
 		// Use ClientManager for JWT authentication (SelfInit)
-		client, err = m.newOpenBaoClient(ctx, logger, cluster)
+		client, err = m.newOpenBaoClient(ctx, cluster)
 		if err != nil {
 			return fmt.Errorf("failed to create OpenBao client for autopilot config: %w", err)
 		}
@@ -156,7 +156,7 @@ func (m *Manager) PrepareScaleDown(
 		return fmt.Errorf("statefulset name is required")
 	}
 
-	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	client, err := m.newScaleDownClient(ctx, cluster)
 	if err != nil {
 		return fmt.Errorf("failed to create authenticated OpenBao client for safe scale down: %w", err)
 	}
@@ -226,7 +226,7 @@ func (m *Manager) PrepareReadReplicaScaleDown(
 		return fmt.Errorf("statefulset name is required")
 	}
 
-	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	client, err := m.newScaleDownClient(ctx, cluster)
 	if err != nil {
 		return fmt.Errorf("failed to create authenticated OpenBao client for read-replica scale down: %w", err)
 	}
@@ -276,7 +276,7 @@ func (m *Manager) ReadRaftConfiguration(
 		return nil, fmt.Errorf("cluster is required")
 	}
 
-	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	client, err := m.newScaleDownClient(ctx, cluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authenticated OpenBao client for raft membership read: %w", err)
 	}
@@ -306,7 +306,7 @@ func (m *Manager) ReadRaftAutopilotState(
 		return nil, fmt.Errorf("cluster is required")
 	}
 
-	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	client, err := m.newScaleDownClient(ctx, cluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create authenticated OpenBao client for raft autopilot state read: %w", err)
 	}
@@ -401,7 +401,7 @@ func (m *Manager) configureAutopilotWithClient(ctx context.Context, logger logr.
 
 // newOpenBaoClient constructs an authenticated OpenBao client for talking to the pod-0 instance
 // using JWT authentication via ClientManager.
-func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (Client, error) {
+func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (Client, error) {
 	if strings.TrimSpace(cluster.Name) == "" || strings.TrimSpace(cluster.Namespace) == "" {
 		return nil, fmt.Errorf("cluster name and namespace are required")
 	}
@@ -420,8 +420,11 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 		return nil, fmt.Errorf("client factory provider returned nil factory for cluster %s", clusterKey)
 	}
 
-	// Get the projected JWT token mounted for OpenBao auth.
-	jwtToken, err := m.getJWTToken(logger)
+	// Resolve only this cluster's selected credential; Target never falls back.
+	if m.tokens == nil {
+		return nil, fmt.Errorf("controller token provider is required")
+	}
+	jwtToken, err := m.tokens.Token(ctx, cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -435,13 +438,14 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 	return client, nil
 }
 
-func (m *Manager) newScaleDownClient(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (Client, error) {
+func (m *Manager) newScaleDownClient(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (Client, error) {
 	if cluster == nil {
 		return nil, fmt.Errorf("cluster is required")
 	}
 
-	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled {
-		return m.newOpenBaoClient(ctx, logger, cluster)
+	if cluster.Spec.ControllerJWTMode == openbaov1alpha1.ControllerJWTModeTarget ||
+		(cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled) {
+		return m.newOpenBaoClient(ctx, cluster)
 	}
 
 	secretName := cluster.Name + suffixRootToken
@@ -465,23 +469,6 @@ func (m *Manager) newScaleDownClient(ctx context.Context, logger logr.Logger, cl
 
 func (m *Manager) getClientTrustBundle(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (openbaotls.ClientTrustBundle, error) {
 	return openbaotls.ReadClientTrustBundle(ctx, m.clientset, cluster)
-}
-
-// getJWTToken retrieves a JWT token for the operator from the projected volume.
-func (m *Manager) getJWTToken(logger logr.Logger) (string, error) {
-	projectedTokenPath := constants.PathOperatorJWTToken
-	tokenBytes, err := os.ReadFile(projectedTokenPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read JWT token from projected volume at %s: %w (ensure operator deployment has projected volume mounted)", projectedTokenPath, err)
-	}
-
-	token := strings.TrimSpace(string(tokenBytes))
-	if len(token) == 0 {
-		return "", fmt.Errorf("JWT token file at %s is empty", projectedTokenPath)
-	}
-
-	logger.V(1).Info("Successfully read JWT token from projected volume", "path", projectedTokenPath)
-	return token, nil
 }
 
 // handleJWTAuthError provides helpful error messages for common JWT auth failures.

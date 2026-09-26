@@ -572,6 +572,14 @@ jobs:
       - name: Run unit, integration, and cluster-independent E2E support tests with coverage gate
         run: make test-ci
 
+      - name: Verify controller JWT isolation against OpenBao 2.6.3
+        run: make test-controller-jwt-openbao
+
+      - name: Verify controller JWT isolation against OpenBao 2.7.0
+        env:
+          OPENBAO_JWT_TEST_IMAGE: openbao/openbao:2.7.0
+        run: make test-controller-jwt-openbao
+
   fuzz:
     name: Fuzz Smoke
     needs: changes

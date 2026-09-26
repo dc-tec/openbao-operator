@@ -273,6 +273,16 @@ type OpenBaoClusterSpec struct {
 	// Auth methods, roles, and the approval policy are not reconciled.
 	// +optional
 	ReconcilePolicies bool `json:"reconcilePolicies,omitempty"`
+	// ControllerJWTMode selects the credential used by the controller for OpenBao.
+	// Shared (also the behavior when omitted) preserves the installation-wide
+	// projected JWT. Target requests a short-lived JWT whose sole audience is
+	// urn:openbao:controller:<metadata.uid>. Prepare the OpenBao controller role
+	// before switching an initialized cluster to Target. Target never falls back
+	// to the shared JWT. Target requires self-init and self-init OIDC to be enabled.
+	// Executor Job authentication is unchanged.
+	// Enforced admission prevents removal or downgrade after selecting Target.
+	// +optional
+	ControllerJWTMode ControllerJWTMode `json:"controllerJWTMode,omitempty"`
 
 	// SelfInit configures OpenBao's native self-initialization feature.
 	// When enabled, OpenBao initializes itself on first start using the configured

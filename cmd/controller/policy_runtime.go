@@ -3,8 +3,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -20,20 +18,16 @@ import (
 func operatorPolicyClientFactory(
 	clientset kubernetes.Interface,
 	manager *openbao.ClientManager,
+	tokens portauth.ControllerTokenProvider,
 ) configuration.PolicyClientFactory {
 	return func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (portopenbao.PolicyClient, error) {
 		trust, err := openbaotls.ReadClientTrustBundle(ctx, clientset, cluster)
 		if err != nil {
 			return nil, err
 		}
-		token, err := os.ReadFile(constants.PathOperatorJWTToken)
+		jwt, err := tokens.Token(ctx, cluster)
 		if err != nil {
-			return nil, fmt.Errorf("read projected OpenBao JWT: %w", err)
-		}
-		defer clear(token)
-		jwt := strings.TrimSpace(string(token))
-		if jwt == "" {
-			return nil, fmt.Errorf("projected OpenBao JWT is empty")
+			return nil, err
 		}
 		service := cluster.Name
 		if cluster.Spec.Service != nil ||

@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
   annotations:
-    openbao.org/admission-policy-fingerprint: sha256:828902329ac47bb74fa1ef8ab7f92d80e1f16b3e2d088b8e585d2dd77b9fd6c1
+    openbao.org/admission-policy-fingerprint: sha256:5a8dec42af4c12ce064c395ea41946fc1c603ee467e72edb5722e30c7011a6ab
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -341,6 +341,15 @@ spec:
           )
         )
   validations:
+    - expression: >-
+        !has(object.spec.controllerJWTMode) || object.spec.controllerJWTMode != "Target" ||
+        (has(object.spec.selfInit) && object.spec.selfInit.enabled &&
+         has(object.spec.selfInit.oidc) && object.spec.selfInit.oidc.enabled)
+      message: "spec.controllerJWTMode Target requires spec.selfInit.enabled and spec.selfInit.oidc.enabled"
+    - expression: >-
+        oldObject == null || !has(oldObject.spec.controllerJWTMode) || oldObject.spec.controllerJWTMode != "Target" ||
+        (has(object.spec.controllerJWTMode) && object.spec.controllerJWTMode == "Target")
+      message: "spec.controllerJWTMode cannot be downgraded or removed after selecting Target"
     - expression: >-
         has(object.spec.profile)
       message: spec.profile is required and must be explicitly set to Hardened or Development.

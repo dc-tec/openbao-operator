@@ -112,6 +112,13 @@ replacements:
       - select:
           group: rbac.authorization.k8s.io
           version: v1
+          kind: Role
+          name: openbao-operator-controller-token
+        fieldPaths:
+          - rules.0.resourceNames.0
+      - select:
+          group: rbac.authorization.k8s.io
+          version: v1
           kind: RoleBinding
           name: openbao-operator-single-tenant
         fieldPaths:

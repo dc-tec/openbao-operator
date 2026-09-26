@@ -431,6 +431,11 @@ func syncRBAC(opts options) error {
 		return fmt.Errorf("sync single-tenant RBAC: %w", err)
 	}
 
+	// Sync controller-only TokenRequest permissions
+	if err := syncControllerTokenRBAC(opts); err != nil {
+		return fmt.Errorf("sync controller token RBAC: %w", err)
+	}
+
 	// Sync leader election
 	if err := syncLeaderElectionRBAC(opts); err != nil {
 		return fmt.Errorf("sync leader election RBAC: %w", err)
@@ -601,6 +606,25 @@ subjects:
 	output := fmt.Sprintf("{{- if eq .Values.tenancy.mode \"single\" }}\n%s%s{{- end }}\n", content, roleBinding)
 	outPath := filepath.Join(opts.rbacOutputDir, "single-tenant-clusterrole.yaml")
 	return writeFile(outPath, output)
+}
+
+// syncControllerTokenRBAC keeps token issuance confined to the controller identity.
+func syncControllerTokenRBAC(opts options) error {
+	var parts []string
+	for _, name := range []string{"controller_token_role.yaml", "controller_token_role_binding.yaml"} {
+		content, err := readFile(filepath.Join(opts.rbacInputDir, name))
+		if err != nil {
+			return fmt.Errorf("read %s: %w", name, err)
+		}
+		content = strings.ReplaceAll(content, "name: controller-token", "name: "+helmFullname+"-controller-token")
+		content = strings.ReplaceAll(content, "namespace: system", "namespace: {{ .Release.Namespace }}")
+		content = strings.ReplaceAll(content, "name: controller\n",
+			"name: {{ include \"openbao-operator.controllerServiceAccountName\" . }}\n")
+		content = strings.ReplaceAll(content, `resourceNames: ["controller"]`,
+			`resourceNames: [{{ include "openbao-operator.controllerServiceAccountName" . | quote }}]`)
+		parts = append(parts, addHelmLabelsToRBAC(content))
+	}
+	return writeFile(filepath.Join(opts.rbacOutputDir, "controller-token.yaml"), strings.Join(parts, "---\n"))
 }
 
 // syncLeaderElectionRBAC syncs leader election RBAC.

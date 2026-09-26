@@ -41,6 +41,16 @@ func TestKustomizeCustomIdentityOverlay_RewritesOperatorIdentityFields(t *testin
 	yamlBytes := kustomizeBuild(t, tmpDir)
 	objs := parseYAMLToUnstructured(t, yamlBytes, nil)
 
+	tokenRole := mustFindObject(t, objs, "rbac.authorization.k8s.io/v1", "Role", "demo-openbao-operator-controller-token")
+	rules, found, err := unstructured.NestedSlice(tokenRole.Object, "rules")
+	if err != nil || !found || len(rules) != 1 {
+		t.Fatalf("controller token role must contain one rule: %v", err)
+	}
+	names, found, err := unstructured.NestedStringSlice(rules[0].(map[string]interface{}), "resourceNames")
+	if err != nil || !found || len(names) != 1 || names[0] != testPrefixedControllerSA {
+		t.Fatalf("controller token role resourceNames=%v, want only %s: %v", names, testPrefixedControllerSA, err)
+	}
+
 	controller := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedControllerSA)
 	provisioner := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedProvisionerSA)
 	controllerPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-restrict-controller-rbac")
@@ -215,6 +225,16 @@ func TestKustomizeSingleTenantOverlay_CustomOperatorAndTargetNamespace(t *testin
 	yamlBytes := kustomizeBuild(t, tmpDir)
 	objs := parseYAMLToUnstructured(t, yamlBytes, nil)
 
+	tokenRole := mustFindObject(t, objs, "rbac.authorization.k8s.io/v1", "Role", "demo-openbao-operator-controller-token")
+	rules, found, err := unstructured.NestedSlice(tokenRole.Object, "rules")
+	if err != nil || !found || len(rules) != 1 {
+		t.Fatalf("controller token role must contain one rule: %v", err)
+	}
+	names, found, err := unstructured.NestedStringSlice(rules[0].(map[string]interface{}), "resourceNames")
+	if err != nil || !found || len(names) != 1 || names[0] != testPrefixedControllerSA {
+		t.Fatalf("controller token role resourceNames=%v, want only %s: %v", names, testPrefixedControllerSA, err)
+	}
+
 	controller := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedControllerSA)
 	roleBinding := mustFindRoleBinding(t, objs, "demo-openbao-operator-single-tenant")
 	operatorNS := mustFindObject(t, objs, "v1", "Namespace", testCustomOperatorNS)
@@ -297,6 +317,16 @@ func TestKustomizeSingleTenantCustomIdentityOverlay_RewritesControllerIdentityAn
 
 	yamlBytes := kustomizeBuild(t, tmpDir)
 	objs := parseYAMLToUnstructured(t, yamlBytes, nil)
+
+	tokenRole := mustFindObject(t, objs, "rbac.authorization.k8s.io/v1", "Role", "demo-openbao-operator-controller-token")
+	rules, found, err := unstructured.NestedSlice(tokenRole.Object, "rules")
+	if err != nil || !found || len(rules) != 1 {
+		t.Fatalf("controller token role must contain one rule: %v", err)
+	}
+	names, found, err := unstructured.NestedStringSlice(rules[0].(map[string]interface{}), "resourceNames")
+	if err != nil || !found || len(names) != 1 || names[0] != testPrefixedControllerSA {
+		t.Fatalf("controller token role resourceNames=%v, want only %s: %v", names, testPrefixedControllerSA, err)
+	}
 
 	controller := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedControllerSA)
 	roleBinding := mustFindRoleBinding(t, objs, "demo-openbao-operator-single-tenant")
