@@ -767,7 +767,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           version: v0.31.1
 
@@ -798,7 +798,7 @@ jobs:
 
       - name: Build operator image
         id: build-manager
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: hack/ci/Dockerfile.fast.manager
@@ -815,7 +815,7 @@ jobs:
 
       - name: Build init image
         id: build-init
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: hack/ci/Dockerfile.fast.init
@@ -829,7 +829,7 @@ jobs:
 
       - name: Build backup image
         id: build-backup
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: hack/ci/Dockerfile.fast.backup
@@ -843,7 +843,7 @@ jobs:
 
       - name: Build upgrade image
         id: build-upgrade
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: hack/ci/Dockerfile.fast.upgrade
@@ -857,7 +857,7 @@ jobs:
 
       - name: Build SoftHSM-enabled OpenBao fixture image
         if: env.BUILD_SEAL_FIXTURES == 'true'
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: test/e2e/images/openbao-softhsm
           file: test/e2e/images/openbao-softhsm/Dockerfile
@@ -871,7 +871,7 @@ jobs:
 
       - name: Build PyKMIP fixture image
         if: env.BUILD_SEAL_FIXTURES == 'true'
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: test/e2e/images/pykmip-server
           file: test/e2e/images/pykmip-server/Dockerfile
