@@ -16,11 +16,14 @@ type hclCoreAttributes struct {
 }
 
 type hclListenerTCP struct {
-	Type               string  `hcl:"type,label"`
-	Address            string  `hcl:"address"`
-	ClusterAddress     *string `hcl:"cluster_address"`
-	TLSDisable         int     `hcl:"tls_disable"`
-	MaxRequestDuration string  `hcl:"max_request_duration"`
+	Type                      string    `hcl:"type,label"`
+	Address                   string    `hcl:"address"`
+	ClusterAddress            *string   `hcl:"cluster_address"`
+	TLSDisable                int       `hcl:"tls_disable"`
+	MaxRequestDuration        string    `hcl:"max_request_duration"`
+	TLSMinVersion             *string   `hcl:"tls_min_version"`
+	TLSMaxVersion             *string   `hcl:"tls_max_version"`
+	TLSKeyExchangePreferences *[]string `hcl:"tls_key_exchange_preferences"`
 
 	ProxyProtocolBehavior *string `hcl:"proxy_protocol_behavior"`
 

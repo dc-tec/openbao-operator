@@ -976,7 +976,7 @@ _Appears in:_
 
 
 
-ListenerConfig allows tuning the TCP listener configuration.
+ListenerConfig allows tuning the API and metrics TCP listeners.
 
 
 
@@ -986,6 +986,9 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `tlsDisable` _boolean_ | TLSDisable controls TLS on the listener.<br />Note: This is typically managed by the operator based on spec.tls.enabled.<br />Hardened clusters reject tlsDisable=true. |  | Optional: \{\} <br /> |
+| `tlsMinVersion` _[TLSVersion](#tlsversion)_ | TLSMinVersion sets the minimum TLS version on the API and metrics listeners.<br />If omitted, OpenBao uses TLS 1.2. TLS must be enabled. |  | Enum: [tls12 tls13] <br />Optional: \{\} <br /> |
+| `tlsMaxVersion` _[TLSVersion](#tlsversion)_ | TLSMaxVersion sets the maximum TLS version on the API and metrics listeners.<br />If omitted, OpenBao uses TLS 1.3. TLS must be enabled. |  | Enum: [tls12 tls13] <br />Optional: \{\} <br /> |
+| `tlsKeyExchangePreferences` _[TLSKeyExchangeGroup](#tlskeyexchangegroup) array_ | TLSKeyExchangePreferences selects allowed key exchange groups on the API<br />and metrics listeners. List order does not control preference; Go uses its<br />internal preference order. If omitted, OpenBao uses Go's default groups.<br />Requires OpenBao >= 2.7.0 and TLS enabled. A list containing only hybrid PQ<br />groups requires TLSMinVersion=tls13 and rejects classical-only clients.<br />This setting does not configure cluster traffic on port 8201. |  | Enum: [CurveP256 CurveP384 CurveP521 X25519 X25519MLKEM768 SecP256r1MLKEM768 SecP384r1MLKEM1024] <br />MaxItems: 7 <br />MinItems: 1 <br />Optional: \{\} <br /> |
 | `proxyProtocolBehavior` _string_ | ProxyProtocolBehavior allows configuring proxy protocol (e.g. for LoadBalancers). |  | Enum: [use_always allow_any deny_unauthorized] <br />Optional: \{\} <br /> |
 
 
@@ -2114,6 +2117,30 @@ _Appears in:_
 | `extraSANs` _string array_ | ExtraSANs lists additional subject alternative names for server certificates.<br />In OperatorManaged mode, the operator includes these names when issuing the certificate.<br />In External mode, the operator requires the supplied certificate to contain them.<br />Values that parse as IP addresses are treated as IP SANs; all other values are DNS SANs. |  | Optional: \{\} <br /> |
 
 
+#### TLSKeyExchangeGroup
+
+_Underlying type:_ _string_
+
+TLSKeyExchangeGroup identifies a classical or hybrid post-quantum TLS group.
+Pure MLKEM1024 is not supported by the operator's default TLS clients.
+
+_Validation:_
+- Enum: [CurveP256 CurveP384 CurveP521 X25519 X25519MLKEM768 SecP256r1MLKEM768 SecP384r1MLKEM1024]
+
+_Appears in:_
+- [ListenerConfig](#listenerconfig)
+
+| Field | Description |
+| --- | --- |
+| `CurveP256` |  |
+| `CurveP384` |  |
+| `CurveP521` |  |
+| `X25519` |  |
+| `X25519MLKEM768` |  |
+| `SecP256r1MLKEM768` |  |
+| `SecP384r1MLKEM1024` |  |
+
+
 #### TLSMode
 
 _Underlying type:_ _string_
@@ -2131,6 +2158,24 @@ _Appears in:_
 | `OperatorManaged` | TLSModeOperatorManaged: The operator acts as the CA, generating keys and rotating certs (Current Behavior).<br /> |
 | `External` | TLSModeExternal: The operator assumes Secrets are managed by an external entity (cert-manager, user, or CSI driver).<br />The operator will mount them but NOT modify/rotate them.<br /> |
 | `ACME` | TLSModeACME: OpenBao uses its native ACME client to fetch certificates.<br />No Secrets are mounted. No sidecar is injected. Best for Zero Trust.<br /> |
+
+
+#### TLSVersion
+
+_Underlying type:_ _string_
+
+TLSVersion identifies a supported TLS protocol version.
+
+_Validation:_
+- Enum: [tls12 tls13]
+
+_Appears in:_
+- [ListenerConfig](#listenerconfig)
+
+| Field | Description |
+| --- | --- |
+| `tls12` | TLSVersion12 selects TLS 1.2.<br /> |
+| `tls13` | TLSVersion13 selects TLS 1.3.<br /> |
 
 
 #### TelemetryConfig

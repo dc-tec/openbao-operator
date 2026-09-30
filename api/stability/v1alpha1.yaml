@@ -70,6 +70,22 @@ resources:
         omission: OpenBao applies its built-in cache-size default
       - path: spec.configuration.defaultLeaseTTL
         omission: OpenBao applies its built-in default lease TTL
+      - path: spec.configuration.listener.tlsMinVersion
+        classification: additive-unfrozen
+        owner: transport-security
+        omission: OpenBao uses TLS 1.2 as the minimum version
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.configuration.listener.tlsMaxVersion
+        classification: additive-unfrozen
+        owner: transport-security
+        omission: OpenBao uses TLS 1.3 as the maximum version
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.configuration.listener.tlsKeyExchangePreferences
+        classification: additive-unfrozen
+        owner: transport-security
+        omission: OpenBao uses Go's default key exchange groups
+        enforcement: [crd-schema, admission-policy, controller]
+        rationale: Configures API and metrics listeners; cluster TLS and pure MLKEM1024 remain outside this contract.
       - path: spec.configuration.maxLeaseTTL
         omission: OpenBao applies its built-in maximum lease TTL
       - path: spec.configuration.plugin.downloadBehavior

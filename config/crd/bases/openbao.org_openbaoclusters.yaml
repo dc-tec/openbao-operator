@@ -579,6 +579,47 @@ spec:
                           Note: This is typically managed by the operator based on spec.tls.enabled.
                           Hardened clusters reject tlsDisable=true.
                         type: boolean
+                      tlsKeyExchangePreferences:
+                        description: |-
+                          TLSKeyExchangePreferences selects allowed key exchange groups on the API
+                          and metrics listeners. List order does not control preference; Go uses its
+                          internal preference order. If omitted, OpenBao uses Go's default groups.
+                          Requires OpenBao >= 2.7.0 and TLS enabled. A list containing only hybrid PQ
+                          groups requires TLSMinVersion=tls13 and rejects classical-only clients.
+                          This setting does not configure cluster traffic on port 8201.
+                        items:
+                          description: |-
+                            TLSKeyExchangeGroup identifies a classical or hybrid post-quantum TLS group.
+                            Pure MLKEM1024 is not supported by the operator's default TLS clients.
+                          enum:
+                          - CurveP256
+                          - CurveP384
+                          - CurveP521
+                          - X25519
+                          - X25519MLKEM768
+                          - SecP256r1MLKEM768
+                          - SecP384r1MLKEM1024
+                          type: string
+                        maxItems: 7
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-type: set
+                      tlsMaxVersion:
+                        description: |-
+                          TLSMaxVersion sets the maximum TLS version on the API and metrics listeners.
+                          If omitted, OpenBao uses TLS 1.3. TLS must be enabled.
+                        enum:
+                        - tls12
+                        - tls13
+                        type: string
+                      tlsMinVersion:
+                        description: |-
+                          TLSMinVersion sets the minimum TLS version on the API and metrics listeners.
+                          If omitted, OpenBao uses TLS 1.2. TLS must be enabled.
+                        enum:
+                        - tls12
+                        - tls13
+                        type: string
                     type: object
                   logLevel:
                     default: info

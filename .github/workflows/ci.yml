@@ -555,6 +555,9 @@ jobs:
           POLICY_TEST_OPENBAO_IMAGE: openbao/openbao:2.7.0
         run: make test-policy-reconciliation-openbao
 
+      - name: Verify hybrid PQ TLS key exchange against OpenBao 2.7.0
+        run: make test-tls-key-exchange-openbao
+
   test-integration:
     name: Envtest Integration
     needs: changes

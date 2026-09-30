@@ -7,6 +7,9 @@ verifiedBy:
   - api/v1alpha1/openbaocluster_configuration_types.go
   - config/policy/openbao-validate-openbaocluster.yaml
   - internal/adapter/config/builder.go
+  - internal/adapter/config/listener_tls.go
+  - internal/adapter/config/render_listener.go
+  - test/e2e/tlskeyexchange/tls_test.go
   - internal/adapter/raft/autopilot.go
   - internal/service/workload/plugin_directory.go
   - internal/service/workload/statefulset_builder_spec.go
@@ -57,6 +60,62 @@ not set `listener.tlsDisable: true` on Hardened clusters.
 
 The Hardened profile also rejects `detectDeadlocks`, `rawStorageEndpoint`, `introspectionEndpoint`, and
 `unsafeAllowAPIAuditCreation`. Those flags expose debugging or unsafe runtime surfaces rather than normal operations.
+
+## Require post-quantum TLS key exchange
+
+Use `spec.configuration.listener` to restrict TLS versions and key exchange groups on the API and dedicated metrics
+listeners. Omitted fields retain OpenBao's defaults. These settings do not configure cluster traffic on port 8201.
+
+Before configuring key exchange groups, complete the upgrade to OpenBao 2.7.0 or later. Verify that the operator,
+helper images, application clients, and metrics scrapers support at least one selected group. Admission rejects key
+exchange settings while `status.currentVersion` reports an older OpenBao version.
+
+This specification fragment requires TLS 1.3 and hybrid post-quantum key exchange:
+
+{{< command label="configure" title="Require hybrid post-quantum key exchange" >}}
+spec:
+  version: "2.7.0"
+  tls:
+    enabled: true
+    mode: OperatorManaged
+    rotationPeriod: "720h"
+  configuration:
+    listener:
+      tlsMinVersion: tls13
+      tlsMaxVersion: tls13
+      tlsKeyExchangePreferences:
+        - X25519MLKEM768
+        - SecP256r1MLKEM768
+        - SecP384r1MLKEM1024
+{{< /command >}}
+
+`tlsMinVersion` and `tlsMaxVersion` accept `tls12` or `tls13`. The maximum must be greater than or equal to the minimum.
+The version defaults are `tls12` and `tls13`, respectively. TLS settings require `spec.tls.enabled: true` and cannot
+be combined with `listener.tlsDisable: true`.
+
+`tlsKeyExchangePreferences` accepts the three hybrid groups above and the classical groups `X25519`, `CurveP256`,
+`CurveP384`, and `CurveP521`. Each group can appear once. The list controls allowed groups; Go uses its own preference
+order. A list containing only hybrid groups requires `tlsMinVersion: tls13`. Adding a classical group permits classical
+fallback. Pure `MLKEM1024` is not accepted because the operator's default clients do not enable it.
+
+The policy applies in `OperatorManaged`, `External`, and `ACME` TLS modes. `OperatorManaged` creates an ECDSA CA and
+ECDSA server certificates. These certificates work with hybrid key exchange, but server authentication remains
+classical. The policy does not select ML-DSA certificates or make every cluster connection post-quantum.
+
+{{< callout type="warning" title="Check clients before requiring hybrid key exchange" >}}
+Clients that support only classical key exchange cannot connect after enforcement. This includes application clients,
+metrics scrapers, and TLS proxies. When a Gateway or ingress terminates TLS, configure its client-facing and backend
+TLS connections independently, or use TLS passthrough.
+{{< /callout >}}
+
+After applying the fragment, inspect the generated configuration, workload revision, and cluster conditions. Check a
+new TLS connection and record both TLS 1.3 and the negotiated hybrid group. TLS 1.3 alone does not prove post-quantum
+key exchange. Confirm that a classical-only TLS 1.3 client and a TLS 1.2 client both fail to connect.
+
+Listener changes use the workload configuration update path and require server restarts. Certificate hot reload does
+not apply changed key exchange settings. Follow the configured rolling or blue/green update procedure and verify each
+replica after it restarts. To permit classical clients again, add a classical group or remove the key exchange list,
+then apply the same update procedure.
 
 ## Configure audit devices
 

@@ -192,13 +192,61 @@ type OpenBaoConfiguration struct {
 	EnableResponseHeaderRaftNodeID *bool `json:"enableResponseHeaderRaftNodeID,omitempty"`
 }
 
-// ListenerConfig allows tuning the TCP listener configuration.
+// TLSVersion identifies a supported TLS protocol version.
+// +kubebuilder:validation:Enum=tls12;tls13
+type TLSVersion string
+
+const (
+	// TLSVersion12 selects TLS 1.2.
+	TLSVersion12 TLSVersion = "tls12"
+	// TLSVersion13 selects TLS 1.3.
+	TLSVersion13 TLSVersion = "tls13"
+)
+
+// TLSKeyExchangeGroup identifies a classical or hybrid post-quantum TLS group.
+// Pure MLKEM1024 is not supported by the operator's default TLS clients.
+// +kubebuilder:validation:Enum=CurveP256;CurveP384;CurveP521;X25519;X25519MLKEM768;SecP256r1MLKEM768;SecP384r1MLKEM1024
+type TLSKeyExchangeGroup string
+
+const (
+	TLSKeyExchangeCurveP256          TLSKeyExchangeGroup = "CurveP256"
+	TLSKeyExchangeCurveP384          TLSKeyExchangeGroup = "CurveP384"
+	TLSKeyExchangeCurveP521          TLSKeyExchangeGroup = "CurveP521"
+	TLSKeyExchangeX25519             TLSKeyExchangeGroup = "X25519"
+	TLSKeyExchangeX25519MLKEM768     TLSKeyExchangeGroup = "X25519MLKEM768"
+	TLSKeyExchangeSecP256r1MLKEM768  TLSKeyExchangeGroup = "SecP256r1MLKEM768"
+	TLSKeyExchangeSecP384r1MLKEM1024 TLSKeyExchangeGroup = "SecP384r1MLKEM1024"
+)
+
+// ListenerConfig allows tuning the API and metrics TCP listeners.
 type ListenerConfig struct {
 	// TLSDisable controls TLS on the listener.
 	// Note: This is typically managed by the operator based on spec.tls.enabled.
 	// Hardened clusters reject tlsDisable=true.
 	// +optional
 	TLSDisable *bool `json:"tlsDisable,omitempty"`
+
+	// TLSMinVersion sets the minimum TLS version on the API and metrics listeners.
+	// If omitted, OpenBao uses TLS 1.2. TLS must be enabled.
+	// +optional
+	TLSMinVersion TLSVersion `json:"tlsMinVersion,omitempty"`
+
+	// TLSMaxVersion sets the maximum TLS version on the API and metrics listeners.
+	// If omitted, OpenBao uses TLS 1.3. TLS must be enabled.
+	// +optional
+	TLSMaxVersion TLSVersion `json:"tlsMaxVersion,omitempty"`
+
+	// TLSKeyExchangePreferences selects allowed key exchange groups on the API
+	// and metrics listeners. List order does not control preference; Go uses its
+	// internal preference order. If omitted, OpenBao uses Go's default groups.
+	// Requires OpenBao >= 2.7.0 and TLS enabled. A list containing only hybrid PQ
+	// groups requires TLSMinVersion=tls13 and rejects classical-only clients.
+	// This setting does not configure cluster traffic on port 8201.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=7
+	// +listType=set
+	// +optional
+	TLSKeyExchangePreferences []TLSKeyExchangeGroup `json:"tlsKeyExchangePreferences,omitempty"`
 
 	// ProxyProtocolBehavior allows configuring proxy protocol (e.g. for LoadBalancers).
 	// +kubebuilder:validation:Enum=use_always;allow_any;deny_unauthorized

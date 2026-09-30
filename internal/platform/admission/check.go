@@ -44,7 +44,7 @@ const (
 	// Helm keeps this value when it renders installation-specific names and identities.
 	PolicyFingerprintAnnotation = "openbao.org/admission-policy-fingerprint"
 
-	fingerprintOpenBaoValidateOpenBaoCluster       = "sha256:5a8dec42af4c12ce064c395ea41946fc1c603ee467e72edb5722e30c7011a6ab"
+	fingerprintOpenBaoValidateOpenBaoCluster       = "sha256:cc749d55f3d9ac98744efae1629b38f6373ede43a6efe273566530a4a01f32a5"
 	fingerprintOpenBaoLockManagedResourceMutations = "sha256:4fe62c598a00d07ae0569c52123bf927ab9e81745655f17f79ee539e3a267031"
 
 	dependencyOpenBaoValidateOpenBaoCluster             = "openbao-validate-openbaocluster"

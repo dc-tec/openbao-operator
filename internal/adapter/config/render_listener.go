@@ -72,6 +72,7 @@ func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Bloc
 		configureNativeTLSAutoReload(&listener, cluster)
 	}
 
+	configureListenerTLSPolicy(&listener, cluster)
 	block := gohcl.EncodeAsBlock(listener, "listener")
 	if metricsOnlyListenerEnabled(cluster) {
 		block.Body().AppendBlock(gohcl.EncodeAsBlock(hclListenerTelemetry{
@@ -100,6 +101,7 @@ func buildMetricsOnlyListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hc
 		TLSClientCAFile:    stringPtr(openBaoPathTLSCACert),
 	}
 	configureNativeTLSAutoReload(&listener, cluster)
+	configureListenerTLSPolicy(&listener, cluster)
 
 	block := gohcl.EncodeAsBlock(listener, "listener")
 	block.Body().AppendBlock(gohcl.EncodeAsBlock(hclListenerTelemetry{
@@ -107,6 +109,22 @@ func buildMetricsOnlyListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hc
 		MetricsOnly:                  boolPtrValue(true),
 	}, "telemetry"))
 	return block, nil
+}
+
+func configureListenerTLSPolicy(listener *hclListenerTCP, cluster *openbaov1alpha1.OpenBaoCluster) {
+	if cluster.Spec.Configuration == nil || cluster.Spec.Configuration.Listener == nil {
+		return
+	}
+	policy := cluster.Spec.Configuration.Listener
+	listener.TLSMinVersion = stringPtr(string(policy.TLSMinVersion))
+	listener.TLSMaxVersion = stringPtr(string(policy.TLSMaxVersion))
+	if len(policy.TLSKeyExchangePreferences) > 0 {
+		groups := make([]string, len(policy.TLSKeyExchangePreferences))
+		for i, group := range policy.TLSKeyExchangePreferences {
+			groups[i] = string(group)
+		}
+		listener.TLSKeyExchangePreferences = &groups
+	}
 }
 
 func configureNativeTLSAutoReload(listener *hclListenerTCP, cluster *openbaov1alpha1.OpenBaoCluster) {

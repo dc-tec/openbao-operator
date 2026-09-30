@@ -1057,6 +1057,10 @@ bench-compare: benchstat ## Compare benchmark result files with benchstat. Set O
 test-policy-reconciliation-openbao: ## Test policy authorization and repair against a disposable OpenBao container (requires Docker).
 	@GOFLAGS="$(GOFLAGS_VENDOR)" go test -tags=e2e ./test/e2e/policyreconciliation -count=1 -v
 
+.PHONY: test-tls-key-exchange-openbao
+test-tls-key-exchange-openbao: ## Test hybrid PQ TLS with operator-issued certificates against OpenBao 2.7.0 (requires Docker).
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go test -tags=e2e ./test/e2e/tlskeyexchange -count=1 -v
+
 .PHONY: test-controller-jwt-openbao
 OPENBAO_JWT_TEST_IMAGE ?= openbao/openbao:2.6.3
 test-controller-jwt-openbao: setup-envtest ## Test target JWT issuance and cross-target replay against disposable OpenBao containers.

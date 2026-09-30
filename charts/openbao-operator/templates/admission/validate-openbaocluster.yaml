@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
   annotations:
-    openbao.org/admission-policy-fingerprint: sha256:5a8dec42af4c12ce064c395ea41946fc1c603ee467e72edb5722e30c7011a6ab
+    openbao.org/admission-policy-fingerprint: sha256:cc749d55f3d9ac98744efae1629b38f6373ede43a6efe273566530a4a01f32a5
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -16,6 +16,16 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["openbaoclusters"]
   variables:
+    - name: has_listener_tls_policy
+      expression: >-
+        has(object.spec.configuration) && has(object.spec.configuration.listener) &&
+        (has(object.spec.configuration.listener.tlsMinVersion) ||
+         has(object.spec.configuration.listener.tlsMaxVersion) ||
+         has(object.spec.configuration.listener.tlsKeyExchangePreferences))
+    - name: has_listener_key_exchange
+      expression: >-
+        has(object.spec.configuration) && has(object.spec.configuration.listener) &&
+        has(object.spec.configuration.listener.tlsKeyExchangePreferences)
     - name: has_backup
       expression: has(object.spec.backup)
     - name: backup_target_provider
@@ -163,6 +173,21 @@ spec:
     - name: current_version_parts
       expression: >-
         variables.current_version_core.split(".").map(part, int(part))
+    - name: listener_key_exchange_version_supported
+      expression: >-
+        variables.spec_version_valid &&
+        (variables.spec_version_parts[0] > 2 ||
+         (variables.spec_version_parts[0] == 2 && variables.spec_version_parts[1] > 7) ||
+         (variables.spec_version_parts[0] == 2 && variables.spec_version_parts[1] == 7 &&
+          (variables.spec_version_parts[2] > 0 || variables.spec_version_prerelease == "")))
+    - name: listener_key_exchange_current_version_supported
+      expression: >-
+        variables.current_version_normalized == "" ||
+        (variables.current_version_valid &&
+         (variables.current_version_parts[0] > 2 ||
+          (variables.current_version_parts[0] == 2 && variables.current_version_parts[1] > 7) ||
+          (variables.current_version_parts[0] == 2 && variables.current_version_parts[1] == 7 &&
+           (variables.current_version_parts[2] > 0 || variables.current_version_prerelease == ""))))
     - name: rolling_target_version_normalized
       expression: >-
         oldObject != null && has(oldObject.status) && has(oldObject.status.upgrade) && has(oldObject.status.upgrade.targetVersion) && oldObject.status.upgrade.targetVersion != "" ? (oldObject.status.upgrade.targetVersion.startsWith("v") ? oldObject.status.upgrade.targetVersion.substring(1) : oldObject.status.upgrade.targetVersion) : ""
@@ -517,6 +542,29 @@ spec:
         !has(object.spec.configuration.listener.tlsDisable) ||
         object.spec.configuration.listener.tlsDisable != true
       message: Hardened profile does not allow spec.configuration.listener.tlsDisable=true.
+    - expression: >-
+        !variables.has_listener_tls_policy ||
+        (object.spec.tls.enabled &&
+         (!has(object.spec.configuration.listener.tlsDisable) || object.spec.configuration.listener.tlsDisable != true))
+      message: "spec.configuration.listener TLS policy requires TLS enabled and tlsDisable!=true."
+    - expression: >-
+        !variables.has_listener_tls_policy ||
+        !has(object.spec.configuration.listener.tlsMinVersion) ||
+        !has(object.spec.configuration.listener.tlsMaxVersion) ||
+        object.spec.configuration.listener.tlsMinVersion != 'tls13' ||
+        object.spec.configuration.listener.tlsMaxVersion != 'tls12'
+      message: "spec.configuration.listener.tlsMaxVersion must be greater than or equal to tlsMinVersion."
+    - expression: >-
+        !variables.has_listener_key_exchange ||
+        object.spec.configuration.listener.tlsKeyExchangePreferences.exists(g, g in ['CurveP256', 'CurveP384', 'CurveP521', 'X25519']) ||
+        (has(object.spec.configuration.listener.tlsMinVersion) && object.spec.configuration.listener.tlsMinVersion == 'tls13')
+      message: "spec.configuration.listener PQ-only key exchange requires tlsMinVersion=tls13."
+    - expression: >-
+        !variables.has_listener_key_exchange || variables.listener_key_exchange_version_supported
+      message: "spec.configuration.listener.tlsKeyExchangePreferences requires OpenBao >= 2.7.0."
+    - expression: >-
+        !variables.has_listener_key_exchange || variables.listener_key_exchange_current_version_supported
+      message: "Complete the OpenBao >= 2.7.0 upgrade before configuring spec.configuration.listener.tlsKeyExchangePreferences."
     - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||

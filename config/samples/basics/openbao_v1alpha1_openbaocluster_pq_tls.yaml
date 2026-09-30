@@ -1,0 +1,23 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: openbao-pq-tls
+spec:
+  version: "2.7.0"
+  profile: Development
+  replicas: 3
+  tls:
+    enabled: true
+    mode: OperatorManaged
+    rotationPeriod: "720h"
+  storage:
+    size: "10Gi"
+  deletionPolicy: Retain
+  configuration:
+    listener:
+      tlsMinVersion: tls13
+      tlsMaxVersion: tls13
+      tlsKeyExchangePreferences:
+        - X25519MLKEM768
+        - SecP256r1MLKEM768
+        - SecP384r1MLKEM1024
