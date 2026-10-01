@@ -215,9 +215,12 @@ func startNode(t *testing.T, cluster *api.OpenBaoCluster, files, network string,
 	if image == "" {
 		image = "openbao/openbao:2.7.0"
 	}
-	id := docker(t, "run", "-d", "--user", "0:0", "--name", network+"-"+name, "--hostname", name,
+	// Run as the fixture owner and bypass the image entrypoint's user change so
+	// the server can read the mounted private files without changing permissions.
+	fixtureUser := fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
+	id := docker(t, "run", "-d", "--user", fixtureUser, "--entrypoint", "bao", "--name", network+"-"+name, "--hostname", name,
 		"--network", network, "--network-alias", fqdn, "-p", "127.0.0.1::8200", "-p", "127.0.0.1::8202",
-		"-e", "SKIP_SETCAP=true", "-v", files+":/etc/bao:ro", "-v", dataPath+":/bao/data",
+		"-v", files+":/etc/bao:ro", "-v", dataPath+":/bao/data",
 		image, "server", "-config=/etc/bao/"+name+".hcl")
 	t.Cleanup(func() {
 		if t.Failed() {
