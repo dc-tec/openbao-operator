@@ -25,6 +25,7 @@ on:
           - core
           - security
           - backup-restore
+          - restore-tests
           - upgrade-rolling
           - upgrade-bluegreen-core
           - upgrade-bluegreen-verification

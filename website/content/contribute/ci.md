@@ -51,6 +51,12 @@ review-required schema changes against the released 0.5.0 CRDs. It runs for cont
 
 The E2E manifest owns suite routing, isolation, parallelism, and supported test versions. Do not duplicate those values in workflow logic. Run `make e2e-ci-matrix` or the nightly matrix commands before changing routing.
 
+The `backup-restore` lane covers storage-provider backup and restore behavior. The `restore-tests` lane covers
+managed targets, scheduled restore tests, and cleanup after the full confirmation timeout. These lanes run in
+separate clusters, have independent time limits, and use the same selectors on PRs and `main`.
+Cross-cluster restore qualification requires a manually
+provisioned environment and is excluded from ordinary CI, nightly, and release-gate selectors.
+
 {{< callout type="note" title="Publishing requires more than PR CI" >}}
 Edge, nightly, prerelease, and stable channels add immutable-subject, provenance, reproducibility, signing, and release-evidence gates. Passing `ci-core` does not authorize publication.
 {{< /callout >}}

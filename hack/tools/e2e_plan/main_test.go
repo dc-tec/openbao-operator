@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/onsi/ginkgo/v2/types"
 )
 
 const (
@@ -487,7 +489,7 @@ func TestRepoManifestKubernetesMatrixPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build CI matrix: %v", err)
 	}
-	assertKubernetesRowCounts(t, ciMatrix, map[string]int{"1.36.1": 10})
+	assertKubernetesRowCounts(t, ciMatrix, map[string]int{"1.36.1": 11})
 
 	dailyMatrix, err := buildGithubNightlyMatrix(m, "daily", nightlyFilters{})
 	if err != nil {
@@ -496,7 +498,7 @@ func TestRepoManifestKubernetesMatrixPolicy(t *testing.T) {
 	assertKubernetesRowCounts(t, dailyMatrix, map[string]int{
 		"1.34.3": 2,
 		"1.35.1": 2,
-		"1.36.1": 9,
+		"1.36.1": 10,
 	})
 
 	weeklyFirst, err := buildGithubNightlyMatrix(m, "weekly-full", nightlyFilters{
@@ -506,8 +508,8 @@ func TestRepoManifestKubernetesMatrixPolicy(t *testing.T) {
 		t.Fatalf("build first weekly rotation: %v", err)
 	}
 	assertKubernetesRowCounts(t, weeklyFirst, map[string]int{
-		"1.34.3": 9,
-		"1.36.1": 9,
+		"1.34.3": 10,
+		"1.36.1": 10,
 	})
 
 	weeklySecond, err := buildGithubNightlyMatrix(m, "weekly-full", nightlyFilters{
@@ -517,8 +519,8 @@ func TestRepoManifestKubernetesMatrixPolicy(t *testing.T) {
 		t.Fatalf("build second weekly rotation: %v", err)
 	}
 	assertKubernetesRowCounts(t, weeklySecond, map[string]int{
-		"1.35.1": 9,
-		"1.36.1": 9,
+		"1.35.1": 10,
+		"1.36.1": 10,
 	})
 
 	releaseMatrix, err := buildGithubNightlyMatrix(m, "release-gate", nightlyFilters{})
@@ -526,10 +528,73 @@ func TestRepoManifestKubernetesMatrixPolicy(t *testing.T) {
 		t.Fatalf("build release matrix: %v", err)
 	}
 	assertKubernetesRowCounts(t, releaseMatrix, map[string]int{
-		"1.34.3": 9,
-		"1.35.1": 9,
-		"1.36.1": 9,
+		"1.34.3": 10,
+		"1.35.1": 10,
+		"1.36.1": 10,
 	})
+}
+
+func TestRepoManifestRestoreLanesSelectSeparateCatalogCases(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "test", "e2e", "catalog", "cases.json"))
+	if err != nil {
+		t.Fatalf("read E2E catalog: %v", err)
+	}
+
+	var cases []struct {
+		ID     string   `json:"id"`
+		File   string   `json:"file"`
+		Labels []string `json:"labels"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatalf("decode E2E catalog: %v", err)
+	}
+
+	lanes, errs := validateLanes(loadRepoManifest(t))
+	if len(errs) > 0 {
+		t.Fatalf("validate lanes: %s", strings.Join(errs, "; "))
+	}
+
+	for _, laneID := range []string{"backup-restore", "restore-tests"} {
+		t.Run(laneID, func(t *testing.T) {
+			lane, ok := lanes[laneID]
+			if !ok {
+				t.Fatalf("missing lane %q", laneID)
+			}
+			wantFile := "test/e2e/backup_restore_test.go"
+			if laneID == "restore-tests" {
+				wantFile = "test/e2e/restore_minimal_test.go"
+			}
+
+			for _, mode := range []string{"full", "pull-request"} {
+				t.Run(mode, func(t *testing.T) {
+					selector := lane.LabelFilter
+					if mode == "pull-request" && lane.PRLabelFilter != "" {
+						selector = lane.PRLabelFilter
+					}
+					matches, err := types.ParseLabelFilter(selector)
+					if err != nil {
+						t.Fatalf("parse selector: %v", err)
+					}
+
+					selected := 0
+					for _, tc := range cases {
+						want := tc.File == wantFile
+						if got := matches(tc.Labels); got != want {
+							t.Errorf("case %q selected = %t, want %t", tc.ID, got, want)
+						}
+						if want {
+							selected++
+						}
+					}
+					if selected == 0 {
+						t.Fatal("catalog has no expected cases for this lane")
+					}
+				})
+			}
+		})
+	}
 }
 
 func TestGithubMatrixJSONShape(t *testing.T) {
@@ -779,6 +844,38 @@ func TestCIWorkflowRoutesLifecycleChangesToBackupAndUpgrade(t *testing.T) {
 	const lifecycleMatcher = "changed_matches_file 'hack/ci/e2e-lifecycle-paths.txt'"
 	if count := strings.Count(string(data), lifecycleMatcher); count != 2 {
 		t.Fatalf("CI lifecycle matcher count = %d, want 2 for backup and upgrade", count)
+	}
+}
+
+func TestCIWorkflowRoutesRestoreTestAndPlanChangesToBackup(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatalf("read CI workflow: %v", err)
+	}
+
+	matcher := regexp.MustCompile(`if changed_matches '([^']+)'[^\n]*\n\s*echo "e2e_backup=true"`)
+	match := matcher.FindSubmatch(data)
+	if len(match) != 2 {
+		t.Fatal("cannot find backup path matcher in CI workflow")
+	}
+	paths, err := regexp.Compile(string(match[1]))
+	if err != nil {
+		t.Fatalf("compile backup path matcher: %v", err)
+	}
+
+	for _, path := range []string{
+		"test/e2e/suites.yaml",
+		"test/e2e/restore_minimal_test.go",
+		"test/e2e/backup_restore_test.go",
+		"hack/tools/e2e_plan/main.go",
+		"hack/tools/e2e_plan/main_test.go",
+		"hack/tools/e2e_manifest/main.go",
+	} {
+		if !paths.MatchString(path) {
+			t.Errorf("%q does not route to backup/restore E2E lanes", path)
+		}
 	}
 }
 

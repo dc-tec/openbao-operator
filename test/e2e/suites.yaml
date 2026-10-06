@@ -61,8 +61,7 @@ ciLanes:
 
   - id: backup-restore
     name: "Backup & Restore"
-    labelFilter: "((dr || restore) && !openshift)"
-    prLabelFilter: "((dr && e2e-anchor) && !openshift)"
+    labelFilter: "(storage-providers && !openshift)"
     prScope: backup
     timeoutMinutes: 45
     e2eTimeout: 40m
@@ -78,6 +77,25 @@ ciLanes:
       - rustfs
       - fake-gcs
       - azurite
+
+  - id: restore-tests
+    name: "Restore Tests"
+    # Keep the full confirmation timeout separate from storage-provider coverage.
+    # Cross-cluster qualification requires a manually provisioned environment.
+    labelFilter: "(restore-minimal && !openshift)"
+    prScope: backup
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+    preloadStorageEmulators:
+      - rustfs
 
   - id: upgrade-rolling
     name: "Upgrade Rolling"
@@ -228,6 +246,7 @@ nightly:
             - core
             - security
             - backup-restore
+            - restore-tests
             - upgrade-rolling
             - upgrade-bluegreen-core
             - upgrade-bluegreen-verification
@@ -260,6 +279,7 @@ nightly:
             - core
             - security
             - backup-restore
+            - restore-tests
             - upgrade-rolling
             - upgrade-bluegreen-core
             - upgrade-bluegreen-verification
@@ -277,6 +297,7 @@ nightly:
             - core
             - security
             - backup-restore
+            - restore-tests
             - upgrade-rolling
             - upgrade-bluegreen-core
             - upgrade-bluegreen-verification
@@ -852,7 +873,7 @@ suites:
       budget: 25m
     ci:
       lanes:
-        - backup-restore
+        - restore-tests
       pullRequest: changed-paths
     nightly:
       policy: primary-version-full
