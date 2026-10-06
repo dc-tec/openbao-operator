@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
   annotations:
-    openbao.org/admission-policy-fingerprint: sha256:62a128ede9c7a9a872cb2c423ebc8c1323e0832d2358bbdd80c0fdbe883e213f
+    openbao.org/admission-policy-fingerprint: sha256:57b606ac5326679442a76aa837e28b90cd2f130c72a6e8d8e4064eca6b798f0f
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -64,6 +64,14 @@ spec:
     - name: new_unseal_secret
       expression: >-
         has(object.spec.unseal) && has(object.spec.unseal.credentialsSecretRef) ? object.spec.unseal.credentialsSecretRef.name : ''
+    - name: restore_test_authorization_required
+      expression: >-
+        !variables.is_operator_controller && has(object.spec.backup) && has(object.spec.backup.restoreTest) &&
+        (oldObject == null || !has(oldObject.spec.backup) || !has(oldObject.spec.backup.restoreTest) ||
+         object.spec.backup.restoreTest != oldObject.spec.backup.restoreTest ||
+         object.spec.backup.target != oldObject.spec.backup.target ||
+         has(object.spec.backup.image) != has(oldObject.spec.backup.image) ||
+         (has(object.spec.backup.image) && has(oldObject.spec.backup.image) && object.spec.backup.image != oldObject.spec.backup.image))
     - name: requested_upgrade_strategy
       expression: >-
         has(object.spec.upgrade) && has(object.spec.upgrade.strategy) && object.spec.upgrade.strategy != "" ? object.spec.upgrade.strategy : "RollingUpdate"
@@ -384,12 +392,84 @@ spec:
             )
           )
         )
+    - name: has_restore_target_cloud_identity_metadata
+      expression: >-
+        has(object.spec.backup) && has(object.spec.backup.restoreTest) && (
+        (has(object.spec.backup.restoreTest.clusterTemplate.serviceAccount) &&
+          has(object.spec.backup.restoreTest.clusterTemplate.serviceAccount.annotations) && size(object.spec.backup.restoreTest.clusterTemplate.serviceAccount.annotations) > 0) ||
+        (has(object.spec.backup.restoreTest.clusterTemplate.podMetadata) && (
+          (has(object.spec.backup.restoreTest.clusterTemplate.podMetadata.annotations) && object.spec.backup.restoreTest.clusterTemplate.podMetadata.annotations.exists(key,
+            key.startsWith("eks.amazonaws.com/") || key.startsWith("iam.amazonaws.com/") ||
+            key.startsWith("iam.gke.io/") || key.startsWith("azure.workload.identity/"))) ||
+          (has(object.spec.backup.restoreTest.clusterTemplate.podMetadata.labels) && object.spec.backup.restoreTest.clusterTemplate.podMetadata.labels.exists(key,
+            key.startsWith("azure.workload.identity/") || key == "aadpodidbinding")))))
   validations:
     # A static key source change remounts a different key and leaves Pods sealed.
     - expression: >-
         request.operation != 'UPDATE' || !variables.old_static_unseal || !variables.new_static_unseal ||
         variables.old_unseal_secret == variables.new_unseal_secret
       message: "spec.unseal.credentialsSecretRef cannot be added, changed, or removed on a static-unseal cluster; a different key source would leave OpenBao sealed."
+
+    - expression: >-
+        !variables.restore_test_authorization_required ||
+        !variables.has_restore_target_cloud_identity_metadata ||
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(object.spec.backup.restoreTest.namespace).check("usecloudidentities").allowed()
+      message: "Restore target workload identities require destination cloud identity delegation."
+    - expression: >-
+        !variables.restore_test_authorization_required ||
+        !has(object.spec.backup.restoreTest.clusterTemplate.serviceAccount) || !has(object.spec.backup.restoreTest.clusterTemplate.serviceAccount.name) ||
+        object.spec.backup.restoreTest.clusterTemplate.serviceAccount.name.trim() == '' ||
+        authorizer.group("").resource("serviceaccounts").namespace(object.spec.backup.restoreTest.namespace).name(object.spec.backup.restoreTest.clusterTemplate.serviceAccount.name).check("use").allowed()
+      message: "Restore targets require use authority for their destination ServiceAccount."
+    - expression: >-
+        !variables.restore_test_authorization_required || !has(object.spec.backup.restoreTest.clusterTemplate.unseal.credentialsSecretRef) ||
+        !object.spec.backup.restoreTest.clusterTemplate.unseal.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")
+      message: "Restore target unseal credentials must not reference operator-managed system Secrets; prepare a separate destination Secret."
+    - expression: >-
+        !variables.restore_test_authorization_required ||
+        authorizer.group("openbao.org").resource("openbaorestores").namespace(object.spec.backup.restoreTest.namespace).check("create").allowed()
+      message: "Restore testing requires create authority for destination openbaorestores."
+    - expression: >-
+        !variables.restore_test_authorization_required ||
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(object.spec.backup.restoreTest.namespace).check("create").allowed()
+      message: "Restore testing requires create authority for destination openbaoclusters."
+    - expression: >-
+        !variables.restore_test_authorization_required ||
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(object.spec.backup.restoreTest.namespace).check("restore").allowed()
+      message: "Restore testing requires restore authority for destination openbaoclusters."
+    - expression: >-
+        !variables.restore_test_authorization_required ||
+        !has(object.spec.backup.restoreTest.clusterTemplate.unseal.credentialsSecretRef) ||
+          authorizer.group("").resource("secrets").namespace(object.spec.backup.restoreTest.namespace).name(object.spec.backup.restoreTest.clusterTemplate.unseal.credentialsSecretRef.name).check("get").allowed()
+      message: "Restore testing requires access to the destination unseal credential Secret."
+    - expression: >-
+        !variables.restore_test_authorization_required || !has(object.spec.backup.restoreTest.credentialsSecretRef) ||
+        authorizer.group("").resource("secrets").namespace(object.spec.backup.restoreTest.namespace).name(object.spec.backup.restoreTest.credentialsSecretRef.name).check("get").allowed()
+      message: "Restore testing requires access to destination storage credentials."
+    - expression: >-
+        !variables.restore_test_authorization_required || !has(object.spec.backup.restoreTest.clusterTemplate.imagePullSecrets) ||
+        object.spec.backup.restoreTest.clusterTemplate.imagePullSecrets.all(ref, authorizer.group("").resource("secrets").namespace(object.spec.backup.restoreTest.namespace).name(ref.name).check("get").allowed())
+      message: "Restore testing requires access to destination image pull Secrets."
+    - expression: >-
+        !variables.restore_test_authorization_required ||
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(object.spec.backup.restoreTest.namespace).check("usecustomexecutables").allowed() ||
+        ((!has(object.spec.backup.image) || object.spec.backup.image == '') &&
+          (!has(object.spec.backup.restoreTest.clusterTemplate.image) || object.spec.backup.restoreTest.clusterTemplate.image == '') &&
+          (!has(object.spec.backup.restoreTest.clusterTemplate.initContainer) || !has(object.spec.backup.restoreTest.clusterTemplate.initContainer.image) || object.spec.backup.restoreTest.clusterTemplate.initContainer.image == '') &&
+          (!has(object.spec.backup.restoreTest.clusterTemplate.plugins) || object.spec.backup.restoreTest.clusterTemplate.plugins.all(p, (!has(p.image) || p.image == '') && (!has(p.command) || p.command == ''))))
+      message: "Custom restore test images require destination executable delegation."
+    - expression: >-
+        !variables.restore_test_authorization_required ||
+        ((!has(object.spec.backup.target.roleArn) || object.spec.backup.target.roleArn == '') && !has(object.spec.backup.target.workloadIdentity)) ||
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(object.spec.backup.restoreTest.namespace).check("usecloudidentities").allowed()
+      message: "Restore test workload identities require destination cloud identity delegation."
+
+    - expression: >-
+        !variables.restore_test_authorization_required ||
+        !has(object.spec.backup.restoreTest.clusterTemplate.storage.storageClassName) ||
+        object.spec.backup.restoreTest.clusterTemplate.storage.storageClassName.trim() == '' ||
+        authorizer.group("storage.k8s.io").resource("storageclasses").name(object.spec.backup.restoreTest.clusterTemplate.storage.storageClassName).check("use").allowed()
+      message: "Restore testing requires use authority for the destination StorageClass."
 
     - expression: >-
         !has(object.spec.controllerJWTMode) || object.spec.controllerJWTMode != "Target" ||

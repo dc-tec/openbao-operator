@@ -138,8 +138,36 @@ var (
 	)
 )
 
+var restoreTestGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "openbao_restore_test_success",
+	Help: "Whether the latest disposable restore test succeeded (1) or failed (0).",
+}, []string{"namespace", "name"})
+
+var restoreTestLastSuccess = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "openbao_restore_test_last_success_timestamp_seconds",
+	Help: "Unix timestamp of the last successful disposable restore test, or zero if none is recorded.",
+}, []string{"namespace", "name"})
+
+// SetRestoreTestLastSuccess permits alerting on stale restore test results.
+func (m *ClusterMetrics) SetRestoreTestLastSuccess(timestamp float64) {
+	restoreTestLastSuccess.WithLabelValues(m.namespace, m.name).Set(timestamp)
+}
+
+// ClearRestoreTest removes restore test series when scheduling is disabled.
+func (m *ClusterMetrics) ClearRestoreTest() {
+	restoreTestGauge.DeleteLabelValues(m.namespace, m.name)
+	restoreTestLastSuccess.DeleteLabelValues(m.namespace, m.name)
+}
+
+// SetRestoreTest reports the last result without snapshot or secret labels.
+func (m *ClusterMetrics) SetRestoreTest(value float64) {
+	restoreTestGauge.WithLabelValues(m.namespace, m.name).Set(value)
+}
+
 func init() {
 	metrics.Registry.MustRegister(
+		restoreTestGauge,
+		restoreTestLastSuccess,
 		reconcileDurationHistogram,
 		reconcileErrorsTotal,
 		clusterReadyReplicasGauge,
@@ -271,6 +299,7 @@ func (m *ClusterMetrics) SetPhase(phase openbaov1alpha1.ClusterPhase) {
 // Clear removes all per-cluster metrics for this cluster. This should be
 // called during finalization to avoid leaving stale series after deletion.
 func (m *ClusterMetrics) Clear() {
+	m.ClearRestoreTest()
 	clusterReadyReplicasGauge.
 		DeleteLabelValues(m.namespace, m.name)
 	clusterReadReplicasDesiredGauge.

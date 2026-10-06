@@ -38,6 +38,8 @@ func TestCRD_RestoreTargetUnsealProviders(t *testing.T) {
 				request.Spec.ClusterTemplate.Plugins = []api.Plugin{{Type: "kms", Name: unseal.Type, Command: "seal-plugin"}}
 			}
 			require.NoError(t, k8sClient.Create(ctx, request, client.DryRunAll))
+			source := restoreTestSource(namespace, request.Spec.ClusterTemplate)
+			require.NoError(t, k8sClient.Create(ctx, source, client.DryRunAll))
 		})
 	}
 
@@ -84,14 +86,27 @@ func TestVAP_RestoreTargetUnsealAuthority(t *testing.T) {
 			// Providers using ambient or workload identity credentials do not need a Secret grant.
 			require.NoError(t, actor.Create(ctx, request.DeepCopy(), client.DryRunAll))
 			tc.edit(request.Spec.ClusterTemplate)
-			for _, object := range []client.Object{request} {
+			source := restoreTestSource(sourceNS, request.Spec.ClusterTemplate)
+			source.Spec.Backup.RestoreTest.Namespace = destination
+			for _, object := range []client.Object{request, source} {
 				require.ErrorContains(t, actor.Create(ctx, object, client.DryRunAll), tc.message)
 			}
 
 			grantNamespacedResourceVerbs(t, destination, username, "seal-access", tc.group, tc.resource, nil, tc.verb)
-			for _, object := range []client.Object{request} {
+			for _, object := range []client.Object{request, source} {
 				require.NoError(t, actor.Create(ctx, object, client.DryRunAll))
 			}
 		})
 	}
+}
+
+func restoreTestSource(namespace string, template *api.RestoreClusterTemplate) *api.OpenBaoCluster {
+	source := newMinimalClusterObj(namespace, "source")
+	source.Spec.InitContainer = nil
+	source.Spec.Backup = &api.BackupSchedule{
+		Schedule: "0 0 * * *", JWTAuthRole: "backup",
+		Target:      api.BackupTarget{Bucket: "snapshots", Endpoint: "https://storage.example"},
+		RestoreTest: &api.RestoreTest{EverySuccessfulBackups: 1, Namespace: namespace, ClusterTemplate: *template.DeepCopy()},
+	}
+	return source
 }

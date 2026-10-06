@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
@@ -40,6 +41,14 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 	}
 	if cluster.Status.Backup != nil {
 		policy.ProtectedKey = cluster.Status.Backup.LastBackupName
+	}
+	// A cached cluster can lag a restore test reservation; never delete its key.
+	live := &openbaov1alpha1.OpenBaoCluster{}
+	if err := m.reader.Get(ctx, client.ObjectKeyFromObject(cluster), live); err != nil {
+		return fmt.Errorf("failed to read restore test reservation for retention: %w", err)
+	}
+	if live.Status.Backup != nil && live.Status.Backup.RestoreTest != nil && live.Status.Backup.RestoreTest.Active != nil {
+		policy.RestoreTestKey = live.Status.Backup.RestoreTest.Active.Key
 	}
 
 	storageClient, err := m.openBackupStorageClient(ctx, cluster, false)

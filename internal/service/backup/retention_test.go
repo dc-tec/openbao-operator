@@ -190,6 +190,11 @@ func TestApplyRetention_NeverDeletesNewestOrProtectedBackup(t *testing.T) {
 			policy:      RetentionPolicy{MaxCount: 1, MaxAge: 24 * time.Hour, ProtectedKey: protected},
 			wantDeleted: []string{oldest},
 		},
+
+		{
+			name:   "active restore test survives age and count",
+			policy: RetentionPolicy{MaxCount: 1, MaxAge: 24 * time.Hour, ProtectedKey: protected, RestoreTestKey: oldest},
+		},
 	}
 
 	for _, tt := range tests {

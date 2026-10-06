@@ -2,9 +2,11 @@ package deletionops
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -55,5 +57,41 @@ func newRetentionTestSecret(cluster *openbaov1alpha1.OpenBaoCluster, name string
 			OwnerReferences: []metav1.OwnerReference{ownerRef},
 		},
 		Data: map[string][]byte{"value": []byte("redacted")},
+	}
+}
+
+func TestSourceDeletionWaitsForOwnedRestoreTest(t *testing.T) {
+	for _, replaced := range []bool{false, true} {
+		t.Run(fmt.Sprintf("replacement=%t", replaced), func(t *testing.T) {
+			cluster := newCleanupTestCluster("source")
+			cluster.UID = "source-uid"
+			cluster.Status.Backup = &openbaov1alpha1.BackupStatus{RestoreTest: &openbaov1alpha1.RestoreTestStatus{
+				Active: &openbaov1alpha1.RestoreTestRun{Namespace: "recovery", Name: "child", UID: "original"},
+			}}
+			child := &openbaov1alpha1.OpenBaoRestore{ObjectMeta: metav1.ObjectMeta{
+				Name: "child", Namespace: "recovery", UID: "original",
+				Annotations: map[string]string{constants.AnnotationRestoreTestSource: string(cluster.UID)},
+				Finalizers:  []string{openbaov1alpha1.OpenBaoRestoreFinalizer},
+			}}
+			if replaced {
+				child.UID = "replacement"
+			}
+			c := newCleanupTestClient(t, cluster, child)
+			err := Handle(t.Context(), logr.Discard(), Dependencies{Client: c}, cluster)
+			if replaced {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+			require.NoError(t, c.Get(t.Context(), client.ObjectKeyFromObject(child), child))
+			if replaced {
+				require.Nil(t, child.DeletionTimestamp)
+				return
+			}
+			require.NotNil(t, child.DeletionTimestamp)
+			child.Finalizers = nil
+			require.NoError(t, c.Update(t.Context(), child))
+			require.NoError(t, Handle(t.Context(), logr.Discard(), Dependencies{Client: c}, cluster))
+		})
 	}
 }

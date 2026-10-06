@@ -338,6 +338,7 @@ func (m *Manager) processBackupJob(
 			return backupJobProcessResult{}, err
 		}
 		cluster.Status.Backup.LatestSnapshot = summary
+		cluster.Status.Backup.SuccessfulBackups++
 		now := metav1.Now()
 		cluster.Status.Backup.LastBackupTime = &now
 		if backupKey != "" {

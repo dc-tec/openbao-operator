@@ -198,7 +198,7 @@ func TestApplyRetention_UsesProviderAndDeletesOldBackups(t *testing.T) {
 
 			client := fake.NewClientBuilder().
 				WithScheme(testScheme).
-				WithObjects(secret).
+				WithObjects(secret, cluster.DeepCopy()).
 				Build()
 
 			store := &fakeBlobStore{
@@ -251,5 +251,45 @@ func TestApplyRetention_UsesProviderAndDeletesOldBackups(t *testing.T) {
 				t.Fatalf("did not expect newest backup to be deleted, deleted=%v", store.deleted)
 			}
 		})
+	}
+}
+
+func TestApplyRetention_ProtectsLiveRestoreTestKey(t *testing.T) {
+	tested := "clusters/default/retention-cluster/2025-01-01T03-00-00Z-aaaaaaaa.snap"
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "retention-cluster", Namespace: "default"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{Backup: &openbaov1alpha1.BackupSchedule{
+			Target: openbaov1alpha1.BackupTarget{
+				Provider: constants.StorageProviderS3, Endpoint: "https://example.com", Bucket: "backups", PathPrefix: "clusters",
+				Region: "us-east-1", CredentialsSecretRef: &corev1.LocalObjectReference{Name: "backup-creds"},
+			},
+			Retention: &openbaov1alpha1.BackupRetention{MaxCount: 1},
+		}},
+	}
+	// The live object holds a reservation that the cached copy has not observed yet.
+	live := cluster.DeepCopy()
+	live.Status.Backup = &openbaov1alpha1.BackupStatus{RestoreTest: &openbaov1alpha1.RestoreTestStatus{
+		Active: &openbaov1alpha1.RestoreTestRun{Namespace: "recovery", Name: "run", Key: tested},
+	}}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "backup-creds", Namespace: "default"},
+		Data:       map[string][]byte{blobstore.SecretKeyAccessKeyID: []byte("test-ak"), blobstore.SecretKeySecretAccessKey: []byte("test-sk")},
+	}
+	c := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret, live).WithStatusSubresource(live).Build()
+
+	store := &fakeBlobStore{objects: []blobstore.ObjectInfo{
+		{Key: tested, LastModified: time.Date(2025, 1, 1, 3, 0, 0, 0, time.UTC)},
+		{Key: "clusters/default/retention-cluster/2025-01-03T03-00-00Z-cccccccc.snap", LastModified: time.Date(2025, 1, 3, 3, 0, 0, 0, time.UTC)},
+	}}
+	originalOpenBlobStoreFn := openBlobStoreFn
+	openBlobStoreFn = func(context.Context, storage.Config) (blobstore.BlobStore, error) { return store, nil }
+	defer func() { openBlobStoreFn = originalOpenBlobStoreFn }()
+
+	manager := NewManager(c, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), "")
+	if err := manager.applyRetention(context.Background(), logr.Discard(), cluster, NewMetrics(cluster.Namespace, cluster.Name)); err != nil {
+		t.Fatalf("applyRetention() error = %v", err)
+	}
+	if slices.Contains(store.deleted, tested) {
+		t.Fatalf("retention deleted the key under test, deleted=%v", store.deleted)
 	}
 }

@@ -289,6 +289,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `restoreTest` _[RestoreTest](#restoretest)_ | RestoreTest periodically restores the latest successful snapshot into a disposable target. |  | Optional: \{\} <br /> |
 | `schedule` _string_ | Schedule is a cron-style schedule, for example "0 3 * * *". |  | MinLength: 1 <br /> |
 | `target` _[BackupTarget](#backuptarget)_ | Target is the object storage configuration for backups. |  |  |
 | `jwtAuthRole` _string_ | JWTAuthRole is the name of the JWT Auth role configured in OpenBao<br />for backup operations. When set, the backup executor will use JWT Auth<br />(projected ServiceAccount token) instead of a static token. This is the preferred authentication<br />method as tokens are automatically rotated by Kubernetes.<br />The role must be configured in OpenBao and must grant the "read" capability on<br />sys/storage/raft/snapshot. The role must bind to the backup ServiceAccount<br />(&lt;cluster-name&gt;-backup-serviceaccount) in the cluster namespace.<br />If OIDC is enabled in SelfInit and this field is empty, a default role<br />named "openbao-operator-backup" will be assumed/created. |  | Optional: \{\} <br /> |
@@ -330,7 +331,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `successfulBackups` _integer_ | SuccessfulBackups counts newly observed successful backup Jobs. |  | Optional: \{\} <br /> |
 | `latestSnapshot` _[BackupSnapshotSummary](#backupsnapshotsummary)_ | LatestSnapshot contains the latest executor's source observation. |  | Optional: \{\} <br /> |
+| `restoreTest` _[RestoreTestStatus](#restoreteststatus)_ | RestoreTest stores one active run and one last result. |  | Optional: \{\} <br /> |
 | `lastBackupTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastBackupTime is the timestamp of the last successful backup. |  | Optional: \{\} <br /> |
 | `lastAttemptTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastAttemptTime is the timestamp of the last backup attempt, regardless of outcome.<br />This is used to avoid retry loops when a scheduled backup fails. |  | Optional: \{\} <br /> |
 | `lastAttemptScheduledTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastAttemptScheduledTime is the scheduled time of the last backup attempt.<br />It is derived from the cron schedule and used to ensure at-most-once execution<br />per scheduled window. |  | Optional: \{\} <br /> |
@@ -1335,7 +1338,7 @@ _Appears in:_
 
 #### PKCS11RuntimeEnvVar
 
-
+_Underlying type:_ _`struct{Name string "json:\"name\""; SecretKey string "json:\"secretKey\""}`_
 
 PKCS11RuntimeEnvVar maps a PKCS#11 runtime environment variable to a key in
 spec.unseal.credentialsSecretRef.
@@ -1345,15 +1348,11 @@ spec.unseal.credentialsSecretRef.
 _Appears in:_
 - [PKCS11RuntimeConfig](#pkcs11runtimeconfig)
 
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name is the environment variable name to expose to the OpenBao process.<br />Names owned by OpenBao's PKCS#11 seal configuration, such as BAO_HSM_PIN,<br />are managed by the operator and must not be configured here. |  | Pattern: `^[A-Za-z_][A-Za-z0-9_]*$` <br /> |
-| `secretKey` _string_ | SecretKey is the key in spec.unseal.credentialsSecretRef to source as the<br />environment variable value. |  | MinLength: 1 <br />Pattern: `^[-._A-Za-z0-9]+$` <br /> |
 
 
 #### PKCS11RuntimeFileEnvVar
 
-
+_Underlying type:_ _`struct{Name string "json:\"name\""; SecretKey string "json:\"secretKey\""}`_
 
 PKCS11RuntimeFileEnvVar maps a PKCS#11 runtime environment variable to the
 mounted file path for a key in spec.unseal.credentialsSecretRef.
@@ -1363,10 +1362,6 @@ mounted file path for a key in spec.unseal.credentialsSecretRef.
 _Appears in:_
 - [PKCS11RuntimeConfig](#pkcs11runtimeconfig)
 
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name is the environment variable name to expose to the OpenBao process. |  | Pattern: `^[A-Za-z_][A-Za-z0-9_]*$` <br /> |
-| `secretKey` _string_ | SecretKey is the key in spec.unseal.credentialsSecretRef whose mounted<br />file path should become the environment variable value. |  | MinLength: 1 <br />Pattern: `^[-._A-Za-z0-9]+$` <br /> |
 
 
 #### PKCS11SealConfig
@@ -1710,6 +1705,34 @@ _Appears in:_
 | `initial` _[InitialRecoveryKeysConfig](#initialrecoverykeysconfig)_ | Initial configures the first recovery-key generation request for a<br />self-initialized cluster using auto-unseal. |  | Optional: \{\} <br /> |
 
 
+#### RestoreClusterTemplate
+
+
+
+RestoreClusterTemplate is the supported fresh recovery target profile.
+Administrators must prepare the destination namespace network boundary.
+
+
+
+_Appears in:_
+- [OpenBaoRestoreSpec](#openbaorestorespec)
+- [RestoreTest](#restoretest)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `version` _string_ | Version must match the administrator-observed snapshot source version. |  | Enum: [2.7.0] <br /> |
+| `image` _string_ | Image defaults to the version-derived image. |  | Optional: \{\} <br /> |
+| `storage` _[StorageConfig](#storageconfig)_ |  |  |  |
+| `tls` _[TLSConfig](#tlsconfig)_ |  |  |  |
+| `unseal` _[UnsealConfig](#unsealconfig)_ | Unseal uses the same provider configuration as OpenBaoCluster. The target<br />must be able to decrypt the snapshot with the original seal key material. |  |  |
+| `serviceAccount` _[ServiceAccountConfig](#serviceaccountconfig)_ | ServiceAccount configures credentials supplied through workload identity. |  | Optional: \{\} <br /> |
+| `podMetadata` _[PodMetadataConfig](#podmetadataconfig)_ | PodMetadata supplies provider-specific workload identity metadata. |  | Optional: \{\} <br /> |
+| `plugins` _[Plugin](#plugin) array_ | Plugins declares KMS seal plugins required by Unseal. OpenBao 2.7 requires<br />plugins for AWS, Azure, GCP, OCI, and PKCS#11 seals. |  | Optional: \{\} <br /> |
+| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#resourcerequirements-v1-core)_ |  |  | Optional: \{\} <br /> |
+| `initContainer` _[InitContainerConfig](#initcontainerconfig)_ |  |  | Optional: \{\} <br /> |
+| `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core) array_ |  |  | MaxItems: 2 <br />Optional: \{\} <br /> |
+
+
 #### RestoreConfig
 
 
@@ -1727,6 +1750,110 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `jwtAuthRole` _string_ | JWTAuthRole is the name of the JWT Auth role configured in OpenBao<br />for restore operations. When set, and when spec.selfInit.oidc.enabled is true,<br />the operator bootstraps a restore policy and JWT role bound to the restore ServiceAccount<br />(&lt;cluster-name&gt;-restore-serviceaccount).<br />If OIDC is enabled in SelfInit and this field is empty, a default role<br />named "openbao-operator-restore" will be assumed/created.<br />The role must grant "update" capability on sys/storage/raft/snapshot and<br />sys/storage/raft/snapshot-force. The force endpoint supports explicitly<br />requested break-glass restores. |  | Optional: \{\} <br /> |
+
+
+#### RestoreTest
+
+
+
+RestoreTest schedules one disposable restore at a time.
+The destination must be an administrator-prepared operator-managed namespace.
+
+
+
+_Appears in:_
+- [BackupSchedule](#backupschedule)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `schedule` _string_ | Schedule uses five-field cron syntax and UTC. |  | MaxLength: 128 <br />MinLength: 1 <br />Optional: \{\} <br /> |
+| `everySuccessfulBackups` _integer_ |  |  | Maximum: 10000 <br />Minimum: 1 <br />Optional: \{\} <br /> |
+| `namespace` _string_ |  |  | MaxLength: 63 <br />MinLength: 1 <br /> |
+| `clusterTemplate` _[RestoreClusterTemplate](#restoreclustertemplate)_ |  |  |  |
+| `credentialsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | CredentialsSecretRef is the existing destination storage credential Secret.<br />Storage connection settings are inherited from the source backup target. |  | Optional: \{\} <br /> |
+| `cleanupAfterSeconds` _integer_ | CleanupAfterSeconds delays deletion after snapshot application to permit inspection. |  | Maximum: 86400 <br />Minimum: 0 <br />Optional: \{\} <br /> |
+
+
+#### RestoreTestOutcome
+
+_Underlying type:_ _string_
+
+RestoreTestOutcome reports whether a disposable restore test passed or failed.
+
+_Validation:_
+- Enum: [Passed Failed]
+
+_Appears in:_
+- [RestoreTestResult](#restoretestresult)
+
+| Field | Description |
+| --- | --- |
+| `Passed` |  |
+| `Failed` |  |
+
+
+#### RestoreTestResult
+
+
+
+RestoreTestResult contains no secret data or authentication tokens.
+
+
+
+_Appears in:_
+- [RestoreTestStatus](#restoreteststatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the child OpenBaoRestore that produced this result. |  |  |
+| `finishedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | FinishedAt records when the result was recorded. |  |  |
+| `namespace` _string_ | Namespace identifies the destination namespace. |  | Optional: \{\} <br /> |
+| `key` _string_ | Key identifies the tested snapshot object in backup storage. |  | Optional: \{\} <br /> |
+| `digest` _string_ | Digest is the pinned snapshot digest, when available. |  | Optional: \{\} <br /> |
+| `reason` _string_ | Reason and Message retain a bounded summary after the child is deleted.<br />They contain operator-defined diagnostics, never provider responses or logs. |  | MaxLength: 64 <br />Optional: \{\} <br /> |
+| `message` _string_ | Message contains the operator-defined diagnostic for this result. |  | MaxLength: 512 <br />Optional: \{\} <br /> |
+| `outcome` _[RestoreTestOutcome](#restoretestoutcome)_ | Outcome is Passed or Failed. |  | Enum: [Passed Failed] <br /> |
+
+
+#### RestoreTestRun
+
+
+
+RestoreTestRun reserves one child request and protects its source key.
+
+
+
+_Appears in:_
+- [RestoreTestStatus](#restoreteststatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `namespace` _string_ | Namespace is the destination namespace of the child OpenBaoRestore. |  |  |
+| `name` _string_ | Name is the generated name of the child OpenBaoRestore. |  |  |
+| `key` _string_ | Key is the snapshot object under test; retention protects it until the run ends. |  |  |
+| `startedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | StartedAt records when the run was reserved. |  |  |
+| `uid` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#uid-types-pkg)_ | UID identifies the child OpenBaoRestore once its creation is observed. |  | Optional: \{\} <br /> |
+
+
+#### RestoreTestStatus
+
+
+
+RestoreTestStatus stores at most one active request and one last result.
+
+
+
+_Appears in:_
+- [BackupStatus](#backupstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `active` _[RestoreTestRun](#restoretestrun)_ |  |  | Optional: \{\} <br /> |
+| `last` _[RestoreTestResult](#restoretestresult)_ |  |  | Optional: \{\} <br /> |
+| `lastSuccessTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastSuccessTime survives later failures and controller restarts. |  | Optional: \{\} <br /> |
+| `lastScheduledAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastScheduledAt records the last time a restore test was started. |  | Optional: \{\} <br /> |
+| `lastBackupCount` _integer_ | LastBackupCount is the successful-backup count at the last started test. |  | Optional: \{\} <br /> |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions reports scheduling and restore test outcomes without secret data.<br />The Passed condition summarizes the current state. |  | Optional: \{\} <br /> |
 
 
 #### RuntimeConfig
@@ -2873,7 +3000,7 @@ _Appears in:_
 
 #### PKCS11RuntimeEnvVar
 
-
+_Underlying type:_ _`struct{Name string "json:\"name\""; SecretKey string "json:\"secretKey\""}`_
 
 PKCS11RuntimeEnvVar maps a PKCS#11 runtime environment variable to a key in
 spec.unseal.credentialsSecretRef.
@@ -2883,15 +3010,11 @@ spec.unseal.credentialsSecretRef.
 _Appears in:_
 - [PKCS11RuntimeConfig](#pkcs11runtimeconfig)
 
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name is the environment variable name to expose to the OpenBao process.<br />Names owned by OpenBao's PKCS#11 seal configuration, such as BAO_HSM_PIN,<br />are managed by the operator and must not be configured here. |  | Pattern: `^[A-Za-z_][A-Za-z0-9_]*$` <br /> |
-| `secretKey` _string_ | SecretKey is the key in spec.unseal.credentialsSecretRef to source as the<br />environment variable value. |  | MinLength: 1 <br />Pattern: `^[-._A-Za-z0-9]+$` <br /> |
 
 
 #### PKCS11RuntimeFileEnvVar
 
-
+_Underlying type:_ _`struct{Name string "json:\"name\""; SecretKey string "json:\"secretKey\""}`_
 
 PKCS11RuntimeFileEnvVar maps a PKCS#11 runtime environment variable to the
 mounted file path for a key in spec.unseal.credentialsSecretRef.
@@ -2901,10 +3024,6 @@ mounted file path for a key in spec.unseal.credentialsSecretRef.
 _Appears in:_
 - [PKCS11RuntimeConfig](#pkcs11runtimeconfig)
 
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name is the environment variable name to expose to the OpenBao process. |  | Pattern: `^[A-Za-z_][A-Za-z0-9_]*$` <br /> |
-| `secretKey` _string_ | SecretKey is the key in spec.unseal.credentialsSecretRef whose mounted<br />file path should become the environment variable value. |  | MinLength: 1 <br />Pattern: `^[-._A-Za-z0-9]+$` <br /> |
 
 
 #### PKCS11SealConfig
@@ -3007,6 +3126,7 @@ Administrators must prepare the destination namespace network boundary.
 
 _Appears in:_
 - [OpenBaoRestoreSpec](#openbaorestorespec)
+- [RestoreTest](#restoretest)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |

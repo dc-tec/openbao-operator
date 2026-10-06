@@ -36,6 +36,7 @@ OpenBao CLI on a cluster you provision yourself, including one without the opera
 | A restore ended `Unknown` | [Recover an uncertain restore](recover-uncertain/) |
 | Keep operator and Job authentication working | [Restore authentication](authentication/) |
 | Prepare a namespace for new targets | [Prepare a recovery namespace](prepare-namespace/) |
+| Test backups on a schedule | [Schedule restore tests](tests/) |
 
 An `OpenBaoRestore` is an immutable request to download a snapshot and apply it. It uses a dedicated Job and
 identity, owns the cluster operation lock while destructive work runs, and records the outcome.

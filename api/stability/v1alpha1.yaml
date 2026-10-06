@@ -43,6 +43,30 @@ resources:
         owner: backup
         omission: scheduled backups are disabled
         enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.backup.restoreTest
+        classification: additive-unfrozen
+        owner: backup
+      - path: status.backup.restoreTest
+        classification: stable-automation
+        owner: backup
+      - path: status.backup.restoreTest.active
+        classification: informational
+        rationale: Identifies the running child request; automation should use the result and condition.
+      - path: status.backup.restoreTest.lastBackupCount
+        classification: informational
+      - path: status.backup.restoreTest.lastScheduledAt
+        classification: informational
+      - path: status.backup.restoreTest.conditions
+        classification: stable-automation
+        stableValues:
+          - Passed
+        rationale: Condition types are stable; reason sets may expand and messages are best-effort.
+      - path: status.backup.restoreTest.conditions[].message
+        classification: informational
+      - path: status.backup.successfulBackups
+        classification: informational
+        owner: backup
+        rationale: Internal trigger counter for everySuccessfulBackups.
       - path: status.backup.latestSnapshot
         classification: informational
         owner: backup

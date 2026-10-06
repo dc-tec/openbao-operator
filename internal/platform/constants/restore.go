@@ -10,6 +10,9 @@ const (
 	// AnnotationRestoreAcknowledge carries <operationID>/Resume or /Abandon.
 	AnnotationRestoreAcknowledge = "openbao.org/restore-acknowledge"
 
+	// AnnotationRestoreTestAcknowledge carries <run-name>/Release on the source.
+	AnnotationRestoreTestAcknowledge = "openbao.org/restore-test-acknowledge"
+
 	DefaultRestoreSnapshotLimitBytes    int64 = 8 * 1024 * 1024 * 1024
 	DefaultRestoreScratchLimitBytes     int64 = 9012 * 1024 * 1024 // 8 GiB + ceilMiB(10%).
 	DefaultRestoreEphemeralStorageBytes int64 = DefaultRestoreScratchLimitBytes + 128*1024*1024

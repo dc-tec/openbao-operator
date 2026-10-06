@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -26,7 +27,7 @@ import (
 	helpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
 
-var _ = Describe("Managed fresh restore targets", Ordered, Label("restore-minimal", "dr", "backup", "restore", "e2e-anchor"), func() {
+var _ = Describe("Minimal fresh restore and scheduled restore tests", Ordered, Label("restore-minimal", "dr", "backup", "restore", "e2e-anchor"), func() {
 	ctx := context.Background()
 	var c client.Client
 	var config *rest.Config
@@ -196,6 +197,7 @@ var _ = Describe("Managed fresh restore targets", Ordered, Label("restore-minima
 		staticSource.ObjectMeta = metav1.ObjectMeta{Name: "static-source", Namespace: sourceFW.Namespace}
 		staticSource.Status = api.OpenBaoClusterStatus{}
 		staticSource.Spec.Unseal = &api.UnsealConfig{Type: "static"}
+		staticSource.Spec.Backup.RestoreTest = nil
 		Expect(c.Create(ctx, staticSource)).To(Succeed())
 		Expect(c.Create(ctx, newBackupNetworkPolicy(sourceFW.Namespace, staticSource.Name, rustfsName, 9000, "backup"))).To(Succeed())
 		sourceFW.WaitForCondition(staticSource.Name, api.ConditionAvailable, metav1.ConditionTrue)
@@ -237,6 +239,61 @@ var _ = Describe("Managed fresh restore targets", Ordered, Label("restore-minima
 		Eventually(func() bool {
 			return apierrors.IsNotFound(c.Get(ctx, client.ObjectKeyFromObject(request), &api.OpenBaoRestore{}))
 		}, time.Minute, time.Second).Should(BeTrue())
+	})
+
+	It("verifies one scheduled restore and removes the target, data volume, and child request", Label("case:restore-minimal-scheduled"), func() {
+		By("refusing manual and scheduled target creation before namespace approval")
+		setMinimalDestinationApproval(ctx, c, destinationFW.Namespace, false)
+		Eventually(func() error {
+			return c.Create(ctx, newRequest("unapproved", "Disposable"), client.DryRunAll)
+		}, time.Minute, time.Second).Should(MatchError(ContainSubstring("openbao.org/restore-target-approved")))
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(source), source)).To(Succeed())
+		before := source.DeepCopy()
+		source.Spec.Backup.RestoreTest = &api.RestoreTest{
+			EverySuccessfulBackups: 1,
+			Namespace:              destinationFW.Namespace,
+
+			ClusterTemplate:      *template.DeepCopy(),
+			CredentialsSecretRef: &corev1.LocalObjectReference{Name: "storage"},
+		}
+		Expect(c.Patch(ctx, source, client.MergeFrom(before))).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(source), source)).To(Succeed())
+			g.Expect(source.Status.Backup.RestoreTest).NotTo(BeNil())
+			g.Expect(source.Status.Backup.RestoreTest.Active).To(BeNil())
+			g.Expect(meta.FindStatusCondition(source.Status.Backup.RestoreTest.Conditions, "Passed")).To(HaveField("Reason", "DestinationRejected"))
+		}, time.Minute, time.Second).Should(Succeed())
+		children := &api.OpenBaoRestoreList{}
+		Expect(c.List(ctx, children, client.InNamespace(destinationFW.Namespace))).To(Succeed())
+		Expect(children.Items).To(BeEmpty())
+
+		By("approving the prepared namespace and completing the restore test")
+		setMinimalDestinationApproval(ctx, c, destinationFW.Namespace, true)
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(source), source)).To(Succeed())
+			g.Expect(source.Status.Backup.RestoreTest).NotTo(BeNil())
+			g.Expect(source.Status.Backup.RestoreTest.Last).NotTo(BeNil(), "conditions: %v", source.Status.Backup.RestoreTest.Conditions)
+			g.Expect(source.Status.Backup.RestoreTest.Last.Outcome).To(Equal(api.RestoreTestPassed))
+			g.Expect(source.Status.Backup.RestoreTest.Active).To(BeNil())
+		}, 10*time.Minute, 2*time.Second).Should(Succeed())
+		last := source.Status.Backup.RestoreTest.Last
+		Expect(last.Namespace).To(Equal(destinationFW.Namespace))
+		Expect(last.Key).NotTo(BeEmpty())
+		Expect(last.Digest).To(MatchRegexp(`^sha256:[a-f0-9]{64}$`))
+		Expect(last.Reason).To(Equal("SnapshotApplied"))
+		Expect(last.Message).NotTo(BeEmpty())
+		Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKey{
+			Namespace: destinationFW.Namespace,
+			Name:      last.Name,
+		}, &api.OpenBaoRestore{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKey{
+			Namespace: destinationFW.Namespace,
+			Name:      last.Name,
+		}, &api.OpenBaoCluster{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKey{
+			Namespace: destinationFW.Namespace,
+			Name:      "data-" + last.Name + "-0",
+		}, &corev1.PersistentVolumeClaim{}))).To(BeTrue())
 	})
 
 	It("retains an applied target until the administrator accepts a paused handoff", Label("case:restore-minimal-retain"), func() {

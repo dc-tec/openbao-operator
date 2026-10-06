@@ -8,8 +8,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
+	"github.com/dc-tec/openbao-operator/internal/service/backup"
 )
 
 // Dependencies contains external collaborators required for deletion orchestration.
@@ -20,6 +22,10 @@ type Dependencies struct {
 
 // Handle applies the deletion policy for an OpenBaoCluster.
 func Handle(ctx context.Context, logger logr.Logger, deps Dependencies, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if err := backup.CancelRestoreTest(ctx, deps.Client, deps.Client, adminopsstatus.NewMutator(deps.Client, deps.Client), cluster); err != nil {
+		return err
+	}
+
 	policy := cluster.Spec.DeletionPolicy
 	if policy == "" {
 		policy = openbaov1alpha1.DeletionPolicyRetain

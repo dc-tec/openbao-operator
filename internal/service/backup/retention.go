@@ -19,6 +19,8 @@ type RetentionPolicy struct {
 	MaxAge time.Duration
 	// ProtectedKey is never deleted, typically the most recently recorded backup.
 	ProtectedKey string
+	// RestoreTestKey protects the active restore test source until cleanup finishes.
+	RestoreTestKey string
 }
 
 // RetentionResult contains the result of a retention policy application.
@@ -115,7 +117,7 @@ func ApplyRetention(
 	backupsLen := int32(len(backups))
 	for i := int32(0); i < backupsLen; i++ {
 		backup := backups[i]
-		if i == 0 || (policy.ProtectedKey != "" && backup.key == policy.ProtectedKey) {
+		if i == 0 || (policy.RestoreTestKey != "" && backup.key == policy.RestoreTestKey) || (policy.ProtectedKey != "" && backup.key == policy.ProtectedKey) {
 			continue
 		}
 		shouldDelete := false

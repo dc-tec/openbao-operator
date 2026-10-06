@@ -3279,13 +3279,13 @@
   },
   {
     "id": "restore-minimal-cancel",
-    "generatedId": "restore-minimal-cleans-a-cancelled-disposable-target-and-4c32b229",
+    "generatedId": "restore-minimal-cleans-a-cancelled-disposable-target-and-e2b004fa",
     "caseLabel": "restore-minimal-cancel",
     "file": "test/e2e/restore_minimal_test.go",
     "type": "It",
     "name": "cleans a cancelled disposable target and its data volume",
     "path": [
-      "Managed fresh restore targets",
+      "Minimal fresh restore and scheduled restore tests",
       "cleans a cancelled disposable target and its data volume"
     ],
     "labels": [
@@ -3313,13 +3313,13 @@
   },
   {
     "id": "restore-minimal-missing-source",
-    "generatedId": "restore-minimal-cleans-a-disposable-target-when-the-286585ea",
+    "generatedId": "restore-minimal-cleans-a-disposable-target-when-the-c26b3f85",
     "caseLabel": "restore-minimal-missing-source",
     "file": "test/e2e/restore_minimal_test.go",
     "type": "It",
     "name": "cleans a disposable target when the source object is missing",
     "path": [
-      "Managed fresh restore targets",
+      "Minimal fresh restore and scheduled restore tests",
       "cleans a disposable target when the source object is missing"
     ],
     "labels": [
@@ -3345,13 +3345,13 @@
   },
   {
     "id": "restore-minimal-identity",
-    "generatedId": "restore-minimal-does-not-confirm-application-when-the-31e6071a",
+    "generatedId": "restore-minimal-does-not-confirm-application-when-the-8f108f5b",
     "caseLabel": "restore-minimal-identity",
     "file": "test/e2e/restore_minimal_test.go",
     "type": "It",
     "name": "does not confirm application when the source identity differs",
     "path": [
-      "Managed fresh restore targets",
+      "Minimal fresh restore and scheduled restore tests",
       "does not confirm application when the source identity differs"
     ],
     "labels": [
@@ -3377,13 +3377,13 @@
   },
   {
     "id": "restore-minimal-digest",
-    "generatedId": "restore-minimal-rejects-changed-snapshot-bytes-before-submission-74cc276f",
+    "generatedId": "restore-minimal-rejects-changed-snapshot-bytes-before-submission-029fe870",
     "caseLabel": "restore-minimal-digest",
     "file": "test/e2e/restore_minimal_test.go",
     "type": "It",
     "name": "rejects changed snapshot bytes before submission",
     "path": [
-      "Managed fresh restore targets",
+      "Minimal fresh restore and scheduled restore tests",
       "rejects changed snapshot bytes before submission"
     ],
     "labels": [
@@ -3409,13 +3409,13 @@
   },
   {
     "id": "restore-minimal-static",
-    "generatedId": "restore-minimal-restores-a-static-sealed-snapshot-with-ef069d65",
+    "generatedId": "restore-minimal-restores-a-static-sealed-snapshot-with-bdf5828c",
     "caseLabel": "restore-minimal-static",
     "file": "test/e2e/restore_minimal_test.go",
     "type": "It",
     "name": "restores a static-sealed snapshot with the original key and removes the disposable target",
     "path": [
-      "Managed fresh restore targets",
+      "Minimal fresh restore and scheduled restore tests",
       "restores a static-sealed snapshot with the original key and removes the disposable target"
     ],
     "labels": [
@@ -3444,13 +3444,13 @@
   },
   {
     "id": "restore-minimal-retain",
-    "generatedId": "restore-minimal-retains-an-applied-target-until-the-77c6db86",
+    "generatedId": "restore-minimal-retains-an-applied-target-until-the-5e6efe95",
     "caseLabel": "restore-minimal-retain",
     "file": "test/e2e/restore_minimal_test.go",
     "type": "It",
     "name": "retains an applied target until the administrator accepts a paused handoff",
     "path": [
-      "Managed fresh restore targets",
+      "Minimal fresh restore and scheduled restore tests",
       "retains an applied target until the administrator accepts a paused handoff"
     ],
     "labels": [
@@ -3469,6 +3469,41 @@
       "e2e-anchor"
     ],
     "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "restore-minimal-scheduled",
+    "generatedId": "restore-minimal-verifies-one-scheduled-restore-and-removes-16b6359a",
+    "caseLabel": "restore-minimal-scheduled",
+    "file": "test/e2e/restore_minimal_test.go",
+    "type": "It",
+    "name": "verifies one scheduled restore and removes the target, data volume, and child request",
+    "path": [
+      "Minimal fresh restore and scheduled restore tests",
+      "verifies one scheduled restore and removes the target, data volume, and child request"
+    ],
+    "labels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor",
+      "case:restore-minimal-scheduled"
+    ],
+    "domainLabels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor"
+    ],
+    "steps": [
+      "refusing manual and scheduled target creation before namespace approval",
+      "approving the prepared namespace and completing the restore test"
+    ],
     "focused": false,
     "pending": false,
     "suiteFile": "",

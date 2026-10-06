@@ -20,6 +20,30 @@ import (
 // Keep both namespaces enrolled until requests and clusters finish deletion.
 // Never acknowledge an uncertain restore or remove a finalizer during teardown.
 func cleanupMinimalFixtures(ctx context.Context, c client.Client, fixtures ...*framework.Framework) error {
+	// Stop new runs before listing requests. Source deletion still cancels any
+	// reservation whose child creation overlaps this initial observation.
+
+	for _, f := range fixtures {
+		if f == nil {
+			continue
+		}
+		clusters := &api.OpenBaoClusterList{}
+		if err := c.List(ctx, clusters, client.InNamespace(f.Namespace)); err != nil {
+			return err
+		}
+		for i := range clusters.Items {
+			cluster := &clusters.Items[i]
+			if cluster.Spec.Backup == nil || cluster.Spec.Backup.RestoreTest == nil {
+				continue
+			}
+			before := cluster.DeepCopy()
+			cluster.Spec.Backup.RestoreTest = nil
+			if err := c.Patch(ctx, cluster, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+				return err
+			}
+		}
+	}
+
 	for _, f := range fixtures {
 		if f == nil {
 			continue

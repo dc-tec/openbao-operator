@@ -3,7 +3,7 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   annotations:
-    openbao.org/admission-policy-fingerprint: sha256:315f44a7c3396f2c02fcb48d5caac9457c406def5861a3575ccc2fa4a87e6ce7
+    openbao.org/admission-policy-fingerprint: sha256:7f6f40028783a267cc4c06cd0eac939a518bfec468e920690c2655cf3babec8b
   name: {{ include "openbao-operator.fullname" . }}-openbao-protect-restore-execution
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
@@ -64,6 +64,14 @@ spec:
       expression: >-
         object != null && has(object.metadata.annotations) && 'openbao.org/restore-acknowledge' in object.metadata.annotations ?
           object.metadata.annotations['openbao.org/restore-acknowledge'] : ''
+    - name: old_test_acknowledgement
+      expression: >-
+        oldObject != null && has(oldObject.metadata.annotations) && 'openbao.org/restore-test-acknowledge' in oldObject.metadata.annotations ?
+          oldObject.metadata.annotations['openbao.org/restore-test-acknowledge'] : ''
+    - name: new_test_acknowledgement
+      expression: >-
+        object != null && has(object.metadata.annotations) && 'openbao.org/restore-test-acknowledge' in object.metadata.annotations ?
+          object.metadata.annotations['openbao.org/restore-test-acknowledge'] : ''
   validations:
     - expression: >-
         !variables.is_restore || variables.is_controller || request.operation == 'DELETE' ||
@@ -71,12 +79,30 @@ spec:
         (oldObject != null && has(oldObject.status) && has(oldObject.status.restart) ? oldObject.status.restart : null)
       message: "Only the controller can record managed restore restarts; use the acknowledgement annotation."
     - expression: >-
+        variables.is_restore || request.operation == 'DELETE' || variables.new_test_acknowledgement == variables.old_test_acknowledgement ||
+        variables.new_test_acknowledgement == '' ||
+        (oldObject != null && has(oldObject.status) && has(oldObject.status.backup) &&
+         has(oldObject.status.backup.restoreTest) && has(oldObject.status.backup.restoreTest.active) &&
+         (!has(oldObject.status.backup.restoreTest.active.uid) || oldObject.status.backup.restoreTest.active.uid == '') &&
+         variables.new_test_acknowledgement == oldObject.status.backup.restoreTest.active.name + '/Release' &&
+         authorizer.group('openbao.org').resource('openbaoclusters').namespace(request.namespace).name(oldObject.metadata.name).check('restore').allowed())
+      message: "Restore test release requires the active unbound run name followed by /Release and restore permission on the source cluster. Inspect the destination and stop the old controller first."
+    # Approval is checked only for new requests and new targets. Revocation must
+    # not block status updates, administrator handoff, or resource cleanup.
+    - expression: >-
         request.operation != 'CREATE' ||
         !(variables.is_restore ? has(object.spec.clusterTemplate) : variables.new_origin != '') ||
         (namespaceObject != null && has(namespaceObject.metadata.labels) &&
          'openbao.org/restore-target-approved' in namespaceObject.metadata.labels &&
          namespaceObject.metadata.labels['openbao.org/restore-target-approved'] == 'true')
       message: "Fresh restore targets require openbao.org/restore-target-approved=true on the destination Namespace. Approval does not verify network isolation."
+    - expression: >-
+        !variables.is_restore || variables.is_controller || request.operation == 'DELETE' ||
+        ((has(object.metadata.annotations) && 'openbao.org/restore-test-source' in object.metadata.annotations ?
+          object.metadata.annotations['openbao.org/restore-test-source'] : '') ==
+         (oldObject != null && has(oldObject.metadata.annotations) && 'openbao.org/restore-test-source' in oldObject.metadata.annotations ?
+          oldObject.metadata.annotations['openbao.org/restore-test-source'] : ''))
+      message: "Only the controller can assign or change a restore test source."
     - expression: >-
         !variables.is_restore || request.operation != 'UPDATE' || !has(oldObject.status) ||
         !has(oldObject.status.target) || !has(oldObject.spec.targetLifecycle) || oldObject.spec.targetLifecycle != 'Disposable' ||

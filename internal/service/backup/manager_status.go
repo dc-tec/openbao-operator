@@ -18,7 +18,13 @@ func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.O
 	}
 
 	return m.adminOpsMutator(ctx, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
-		obj.Status.Backup = cluster.Status.Backup
+		// RestoreTest has a separate compare-and-set writer. Ordinary backup
+		// observations must preserve a reservation made by another reconcile.
+		currentBackup := obj.Status.Backup
+		obj.Status.Backup = cluster.Status.Backup.DeepCopy()
+		if currentBackup != nil && obj.Status.Backup != nil {
+			obj.Status.Backup.RestoreTest = currentBackup.RestoreTest.DeepCopy()
+		}
 		return nil
 	}, adminops.ForceOwnershipOnConflict)
 }

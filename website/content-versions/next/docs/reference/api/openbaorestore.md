@@ -396,7 +396,7 @@ _Appears in:_
 
 #### PKCS11RuntimeEnvVar
 
-
+_Underlying type:_ _`struct{Name string "json:\"name\""; SecretKey string "json:\"secretKey\""}`_
 
 PKCS11RuntimeEnvVar maps a PKCS#11 runtime environment variable to a key in
 spec.unseal.credentialsSecretRef.
@@ -406,15 +406,11 @@ spec.unseal.credentialsSecretRef.
 _Appears in:_
 - [PKCS11RuntimeConfig](#pkcs11runtimeconfig)
 
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name is the environment variable name to expose to the OpenBao process.<br />Names owned by OpenBao's PKCS#11 seal configuration, such as BAO_HSM_PIN,<br />are managed by the operator and must not be configured here. |  | Pattern: `^[A-Za-z_][A-Za-z0-9_]*$` <br /> |
-| `secretKey` _string_ | SecretKey is the key in spec.unseal.credentialsSecretRef to source as the<br />environment variable value. |  | MinLength: 1 <br />Pattern: `^[-._A-Za-z0-9]+$` <br /> |
 
 
 #### PKCS11RuntimeFileEnvVar
 
-
+_Underlying type:_ _`struct{Name string "json:\"name\""; SecretKey string "json:\"secretKey\""}`_
 
 PKCS11RuntimeFileEnvVar maps a PKCS#11 runtime environment variable to the
 mounted file path for a key in spec.unseal.credentialsSecretRef.
@@ -424,10 +420,6 @@ mounted file path for a key in spec.unseal.credentialsSecretRef.
 _Appears in:_
 - [PKCS11RuntimeConfig](#pkcs11runtimeconfig)
 
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name is the environment variable name to expose to the OpenBao process. |  | Pattern: `^[A-Za-z_][A-Za-z0-9_]*$` <br /> |
-| `secretKey` _string_ | SecretKey is the key in spec.unseal.credentialsSecretRef whose mounted<br />file path should become the environment variable value. |  | MinLength: 1 <br />Pattern: `^[-._A-Za-z0-9]+$` <br /> |
 
 
 #### PKCS11SealConfig
@@ -530,6 +522,7 @@ Administrators must prepare the destination namespace network boundary.
 
 _Appears in:_
 - [OpenBaoRestoreSpec](#openbaorestorespec)
+- [RestoreTest](../openbaocluster/#restoretest)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |

@@ -150,3 +150,4 @@ accepts `spec.upgrade.blueGreen.preUpgradeSnapshot`, but the top-level field kee
 upgrade does not continue if its required snapshot fails.
 
 A backup is complete only after you [restore it into an isolated target](../restore/) and validate the recovered data.
+[Schedule restore tests](../restore/tests/) to do this automatically for the latest backup.

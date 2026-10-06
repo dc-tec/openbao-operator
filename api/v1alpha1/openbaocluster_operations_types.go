@@ -20,6 +20,10 @@ import corev1 "k8s.io/api/core/v1"
 
 // BackupSchedule defines when and where snapshots are stored.
 type BackupSchedule struct {
+	// RestoreTest periodically restores the latest successful snapshot into a disposable target.
+	// +optional
+	RestoreTest *RestoreTest `json:"restoreTest,omitempty"`
+
 	// Schedule is a cron-style schedule, for example "0 3 * * *".
 	// +kubebuilder:validation:MinLength=1
 	Schedule string `json:"schedule"`

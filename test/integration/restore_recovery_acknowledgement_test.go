@@ -7,13 +7,84 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/port/adminops"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/backup"
 )
+
+func TestRestoreTestReleaseAdmissionAndDeletion(t *testing.T) {
+	installRestoreExecutionPolicy(t)
+	namespace := newTestNamespace(t)
+	controller := newControllerClient(t)
+	for _, deleting := range []bool{false, true} {
+		name := "release-active"
+		if deleting {
+			name = "release-deleting"
+		}
+		cluster := createMinimalCluster(t, namespace, name)
+		cluster.Finalizers = []string{api.OpenBaoClusterFinalizer}
+		require.NoError(t, k8sClient.Update(ctx, cluster))
+		stamp := metav1.Now()
+		mutate := adminopsstatus.NewMutator(controller, controller)
+		require.NoError(t, mutate(ctx, cluster, func(current *api.OpenBaoCluster) error {
+			current.Status.Backup = &api.BackupStatus{RestoreTest: &api.RestoreTestStatus{
+				Active:          &api.RestoreTestRun{Name: "uncertain", Namespace: namespace, StartedAt: stamp},
+				LastScheduledAt: &stamp, LastBackupCount: 7,
+			}}
+			return nil
+		}, adminops.ForceOwnership))
+		username := "release-" + name
+		grantNamespacedResourceVerbs(t, namespace, username, name+"-edit", "openbao.org", "openbaoclusters", []string{name}, "get", "patch", "usecustomexecutables")
+		user := newImpersonatedClient(t, username)
+		before := cluster.DeepCopy()
+		cluster.Annotations = map[string]string{constants.AnnotationRestoreTestAcknowledge: "uncertain/Release"}
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			err := user.Patch(ctx, cluster, client.MergeFrom(before), client.DryRunAll)
+			require.ErrorContains(c, err, "restore permission")
+		}, 10*time.Second, 100*time.Millisecond)
+		grantNamespacedResourceVerbs(t, namespace, username, name+"-restore", "openbao.org", "openbaoclusters", []string{name}, "restore")
+		cluster.Annotations[constants.AnnotationRestoreTestAcknowledge] = "stale/Release"
+		requireAdmissionDenied(t, user.Patch(ctx, cluster, client.MergeFrom(before)))
+		cluster.Annotations[constants.AnnotationRestoreTestAcknowledge] = "uncertain/Release"
+		if deleting {
+			require.NoError(t, k8sClient.Delete(ctx, before))
+			require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(before), before))
+			cluster = before.DeepCopy()
+			cluster.Annotations = map[string]string{constants.AnnotationRestoreTestAcknowledge: "uncertain/Release"}
+		}
+		require.Eventually(t, func() bool {
+			return user.Patch(ctx, cluster, client.MergeFrom(before)) == nil
+		}, 10*time.Second, 100*time.Millisecond)
+		if deleting {
+			require.NoError(t, backup.CancelRestoreTest(ctx, controller, controller, mutate, cluster))
+		} else {
+			manager := backup.NewManager(controller, k8sScheme, portopenbao.ClientConfig{}, nil, "").WithReader(controller).WithAdminOpsStatusMutator(mutate)
+			_, err := manager.Reconcile(ctx, logr.Discard(), cluster)
+			require.NoError(t, err)
+		}
+		require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster))
+		require.Nil(t, cluster.Status.Backup.RestoreTest.Active)
+		require.Equal(t, api.RestoreTestFailed, cluster.Status.Backup.RestoreTest.Last.Outcome)
+		require.Equal(t, int64(7), cluster.Status.Backup.RestoreTest.LastBackupCount)
+		// Removing a consumed annotation does not require restore permission again.
+		before = cluster.DeepCopy()
+		delete(cluster.Annotations, constants.AnnotationRestoreTestAcknowledge)
+		require.NoError(t, user.Patch(ctx, cluster, client.MergeFrom(before)))
+		if deleting {
+			cluster.Finalizers = nil
+			require.NoError(t, controller.Update(ctx, cluster))
+		}
+	}
+}
 
 func TestManagedRestartStatusRequiresController(t *testing.T) {
 	installRestoreExecutionPolicy(t)

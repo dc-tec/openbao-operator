@@ -834,7 +834,7 @@ suites:
       policy: external-cluster-scheduled
 
   - id: restore-minimal
-    title: "Managed fresh restore targets"
+    title: "Minimal fresh restore and scheduled restore tests"
     owner: backup-restore
     riskTier: critical
     isolation: global-mutator

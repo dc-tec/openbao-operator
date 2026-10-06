@@ -1,4 +1,4 @@
-# Managed fresh restore targets
+# Minimal fresh restore and scheduled restore tests
 
 Source: `test/e2e/restore_minimal_test.go`
 
@@ -14,14 +14,15 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `restore-minimal-digest` | rejects changed snapshot bytes before submission | active | _none_ | `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor` |
 | `restore-minimal-static` | restores a static-sealed snapshot with the original key and removes the disposable target | active | _none_ | `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor` |
 | `restore-minimal-retain` | retains an applied target until the administrator accepts a paused handoff | active | _none_ | `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor` |
+| `restore-minimal-scheduled` | verifies one scheduled restore and removes the target, data volume, and child request | active | _none_ | `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor` |
 
 ## `restore-minimal-cancel`
 
-Path: `Managed fresh restore targets > cleans a cancelled disposable target and its data volume`
+Path: `Minimal fresh restore and scheduled restore tests > cleans a cancelled disposable target and its data volume`
 
 State: `active`
 
-Generated fallback ID: `restore-minimal-cleans-a-cancelled-disposable-target-and-4c32b229`
+Generated fallback ID: `restore-minimal-cleans-a-cancelled-disposable-target-and-e2b004fa`
 
 Covers: _none_
 
@@ -33,11 +34,11 @@ Recorded checkpoints:
 
 ## `restore-minimal-missing-source`
 
-Path: `Managed fresh restore targets > cleans a disposable target when the source object is missing`
+Path: `Minimal fresh restore and scheduled restore tests > cleans a disposable target when the source object is missing`
 
 State: `active`
 
-Generated fallback ID: `restore-minimal-cleans-a-disposable-target-when-the-286585ea`
+Generated fallback ID: `restore-minimal-cleans-a-disposable-target-when-the-c26b3f85`
 
 Covers: _none_
 
@@ -46,11 +47,11 @@ Labels: `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor`
 
 ## `restore-minimal-identity`
 
-Path: `Managed fresh restore targets > does not confirm application when the source identity differs`
+Path: `Minimal fresh restore and scheduled restore tests > does not confirm application when the source identity differs`
 
 State: `active`
 
-Generated fallback ID: `restore-minimal-does-not-confirm-application-when-the-31e6071a`
+Generated fallback ID: `restore-minimal-does-not-confirm-application-when-the-8f108f5b`
 
 Covers: _none_
 
@@ -59,11 +60,11 @@ Labels: `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor`
 
 ## `restore-minimal-digest`
 
-Path: `Managed fresh restore targets > rejects changed snapshot bytes before submission`
+Path: `Minimal fresh restore and scheduled restore tests > rejects changed snapshot bytes before submission`
 
 State: `active`
 
-Generated fallback ID: `restore-minimal-rejects-changed-snapshot-bytes-before-submission-74cc276f`
+Generated fallback ID: `restore-minimal-rejects-changed-snapshot-bytes-before-submission-029fe870`
 
 Covers: _none_
 
@@ -72,11 +73,11 @@ Labels: `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor`
 
 ## `restore-minimal-static`
 
-Path: `Managed fresh restore targets > restores a static-sealed snapshot with the original key and removes the disposable target`
+Path: `Minimal fresh restore and scheduled restore tests > restores a static-sealed snapshot with the original key and removes the disposable target`
 
 State: `active`
 
-Generated fallback ID: `restore-minimal-restores-a-static-sealed-snapshot-with-ef069d65`
+Generated fallback ID: `restore-minimal-restores-a-static-sealed-snapshot-with-bdf5828c`
 
 Covers: _none_
 
@@ -89,12 +90,29 @@ Recorded checkpoints:
 
 ## `restore-minimal-retain`
 
-Path: `Managed fresh restore targets > retains an applied target until the administrator accepts a paused handoff`
+Path: `Minimal fresh restore and scheduled restore tests > retains an applied target until the administrator accepts a paused handoff`
 
 State: `active`
 
-Generated fallback ID: `restore-minimal-retains-an-applied-target-until-the-77c6db86`
+Generated fallback ID: `restore-minimal-retains-an-applied-target-until-the-5e6efe95`
 
 Covers: _none_
 
 Labels: `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor`
+
+
+## `restore-minimal-scheduled`
+
+Path: `Minimal fresh restore and scheduled restore tests > verifies one scheduled restore and removes the target, data volume, and child request`
+
+State: `active`
+
+Generated fallback ID: `restore-minimal-verifies-one-scheduled-restore-and-removes-16b6359a`
+
+Covers: _none_
+
+Labels: `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor`
+
+Recorded checkpoints:
+- refusing manual and scheduled target creation before namespace approval
+- approving the prepared namespace and completing the restore test

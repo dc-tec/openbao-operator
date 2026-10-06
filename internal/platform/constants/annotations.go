@@ -23,3 +23,6 @@ const (
 
 // AnnotationRestoreOrigin binds restricted fresh-target workloads to a restore request.
 const AnnotationRestoreOrigin = "openbao.org/restore-origin"
+
+// AnnotationRestoreTestSource binds a scheduled restore to the source cluster UID.
+const AnnotationRestoreTestSource = "openbao.org/restore-test-source"

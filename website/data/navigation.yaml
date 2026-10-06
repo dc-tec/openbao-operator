@@ -88,6 +88,8 @@ primary:
             url: docs/operate/restore/manual/
           - title: Prepare a recovery namespace
             url: docs/operate/restore/prepare-namespace/
+          - title: Schedule restore tests
+            url: docs/operate/restore/tests/
           - title: Restore authentication
             url: docs/operate/restore/authentication/
       - title: Decommission a cluster

@@ -299,9 +299,16 @@ type UpgradeRequestStatus struct {
 
 // BackupStatus tracks the state of backups for a cluster.
 type BackupStatus struct {
+	// SuccessfulBackups counts newly observed successful backup Jobs.
+	// +optional
+	SuccessfulBackups int64 `json:"successfulBackups,omitempty"`
 	// LatestSnapshot contains the latest executor's source observation.
 	// +optional
 	LatestSnapshot *BackupSnapshotSummary `json:"latestSnapshot,omitempty"`
+	// RestoreTest stores one active run and one last result.
+	// +optional
+	RestoreTest *RestoreTestStatus `json:"restoreTest,omitempty"`
+
 	// LastBackupTime is the timestamp of the last successful backup.
 	// +optional
 	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`

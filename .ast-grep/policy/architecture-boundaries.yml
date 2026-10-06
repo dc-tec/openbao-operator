@@ -407,7 +407,8 @@ appBoundaries:
       - internal/app/openbaocluster/deletionops/**/*.go
     ignores:
       - "**/*_test.go"
-    allowServiceImports: []
+    allowServiceImports:
+      - internal/service/backup
   - name: openbaocluster-adminopsstatus
     displayName: OpenBaoCluster AdminOpsStatus
     files:

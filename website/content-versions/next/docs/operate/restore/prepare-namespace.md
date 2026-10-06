@@ -50,7 +50,8 @@ After testing the boundary, a platform administrator approves the namespace:
 kubectl label namespace recovery-tests openbao.org/restore-target-approved=true
 ```
 
-Admission requires this label when a restore with `spec.clusterTemplate` is created, and when the operator creates the target cluster. Restores into existing clusters do not need it. Limit
+Admission requires this label when a restore with `spec.clusterTemplate` is created, including scheduled restore
+tests, and when the operator creates the target cluster. Restores into existing clusters do not need it. Limit
 namespace label changes to trusted platform administrators.
 
 To withdraw approval:

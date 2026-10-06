@@ -48,7 +48,20 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if err != nil {
 		return recon.Result{}, err
 	}
-	return m.applyBackupDecision(ctx, logger, cluster, metrics, decideBackup(observation))
+	result, err := m.applyBackupDecision(ctx, logger, cluster, metrics, decideBackup(observation))
+	if err != nil {
+		return result, err
+	}
+	if err := m.reconcileRestoreTest(ctx, logger, cluster, now); err != nil {
+		return result, err
+	}
+	restoreTestEnabled := cluster.Spec.Backup != nil && cluster.Spec.Backup.RestoreTest != nil
+	restoreTestActive := cluster.Status.Backup != nil && cluster.Status.Backup.RestoreTest != nil &&
+		cluster.Status.Backup.RestoreTest.Active != nil
+	if (restoreTestEnabled || restoreTestActive) && (result.RequeueAfter == 0 || result.RequeueAfter > restoreTestPoll) {
+		result.RequeueAfter = restoreTestPoll
+	}
+	return result, nil
 }
 
 func (m *Manager) ensureBackupStatus(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
