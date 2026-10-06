@@ -4,6 +4,7 @@ description: Schedule Raft snapshots, choose storage and OpenBao identities, tri
 eyebrow: Operate · Data protection
 weight: 2
 verifiedBy:
+  - cmd/bao-backup/backup_flow.go
   - api/v1alpha1/openbaocluster_operations_types.go
   - api/v1alpha1/openbaocluster_status_types.go
   - config/policy/openbao-validate-openbaocluster.yaml
@@ -17,6 +18,10 @@ verifiedBy:
 The operator creates a transient Job for each due or manually requested backup. The Job authenticates to OpenBao,
 streams a Raft snapshot to object storage, and records the result on `status.backup`. Snapshot bytes do not pass
 through the controller.
+
+The stored object is a standard OpenBao Raft snapshot. Recovery can use an [operator-managed restore](../restore/)
+or a [manual restore](../restore/manual/) into a separately provisioned cluster. An operator installation is not
+required for the manual path.
 
 ## Before you begin
 

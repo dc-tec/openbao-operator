@@ -41,7 +41,6 @@ func newTestClient(t *testing.T) client.Client {
 		Build()
 }
 
-//nolint:unparam // shared fixture keeps its namespace argument for workload tests.
 func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 	return &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: types.UID(name + "-uid")},

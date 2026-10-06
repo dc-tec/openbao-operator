@@ -35,4 +35,7 @@ type StatefulSetSpec struct {
 	// SkipReconciliation indicates the StatefulSet should not be reconciled
 	// (e.g., during BlueGreen cleanup phases)
 	SkipReconciliation bool
+
+	// staticUnsealSecret keeps an existing operator-generated static key.
+	staticUnsealSecret string
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/zclconf/go-cty/cty"
@@ -56,6 +57,12 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 		}
 		config := *bootstrapConfig
 		config.ControllerJWTAudience = audience
+		if cluster.Annotations[constants.AnnotationRestoreOrigin] != "" {
+			if len(config.JWTKeysPEM) == 0 {
+				return nil, fmt.Errorf("fresh restore bootstrap requires observed JWT public keys")
+			}
+			config.OIDCDiscoveryURL, config.OIDCJWKSURL = "", ""
+		}
 		body.AppendBlock(buildSelfInitBootstrapInitializeBlock(cluster, config))
 	}
 

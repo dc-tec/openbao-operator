@@ -31,7 +31,12 @@ const (
 	// ReasonRestoreCompleted indicates the restore operation completed successfully.
 	ReasonRestoreCompleted = "RestoreCompleted"
 
-	ReasonDestinationRejected = "DestinationRejected"
+	ReasonTargetBootstrapTimedOut = "TargetBootstrapTimedOut"
+	ReasonTargetIdentityMismatch  = "TargetIdentityMismatch"
+	ReasonDestinationRejected     = "DestinationRejected"
+	ReasonTargetCollision         = "TargetCollision"
+	ReasonTargetStorageChanged    = "TargetStorageChanged"
+	ReasonTargetUnavailable       = "TargetUnavailable"
 
 	// ReasonRestoreSucceeded indicates the restore operation succeeded.
 	ReasonRestoreSucceeded = "RestoreSucceeded"

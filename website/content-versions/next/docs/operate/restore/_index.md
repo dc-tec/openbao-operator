@@ -31,9 +31,11 @@ OpenBao CLI on a cluster you provision yourself, including one without the opera
 | Task | Page |
 | --- | --- |
 | Restore into an existing `OpenBaoCluster` | This page |
+| Let the operator create the target | [Restore into a new cluster](new-cluster/) |
 | Restore with the OpenBao CLI, without `OpenBaoRestore` | [Restore a snapshot manually](manual/) |
 | A restore ended `Unknown` | [Recover an uncertain restore](recover-uncertain/) |
 | Keep operator and Job authentication working | [Restore authentication](authentication/) |
+| Prepare a namespace for new targets | [Prepare a recovery namespace](prepare-namespace/) |
 
 An `OpenBaoRestore` is an immutable request to download a snapshot and apply it. It uses a dedicated Job and
 identity, owns the cluster operation lock while destructive work runs, and records the outcome.
@@ -172,7 +174,7 @@ kubectl -n <namespace> get openbaocluster <cluster> -o yaml
 submitted. The operator retains the Job for inspection.
 
 Deleting a request before its Job is committed cancels it. After commitment, admission rejects deletion until the
-request has failed before submission, completed, or been acknowledged. Do not remove
+request has failed before submission, completed, finished disposable cleanup, or been acknowledged. Do not remove
 finalizers or the `openbao.org/restore-hold` annotation to bypass recovery.
 
 ## Use a force restore

@@ -133,6 +133,12 @@ func (m *Manager) EnsureStatefulSet(ctx context.Context, logger logr.Logger, clu
 		return err
 	}
 
+	staticUnsealSecret, err := m.staticUnsealSecretName(ctx, logger, cluster)
+	if err != nil {
+		return err
+	}
+	spec.staticUnsealSecret = staticUnsealSecret
+
 	initialized := cluster.Status.Initialized
 	desiredReplicas := desiredStatefulSetReplicas(cluster, initialized, spec)
 

@@ -183,7 +183,9 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 
 	body.AppendBlock(buildStorageBlock(cluster, infra))
 
-	body.AppendNewBlock("service_registration", []string{"kubernetes"})
+	if cluster.Annotations[constants.AnnotationRestoreOrigin] == "" {
+		body.AppendNewBlock("service_registration", []string{"kubernetes"})
+	}
 
 	if tokens := buildUserConfigTokens(cluster.Spec.Configuration); len(tokens) > 0 {
 		body.AppendUnstructuredTokens(tokens)

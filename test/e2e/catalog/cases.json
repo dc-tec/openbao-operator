@@ -3211,5 +3211,267 @@
     "pending": false,
     "suiteFile": "",
     "suiteTitle": ""
+  },
+  {
+    "id": "restore-cross-cluster-disposable",
+    "generatedId": "restore-cross-cluster-confirms-and-cleans-a-disposable-restore-67f9ae83",
+    "caseLabel": "restore-cross-cluster-disposable",
+    "file": "test/e2e/restore_cross_cluster_test.go",
+    "type": "It",
+    "name": "confirms and cleans a disposable restore while the source Kubernetes cluster is stopped",
+    "path": [
+      "Restore across independent Kubernetes clusters",
+      "confirms and cleans a disposable restore while the source Kubernetes cluster is stopped"
+    ],
+    "labels": [
+      "restore-cross-cluster",
+      "dr",
+      "restore",
+      "slow",
+      "case:restore-cross-cluster-disposable"
+    ],
+    "domainLabels": [
+      "restore-cross-cluster",
+      "dr",
+      "restore",
+      "slow"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "restore-cross-cluster-retain",
+    "generatedId": "restore-cross-cluster-retains-restored-data-and-resumes-after-0daa6d35",
+    "caseLabel": "restore-cross-cluster-retain",
+    "file": "test/e2e/restore_cross_cluster_test.go",
+    "type": "It",
+    "name": "retains restored data and resumes after administrator repair of destination JWT trust",
+    "path": [
+      "Restore across independent Kubernetes clusters",
+      "retains restored data and resumes after administrator repair of destination JWT trust"
+    ],
+    "labels": [
+      "restore-cross-cluster",
+      "dr",
+      "restore",
+      "slow",
+      "case:restore-cross-cluster-retain"
+    ],
+    "domainLabels": [
+      "restore-cross-cluster",
+      "dr",
+      "restore",
+      "slow"
+    ],
+    "steps": [
+      "showing Resume retains the hold while restored source trust rejects the destination controller",
+      "repairing issuer, signing-key trust, controller audience, and lifecycle subjects through independent administrator access",
+      "confirming normal management keeps the resumed Pod and service registration works",
+      "reading the restored data after managed restart with the source still unavailable"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "restore-minimal-cancel",
+    "generatedId": "restore-minimal-cleans-a-cancelled-disposable-target-and-4c32b229",
+    "caseLabel": "restore-minimal-cancel",
+    "file": "test/e2e/restore_minimal_test.go",
+    "type": "It",
+    "name": "cleans a cancelled disposable target and its data volume",
+    "path": [
+      "Managed fresh restore targets",
+      "cleans a cancelled disposable target and its data volume"
+    ],
+    "labels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor",
+      "case:restore-minimal-cancel"
+    ],
+    "domainLabels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor"
+    ],
+    "steps": [
+      "withdrawing approval without blocking cleanup of the admitted target"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "restore-minimal-missing-source",
+    "generatedId": "restore-minimal-cleans-a-disposable-target-when-the-286585ea",
+    "caseLabel": "restore-minimal-missing-source",
+    "file": "test/e2e/restore_minimal_test.go",
+    "type": "It",
+    "name": "cleans a disposable target when the source object is missing",
+    "path": [
+      "Managed fresh restore targets",
+      "cleans a disposable target when the source object is missing"
+    ],
+    "labels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor",
+      "case:restore-minimal-missing-source"
+    ],
+    "domainLabels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "restore-minimal-identity",
+    "generatedId": "restore-minimal-does-not-confirm-application-when-the-31e6071a",
+    "caseLabel": "restore-minimal-identity",
+    "file": "test/e2e/restore_minimal_test.go",
+    "type": "It",
+    "name": "does not confirm application when the source identity differs",
+    "path": [
+      "Managed fresh restore targets",
+      "does not confirm application when the source identity differs"
+    ],
+    "labels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor",
+      "case:restore-minimal-identity"
+    ],
+    "domainLabels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "restore-minimal-digest",
+    "generatedId": "restore-minimal-rejects-changed-snapshot-bytes-before-submission-74cc276f",
+    "caseLabel": "restore-minimal-digest",
+    "file": "test/e2e/restore_minimal_test.go",
+    "type": "It",
+    "name": "rejects changed snapshot bytes before submission",
+    "path": [
+      "Managed fresh restore targets",
+      "rejects changed snapshot bytes before submission"
+    ],
+    "labels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor",
+      "case:restore-minimal-digest"
+    ],
+    "domainLabels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "restore-minimal-static",
+    "generatedId": "restore-minimal-restores-a-static-sealed-snapshot-with-ef069d65",
+    "caseLabel": "restore-minimal-static",
+    "file": "test/e2e/restore_minimal_test.go",
+    "type": "It",
+    "name": "restores a static-sealed snapshot with the original key and removes the disposable target",
+    "path": [
+      "Managed fresh restore targets",
+      "restores a static-sealed snapshot with the original key and removes the disposable target"
+    ],
+    "labels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor",
+      "case:restore-minimal-static"
+    ],
+    "domainLabels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor"
+    ],
+    "steps": [
+      "backing up a source with an operator-generated static key",
+      "preparing the original key as an administrator-owned destination Secret"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "restore-minimal-retain",
+    "generatedId": "restore-minimal-retains-an-applied-target-until-the-77c6db86",
+    "caseLabel": "restore-minimal-retain",
+    "file": "test/e2e/restore_minimal_test.go",
+    "type": "It",
+    "name": "retains an applied target until the administrator accepts a paused handoff",
+    "path": [
+      "Managed fresh restore targets",
+      "retains an applied target until the administrator accepts a paused handoff"
+    ],
+    "labels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor",
+      "case:restore-minimal-retain"
+    ],
+    "domainLabels": [
+      "restore-minimal",
+      "dr",
+      "backup",
+      "restore",
+      "e2e-anchor"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
   }
 ]

@@ -397,3 +397,20 @@ func hasVolumeMountWithPath(mounts []corev1.VolumeMount, name, mountPath string)
 	}
 	return false
 }
+
+func TestSealWiring_StaticReferencedKey(t *testing.T) {
+	cluster := newMinimalCluster("static-recovery", "recovery")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type:                 "static",
+		CredentialsSecretRef: &corev1.LocalObjectReference{Name: "snapshot-seal"},
+	}
+
+	provider := newSealWiringProvider(cluster)
+	volume, ok := getVolume(provider.Volumes(), unsealVolumeName)
+	if !ok || volume.Secret == nil || volume.Secret.SecretName != "snapshot-seal" {
+		t.Fatalf("static restore must mount the referenced key: %#v", volume)
+	}
+	if !hasVolumeMountWithPath(provider.VolumeMounts(), unsealVolumeName, openBaoUnsealMountPath) {
+		t.Fatal("referenced keys must use the existing static seal path")
+	}
+}

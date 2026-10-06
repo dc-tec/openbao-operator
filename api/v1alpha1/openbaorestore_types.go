@@ -128,6 +128,15 @@ type RestoreExecutionStatus struct {
 
 // RestoreSource defines where the snapshot comes from.
 type RestoreSource struct {
+	// ExpectedClusterID is the native ID observed on the snapshot source.
+	// Required for a fresh target; supplied metadata is an administrator assertion.
+	// +kubebuilder:validation:MaxLength=128
+	// +optional
+	ExpectedClusterID string `json:"expectedClusterID,omitempty"`
+	// ExpectedVersion is the source version observed when taking the snapshot.
+	// +kubebuilder:validation:MaxLength=64
+	// +optional
+	ExpectedVersion string `json:"expectedVersion,omitempty"`
 	// ExpectedDigest pins the staged bytes before submission.
 	// +kubebuilder:validation:Pattern=`^sha256:[a-f0-9]{64}$`
 	// +optional
@@ -149,9 +158,26 @@ type RestoreSource struct {
 
 // OpenBaoRestoreSpec defines the desired state for a restore operation.
 // An OpenBaoRestore acts as a "job request" - it is immutable after creation.
+// +kubebuilder:validation:XValidation:rule="!has(self.clusterTemplate) || (has(self.targetLifecycle) && self.force && !has(self.tokenSecretRef) && !has(self.jwtAuthRole) && (!has(self.overrideOperationLock) || !self.overrideOperationLock) && has(self.source.expectedClusterID) && size(self.source.expectedClusterID) > 0 && has(self.source.expectedVersion) && self.source.expectedVersion == self.clusterTemplate.version)",message="fresh targets require a lifecycle, matching source identity/version, force, and generated JWT authentication"
+// +kubebuilder:validation:XValidation:rule="has(self.clusterTemplate) || !has(self.targetLifecycle)",message="targetLifecycle requires clusterTemplate"
+// +kubebuilder:validation:XValidation:rule="!has(self.cleanupAfterSeconds) || (has(self.targetLifecycle) && self.targetLifecycle == 'Disposable')",message="cleanupAfterSeconds requires a disposable fresh target"
 type OpenBaoRestoreSpec struct {
+	// CleanupAfterSeconds delays disposable target cleanup after snapshot application is confirmed.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=86400
+	// +optional
+	CleanupAfterSeconds int32 `json:"cleanupAfterSeconds,omitempty"`
+
+	// ClusterTemplate creates a new single-voter target. Existing targets are rejected.
+	// +optional
+	ClusterTemplate *RestoreClusterTemplate `json:"clusterTemplate,omitempty"`
+	// TargetLifecycle retains recovery targets or deletes disposable test resources.
+	// +kubebuilder:validation:Enum=Retain;Disposable
+	// +optional
+	TargetLifecycle RestoreTargetLifecycle `json:"targetLifecycle,omitempty"`
+
 	// Cluster is the name of the OpenBaoCluster to restore INTO.
-	// Must exist in the same namespace as the OpenBaoRestore.
+	// Must be in the request namespace. ClusterTemplate requires a new name.
 	// +kubebuilder:validation:MinLength=1
 	Cluster string `json:"cluster"`
 
@@ -265,6 +291,10 @@ type RestoreRestartStatus struct {
 
 // OpenBaoRestoreStatus defines the observed state of OpenBaoRestore.
 type OpenBaoRestoreStatus struct {
+	// Target binds the fresh cluster and storage to this request.
+	// +optional
+	Target *RestoreTargetStatus `json:"target,omitempty"`
+
 	// SubmissionClaim reserves the only permitted snapshot submission.
 	// +optional
 	SubmissionClaim *RestoreSubmissionClaim `json:"submissionClaim,omitempty"`

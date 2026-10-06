@@ -64,4 +64,8 @@ session in the restored state to update:
 Read and update the existing roles; do not replace customized roles with bootstrap defaults. If a role uses both
 `bound_subject` and `bound_claims.sub`, both must match the destination identity.
 
+A restricted restore target has no Kubernetes API token, so it cannot read a JWKS endpoint that requires
+authentication. Obtain the public signing keys through an authenticated administrator connection instead. With static
+keys, update the restored configuration when the destination rotates its signing keys.
+
 Before `Resume`, verify destination controller login and that unrelated audiences are rejected.

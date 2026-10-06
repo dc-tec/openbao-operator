@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclwrite"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -70,6 +71,10 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 
 	storageBlock := hclwrite.NewBlock("storage", []string{storageAttrs.Type})
 	gohcl.EncodeIntoBody(storageAttrs, storageBlock.Body())
+
+	if cluster.Annotations[constants.AnnotationRestoreOrigin] != "" {
+		return storageBlock
+	}
 
 	retryJoinBlock := hclwrite.NewBlock("retry_join", nil)
 	gohcl.EncodeIntoBody(retryJoinAttrs, retryJoinBlock.Body())

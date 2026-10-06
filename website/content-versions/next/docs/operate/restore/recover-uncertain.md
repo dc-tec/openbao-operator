@@ -8,6 +8,7 @@ verifiedBy:
   - internal/service/restore/manager_effects.go
   - internal/service/restore/target_health.go
   - internal/service/restore/recovery_restart.go
+  - internal/service/workload/restore_handoff.go
   - internal/service/restore/recovery_status.go
   - config/policy/openbao-protect-restore-execution.yaml
 ---
@@ -48,8 +49,9 @@ kubectl -n <namespace> annotate openbaorestore <restore-name> \
 | `Abandon` | Pauses the original target, removes its hold, and releases the lock. The administrator takes responsibility for remaining processes and resources. |
 
 `Resume` requires a recorded Job UID, terminated executor Pods, and a live, unchanged target that is not paused, not
-being deleted, and not locked by another operation. If the target is
-missing or replaced, `status.message` directs you to use `Abandon`. Acknowledgements are accepted after the restore is `Unknown`. You cannot pre-approve a future outcome.
+being deleted, and not locked by another operation. Disposable targets do not support `Resume`. If the target is
+missing or replaced, `status.message` directs you to use `Abandon`. Acknowledgements are accepted after the restore is `Unknown`, or
+after target cleanup fails (`Abandon` only). You cannot pre-approve a future outcome.
 
 ## Monitor recovery
 
@@ -71,11 +73,15 @@ The operator prefers remaining standbys and steps down a multi-voter leader befo
 restart interrupts service. Both `RollingUpdate` and `OnDelete` use this path. With manual unseal, unseal each new Pod
 before recovery can continue. Do not change the workload topology during the restart.
 
+For a fresh retained target, `Resume` also enables the normal configuration and Kubernetes API token mount before
+replacing its Pod. The hold remains until that replacement is healthy and controller authentication succeeds.
+
 Wait for `status.restart.completedAt`, `status.administratorDisposition: Resume`, and `RecoveryReleased=True` with
-reason `Resumed`. An existing-cluster request remains `Unknown`; that phase no longer means management is held once recovery is released.
+reason `Resumed`. A retained fresh target can then become `Completed` if its application was confirmed. An
+existing-cluster request remains `Unknown`; that phase no longer means management is held once recovery is released.
 
 The `openbao_restore_state` metric reports 0 when no request exists, 1 for pending or running, 2 for success, 3 for failure, 4 for an unresolved unknown
-outcome, 5 for restarting, 6 for resumed management, and 7 for administrator handoff. It is rebuilt
+outcome or blocked cleanup, 5 for restarting, 6 for resumed management, and 7 for administrator handoff. It is rebuilt
 from retained requests. An unresolved recovery takes precedence over newer requests; otherwise the newest request
 wins. Deleting the last request removes the series, which the dashboard displays as no restore.
 

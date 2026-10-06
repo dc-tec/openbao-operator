@@ -127,12 +127,14 @@ func (m *Manager) markRestoreExecutionUnknown(ctx context.Context, restore *open
 	restore.Status.Execution.Stage = openbaov1alpha1.RestoreExecutionStageUnknown
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseUnknown
 	restore.Status.Message = message
-	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
-		Type: constants.RestoreRecoveryReleasedConditionType, Status: metav1.ConditionFalse,
-		Reason:             ReasonRecoveryAwaitingAcknowledgement,
-		Message:            "Inspect the restored target before acknowledging Resume or Abandon",
-		ObservedGeneration: restore.Generation,
-	})
+	if restore.Spec.TargetLifecycle != openbaov1alpha1.RestoreTargetLifecycleDisposable {
+		meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
+			Type: constants.RestoreRecoveryReleasedConditionType, Status: metav1.ConditionFalse,
+			Reason:             ReasonRecoveryAwaitingAcknowledgement,
+			Message:            "Inspect the restored target before acknowledging Resume or Abandon",
+			ObservedGeneration: restore.Generation,
+		})
+	}
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
 		Type:               string(RestoreConditionType),
 		Status:             metav1.ConditionUnknown,

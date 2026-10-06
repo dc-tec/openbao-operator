@@ -54,7 +54,8 @@ func (m *Manager) reconcileAcknowledgement(
 	ctx context.Context, logger logr.Logger,
 	request *openbaov1alpha1.OpenBaoRestore,
 ) (ctrl.Result, error) {
-	if request.Status.Phase != openbaov1alpha1.RestorePhaseUnknown {
+	cleanupFailed := request.Status.Target != nil && request.Status.Target.Cleanup == openbaov1alpha1.RestoreTargetCleanupFailed
+	if request.Status.Phase != openbaov1alpha1.RestorePhaseUnknown && !cleanupFailed {
 		return ctrl.Result{}, nil
 	}
 
@@ -68,6 +69,13 @@ func (m *Manager) reconcileAcknowledgement(
 	}
 	if !valid || (action != openbaov1alpha1.RestoreAdministratorResume && action != openbaov1alpha1.RestoreAdministratorAbandon) {
 		return ctrl.Result{}, nil
+	}
+
+	if cleanupFailed && action == openbaov1alpha1.RestoreAdministratorResume {
+		return m.blockAcknowledgement(ctx, request, "Target cleanup failed; use Abandon after administrator cleanup")
+	}
+	if request.Spec.TargetLifecycle == openbaov1alpha1.RestoreTargetLifecycleDisposable && action == openbaov1alpha1.RestoreAdministratorResume {
+		return m.blockAcknowledgement(ctx, request, "Disposable targets cannot resume; use Abandon after administrator cleanup")
 	}
 
 	if request.Status.AdministratorDisposition == "" {
@@ -98,6 +106,9 @@ func (m *Manager) reconcileAcknowledgement(
 		if action == openbaov1alpha1.RestoreAdministratorAbandon {
 			request.Status.Message = "Administrator abandoned operator recovery; the original target is left paused if present"
 		}
+		if cleanupFailed {
+			request.Status.Phase = openbaov1alpha1.RestorePhaseFailed
+		}
 		now := metav1.Now()
 		request.Status.CompletionTime = &now
 		reason := ReasonRecoveryResumed
@@ -112,6 +123,10 @@ func (m *Manager) reconcileAcknowledgement(
 		}
 
 		logger.Info("Administrator released restore management hold", "restore_name", request.Name, "disposition", action)
+	}
+
+	if retainedTargetAccepted(request) {
+		return ctrl.Result{}, m.completeRestore(ctx, logger, request, "Fresh target application confirmed; administrator accepted the retained target")
 	}
 
 	return ctrl.Result{}, nil
@@ -138,7 +153,8 @@ func (m *Manager) releaseAcknowledgedTarget(ctx context.Context, request *openba
 	targetUID := cluster.UID
 	if request.Status.Execution != nil && request.Status.Execution.TargetUID != "" {
 		targetUID = request.Status.Execution.TargetUID
-
+	} else if request.Status.Target != nil {
+		targetUID = request.Status.Target.UID
 	}
 	if cluster.UID != targetUID {
 		if action == openbaov1alpha1.RestoreAdministratorAbandon {
@@ -155,12 +171,15 @@ func (m *Manager) releaseAcknowledgedTarget(ctx context.Context, request *openba
 
 	if cluster.Annotations[constants.AnnotationRestoreHold] == restoreExecutionOperationID(request) ||
 		(action == openbaov1alpha1.RestoreAdministratorAbandon && cluster.Annotations[constants.AnnotationRestoreHold] == "" &&
-			request.Status.Restart != nil) {
+			(cluster.Annotations[constants.AnnotationRestoreOrigin] == string(request.UID) || request.Status.Restart != nil)) {
 		before := cluster.DeepCopy()
 		if action == openbaov1alpha1.RestoreAdministratorAbandon {
 			cluster.Spec.Paused = true
 		}
 		delete(cluster.Annotations, constants.AnnotationRestoreHold)
+		if request.Status.Target != nil && cluster.Annotations[constants.AnnotationRestoreOrigin] == string(request.UID) {
+			delete(cluster.Annotations, constants.AnnotationRestoreOrigin)
+		}
 		if err := m.client.Patch(ctx, cluster, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
 			return "", err
 		}

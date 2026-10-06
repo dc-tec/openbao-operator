@@ -2,9 +2,11 @@ package openbaorestore
 
 import (
 	"context"
+	"errors"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -13,7 +15,9 @@ import (
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/configuration"
 	"github.com/dc-tec/openbao-operator/internal/service/restore"
+	"github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 // RestoreReconciler coordinates restore lifecycle transitions for OpenBaoRestore resources.
@@ -87,6 +91,21 @@ func (a restoreManagerAdapter) Reconcile(ctx context.Context, logger logr.Logger
 
 // NewRestoreReconciler constructs the restore reconciler used by the controller.
 func NewRestoreReconciler(deps RestoreDependencies) RestoreReconciler {
+	workloads := workload.NewManager(deps.Client, deps.Scheme, deps.Platform).WithReader(deps.APIReader)
+	prepare := func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, uid types.UID) (string, error) {
+		managed := cluster.DeepCopy()
+		delete(managed.Annotations, constants.AnnotationRestoreOrigin)
+		config, err := configuration.Render(managed, configuration.RenderOptions{})
+		if err != nil {
+			return "", err
+		}
+		hash, err := workloads.PrepareRestoreHandoff(ctx, cluster, uid, config)
+		var blocked *workload.RestoreHandoffBlockedError
+		if errors.As(err, &blocked) {
+			return "", restore.RetainedTargetBlocked(blocked.Message)
+		}
+		return hash, err
+	}
 
 	return restoreManagerAdapter{
 		manager: restore.NewManager(
@@ -96,6 +115,6 @@ func NewRestoreReconciler(deps RestoreDependencies) RestoreReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.ClientConfig,
-		).WithReader(deps.APIReader).WithRecoveryClientFactory(deps.RecoveryClientFor),
+		).WithReader(deps.APIReader).WithRecoveryClientFactory(deps.RecoveryClientFor).WithRetainedTargetPreparer(prepare),
 	}
 }

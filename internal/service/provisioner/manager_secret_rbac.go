@@ -105,6 +105,12 @@ func accumulateRestoreTenantSecretNames(restore *openbaov1alpha1.OpenBaoRestore,
 	if ref := restore.Spec.Source.Target.CredentialsSecretRef; ref != nil {
 		reader[ref.Name] = struct{}{}
 	}
+	if template := restore.Spec.ClusterTemplate; template != nil {
+		reader[template.Unseal.CredentialsSecretRef.Name] = struct{}{}
+		for _, ref := range template.ImagePullSecrets {
+			reader[ref.Name] = struct{}{}
+		}
+	}
 	if restoreUsesStaticTokenAuth(restore, clustersByName[restore.Spec.Cluster]) {
 		reader[restore.Spec.TokenSecretRef.Name] = struct{}{}
 	}

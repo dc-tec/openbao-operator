@@ -38,6 +38,7 @@ type Manager struct {
 	readHealth            func(context.Context, portopenbao.ClientConfig) (*portopenbao.HealthStatus, error)
 	clientConfig          portopenbao.ClientConfig
 	recoveryClientFor     RecoveryClientFactory
+	prepareRetainedTarget RetainedTargetPreparer
 	Platform              string
 }
 
@@ -78,5 +79,11 @@ func (m *Manager) WithReader(reader client.Reader) *Manager {
 // WithRecoveryClientFactory configures authenticated, Pod-local recovery actions.
 func (m *Manager) WithRecoveryClientFactory(factory RecoveryClientFactory) *Manager {
 	m.recoveryClientFor = factory
+	return m
+}
+
+// WithRetainedTargetPreparer configures the transition to the normal workload.
+func (m *Manager) WithRetainedTargetPreparer(prepare RetainedTargetPreparer) *Manager {
+	m.prepareRetainedTarget = prepare
 	return m
 }

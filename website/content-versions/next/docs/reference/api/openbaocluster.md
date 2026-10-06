@@ -304,6 +304,26 @@ _Appears in:_
 | `image` _string_ | Image is the container image to use for backup operations.<br />If not specified, OPERATOR_BACKUP_IMAGE can supply a complete image reference, including a digest.<br />Otherwise, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_BACKUP_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-backup") and the tag matches OPERATOR_VERSION.<br />This allows users to override the image for air-gapped environments or custom registries. |  | Optional: \{\} <br /> |
 
 
+#### BackupSnapshotSummary
+
+
+
+BackupSnapshotSummary is the latest successful executor's bounded observation.
+Identity and version are observed before and after streaming the snapshot.
+
+
+
+_Appears in:_
+- [BackupStatus](#backupstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `digest` _string_ | Digest is sha256: followed by the lowercase digest of the uploaded snapshot. |  | Pattern: `^sha256:[a-f0-9]\{64\}$` <br /> |
+| `clusterID` _string_ | ClusterID is the source native cluster ID observed during the backup. |  | MaxLength: 128 <br /> |
+| `version` _string_ | Version is the source OpenBao version observed during the backup. |  | MaxLength: 64 <br /> |
+| `size` _integer_ | Size is the snapshot size in bytes. |  | Maximum: 8.589934592e+09 <br />Minimum: 1 <br /> |
+
+
 #### BackupStatus
 
 
@@ -317,6 +337,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `latestSnapshot` _[BackupSnapshotSummary](#backupsnapshotsummary)_ | LatestSnapshot contains the latest executor's source observation. |  | Optional: \{\} <br /> |
 | `lastBackupTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastBackupTime is the timestamp of the last successful backup. |  | Optional: \{\} <br /> |
 | `lastAttemptTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastAttemptTime is the timestamp of the last backup attempt, regardless of outcome.<br />This is used to avoid retry loops when a scheduled backup fails. |  | Optional: \{\} <br /> |
 | `lastAttemptScheduledTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastAttemptScheduledTime is the scheduled time of the last backup attempt.<br />It is derived from the cron schedule and used to ensure at-most-once execution<br />per scheduled window. |  | Optional: \{\} <br /> |
@@ -887,6 +908,7 @@ the init container is not supported and will be rejected by validation.
 
 _Appears in:_
 - [OpenBaoClusterSpec](#openbaoclusterspec)
+- [RestoreClusterTemplate](../openbaorestore/#restoreclustertemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1392,6 +1414,7 @@ See: https://openbao.org/docs/configuration/plugins/
 
 _Appears in:_
 - [OpenBaoClusterSpec](#openbaoclusterspec)
+- [RestoreClusterTemplate](../openbaorestore/#restoreclustertemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1437,6 +1460,7 @@ PodMetadataConfig configures additional metadata for the OpenBao Pod template.
 _Appears in:_
 - [OpenBaoClusterSpec](#openbaoclusterspec)
 - [ReadReplicaTemplateConfig](#readreplicatemplateconfig)
+- [RestoreClusterTemplate](../openbaorestore/#restoreclustertemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1928,6 +1952,7 @@ ServiceAccountConfig configures the ServiceAccount used by OpenBao pods.
 
 _Appears in:_
 - [OpenBaoClusterSpec](#openbaoclusterspec)
+- [RestoreClusterTemplate](../openbaorestore/#restoreclustertemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -2078,6 +2103,7 @@ StorageConfig captures storage-related configuration for the StatefulSet.
 
 _Appears in:_
 - [OpenBaoClusterSpec](#openbaoclusterspec)
+- [RestoreClusterTemplate](../openbaorestore/#restoreclustertemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -2114,6 +2140,7 @@ TLSConfig captures TLS configuration for an OpenBaoCluster.
 
 _Appears in:_
 - [OpenBaoClusterSpec](#openbaoclusterspec)
+- [RestoreClusterTemplate](../openbaorestore/#restoreclustertemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -2266,6 +2293,7 @@ If omitted, defaults to "static" mode managed by the operator.
 
 _Appears in:_
 - [OpenBaoClusterSpec](#openbaoclusterspec)
+- [RestoreClusterTemplate](../openbaorestore/#restoreclustertemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -2279,7 +2307,7 @@ _Appears in:_
 | `kms` _[KMSPluginSealConfig](#kmspluginsealconfig)_ | KMS configures a plugin-backed KMS seal.<br />Required when Type is "kms". |  | Optional: \{\} <br /> |
 | `ocikms` _[OCIKMSSealConfig](#ocikmssealconfig)_ | OCIKMS configures the OCI KMS seal type.<br />Required when Type is "ocikms". |  | Optional: \{\} <br /> |
 | `pkcs11` _[PKCS11SealConfig](#pkcs11sealconfig)_ | PKCS11 configures the PKCS#11 seal type.<br />Required when Type is "pkcs11". |  | Optional: \{\} <br /> |
-| `credentialsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | CredentialsSecretRef references a Secret containing provider credentials<br />(for example AWS access keys, GCP credentials.json, Azure client-secret keys,<br />OCI SDK config for authTypeAPIKey mode, or plugin-backed KMS runtime files).<br />If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons. |  | Optional: \{\} <br /> |
+| `credentialsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | CredentialsSecretRef references a Secret containing provider credentials<br />(for example AWS access keys, GCP credentials.json, Azure client-secret keys,<br />OCI SDK config for authTypeAPIKey mode, or plugin-backed KMS runtime files).<br />If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.<br />For static unseal, the Secret supplies the original key instead of an<br />operator-generated key. Its files are mounted at /etc/bao/unseal; the<br />default currentKey reads its "key" entry. The operator does not create,<br />modify, or take ownership of this Secret. A cluster that already owns an<br />operator-generated unseal key keeps that key and ignores this reference.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons. |  | Optional: \{\} <br /> |
 
 
 #### UpdateStrategyType

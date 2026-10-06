@@ -531,6 +531,13 @@ func compareNode(oldNode, newNode schemaNode) []change {
 				newNode,
 				"rotationPeriod presence guard preserves validation outcomes and corrects the missing-field error",
 			))
+		case isFreshRestoreValidation(newNode, added, removed):
+			changes = append(changes, newChange(
+				impactCompatible,
+				"cel-optional-feature-validation",
+				newNode,
+				"fresh-target rules are guarded by optional fields absent from the released restore API",
+			))
 		case len(added) > 0 && len(removed) == 0:
 			changes = append(changes, newChange(
 				impactReview,
@@ -574,6 +581,43 @@ func isTLSRotationPeriodDiagnosticFix(node schemaNode, added, removed []string) 
 	after.Rule = "self.tls.mode != 'OperatorManaged' || " +
 		"(has(self.tls.rotationPeriod) && size(self.tls.rotationPeriod) > 0)"
 	return celRuleSet([]celRule{before})[removed[0]] && celRuleSet([]celRule{after})[added[0]]
+}
+
+// isFreshRestoreValidation recognizes the reviewed rules for optional restore
+// fields introduced after 0.5.0. Each rule accepts a request without those fields.
+// TestCRD_FreshRestoreOptions verifies legacy requests and the new constraints.
+func isFreshRestoreValidation(node schemaNode, added, removed []string) bool {
+	if node.CRD != "openbaorestores.openbao.org" || node.Kind != "OpenBaoRestore" ||
+		node.Version != "v1alpha1" || node.Path != "spec" || len(added) == 0 || len(removed) != 0 {
+		return false
+	}
+
+	allowed := celRuleSet([]celRule{
+		{
+			Rule: "!has(self.clusterTemplate) || (has(self.targetLifecycle) && self.force && !has(self.tokenSecretRef) && " +
+				"!has(self.jwtAuthRole) && (!has(self.overrideOperationLock) || !self.overrideOperationLock) && " +
+				"has(self.source.expectedClusterID) && size(self.source.expectedClusterID) > 0 && " +
+				"has(self.source.expectedVersion) && self.source.expectedVersion == self.clusterTemplate.version)",
+			Message: "fresh targets require a lifecycle, matching source identity/version, " +
+				"force, and generated JWT authentication",
+		},
+		{
+			Rule:    "has(self.clusterTemplate) || !has(self.targetLifecycle)",
+			Message: "targetLifecycle requires clusterTemplate",
+		},
+		{
+			Rule: "!has(self.cleanupAfterSeconds) || " +
+				"(has(self.targetLifecycle) && self.targetLifecycle" +
+				" == 'Disposable')",
+			Message: "cleanupAfterSeconds requires a disposable fresh target",
+		},
+	})
+	for _, rule := range added {
+		if !allowed[rule] {
+			return false
+		}
+	}
+	return true
 }
 
 func compareEnum(oldNode, newNode schemaNode) []change {

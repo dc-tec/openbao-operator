@@ -88,8 +88,8 @@ intent. The executor claims submission once and never retries it. When the opera
 snapshot applied, the request ends `Unknown` and keeps the restore hold and operation lock until an administrator
 acknowledges `Resume` or `Abandon`. `Resume` runs a managed restart before releasing management.
 
-An existing-cluster restore remains `Unknown` after recovery is released. The operator cannot prove that the
-snapshot finished applying; the administrator verifies the restored data.
+A fresh target created from `spec.clusterTemplate` can end `Completed`, because the operator observes the expected
+source identity on an empty target. `Completed` still does not prove that applications can use the restored data.
 
 ## Upgrade with strategy-owned state machines
 

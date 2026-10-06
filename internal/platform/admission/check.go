@@ -44,10 +44,10 @@ const (
 	// Helm keeps this value when it renders installation-specific names and identities.
 	PolicyFingerprintAnnotation = "openbao.org/admission-policy-fingerprint"
 
-	fingerprintLockControllerStatefulSetMutations  = "sha256:98fad50f9845a72a6ff55f569167fddee66acd015ab4f35daac59e17bc6baaec"
-	fingerprintOpenBaoValidateOpenBaoRestore       = "sha256:25303ada192441de20c0ca5ff2cf6668fbe49089e804e57d44c81ae55e656269"
-	fingerprintProtectRestoreExecution             = "sha256:2ce0f9a34eede30faafd4f494d07b15fda3d1b004e14ecd4620136713cfc3a20"
-	fingerprintOpenBaoValidateOpenBaoCluster       = "sha256:cc749d55f3d9ac98744efae1629b38f6373ede43a6efe273566530a4a01f32a5"
+	fingerprintLockControllerStatefulSetMutations  = "sha256:71df31f013ae60eb423266e14891db3753db4276907db82d070f9ae088c028ae"
+	fingerprintOpenBaoValidateOpenBaoRestore       = "sha256:ebe7129850a7d59ff5e84b5da4214e1e74c864613acd8fa0132d8605c2902ccc"
+	fingerprintProtectRestoreExecution             = "sha256:315f44a7c3396f2c02fcb48d5caac9457c406def5861a3575ccc2fa4a87e6ce7"
+	fingerprintOpenBaoValidateOpenBaoCluster       = "sha256:62a128ede9c7a9a872cb2c423ebc8c1323e0832d2358bbdd80c0fdbe883e213f"
 	fingerprintOpenBaoLockManagedResourceMutations = "sha256:4fe62c598a00d07ae0569c52123bf927ab9e81745655f17f79ee539e3a267031"
 
 	dependencyOpenBaoValidateOpenBaoCluster             = "openbao-validate-openbaocluster"

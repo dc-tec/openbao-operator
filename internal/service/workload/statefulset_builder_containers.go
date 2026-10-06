@@ -198,11 +198,13 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 	// Mount the ServiceAccount token only into the OpenBao container. We disable
 	// automounting at the Pod level and instead use an explicit projected volume
 	// to minimize token exposure.
-	mounts = append(mounts, corev1.VolumeMount{
-		Name:      kubeAPIAccessVolumeName,
-		MountPath: serviceAccountMountPath,
-		ReadOnly:  true,
-	})
+	if cluster.Annotations[constants.AnnotationRestoreOrigin] == "" {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      kubeAPIAccessVolumeName,
+			MountPath: serviceAccountMountPath,
+			ReadOnly:  true,
+		})
+	}
 
 	// Only mount TLS volume when not using ACME mode (ACME stores certs in OpenBao's
 	// internal ACME cache rather than in a mounted Kubernetes TLS Secret).

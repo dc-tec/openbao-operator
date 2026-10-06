@@ -165,6 +165,15 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, spec State
 		},
 	}
 
+	if cluster.Annotations[constants.AnnotationRestoreOrigin] != "" {
+		for i := range volumes {
+			if volumes[i].Name == kubeAPIAccessVolumeName {
+				volumes = append(volumes[:i], volumes[i+1:]...)
+				break
+			}
+		}
+	}
+
 	// Only add TLS volume when not using ACME mode (ACME stores certs in OpenBao's
 	// internal ACME cache rather than in a mounted Kubernetes TLS Secret).
 	if !usesACMEMode(cluster) {
@@ -210,7 +219,9 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, spec State
 		})
 	}
 
-	volumes = append(volumes, newSealWiringProvider(cluster).Volumes()...)
+	sealVolumes := newSealWiringProvider(cluster).Volumes()
+	overrideStaticUnsealSecret(sealVolumes, spec.staticUnsealSecret)
+	volumes = append(volumes, sealVolumes...)
 
 	// If self-init is enabled, add the self-init ConfigMap volume, unless disabled (Green pods)
 	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled && !spec.DisableSelfInit {

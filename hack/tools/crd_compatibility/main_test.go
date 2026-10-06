@@ -307,3 +307,33 @@ func testSchemaNode(path, schemaType string) schemaNode {
 		Type:    schemaType,
 	}
 }
+
+func TestFreshRestoreValidationRequiresExactReviewedRule(t *testing.T) {
+	node := schemaNode{CRD: "openbaorestores.openbao.org", Kind: "OpenBaoRestore", Version: "v1alpha1", Path: "spec"}
+	rule := celRule{Rule: "has(self.clusterTemplate) || !has(self.targetLifecycle)",
+		Message: "targetLifecycle requires clusterTemplate"}
+	encoded := func(r celRule) []string {
+		for key := range celRuleSet([]celRule{r}) {
+			return []string{key}
+		}
+		return nil
+	}
+	if !isFreshRestoreValidation(node, encoded(rule), nil) {
+		t.Fatal("reviewed optional-field guard rejected")
+	}
+	changed := rule
+	changed.Rule += " && self.force"
+	if isFreshRestoreValidation(node, encoded(changed), nil) {
+		t.Fatal("new restriction on released requests must require review")
+	}
+	changed = rule
+	changed.Message = "different validation"
+	if isFreshRestoreValidation(node, encoded(changed), nil) ||
+		isFreshRestoreValidation(node, encoded(rule), encoded(rule)) {
+		t.Fatal("changed rule metadata or removal must require review")
+	}
+	node.Kind = "OpenBaoCluster"
+	if isFreshRestoreValidation(node, encoded(rule), nil) {
+		t.Fatal("exception must be confined to the reviewed resource")
+	}
+}

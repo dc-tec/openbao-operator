@@ -1,0 +1,423 @@
+//go:build e2e
+
+package e2e
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/test/e2e/framework"
+	helpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
+)
+
+var _ = Describe("Managed fresh restore targets", Ordered, Label("restore-minimal", "dr", "backup", "restore", "e2e-anchor"), func() {
+	ctx := context.Background()
+	var c client.Client
+	var config *rest.Config
+	var sourceFW, destinationFW *framework.Framework
+	var source *api.OpenBaoCluster
+	var template *api.RestoreClusterTemplate
+	var snapshot api.RestoreSource
+	const image = "openbao/openbao:2.7.0"
+
+	BeforeAll(func() {
+		var err error
+		config, err = ctrlconfig.GetConfig()
+		Expect(err).NotTo(HaveOccurred())
+		scheme := runtime.NewScheme()
+		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
+		Expect(api.AddToScheme(scheme)).To(Succeed())
+		c, err = client.New(config, client.Options{Scheme: scheme})
+		Expect(err).NotTo(HaveOccurred())
+		sourceFW, err = framework.New(ctx, c, "minimal-source", operatorNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		destinationFW, err = framework.New(ctx, c, "minimal-destination", operatorNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ensureRustFS(ctx, c, config)).To(Succeed())
+
+		By("preparing compatible Transit credentials in both namespaces")
+		infra := helpers.InfraBaoConfig{
+			Namespace: sourceFW.Namespace,
+			Name:      "transit",
+			// The infrastructure helper uses file storage, which 2.7 removes.
+			// Source and restore targets still use the 2.7 image below.
+			Image: "openbao/openbao:2.6.3",
+		}
+		Expect(helpers.EnsureInfraBao(ctx, config, c, infra)).To(Succeed())
+		address := fmt.Sprintf("https://transit.%s.svc:8200", sourceFW.Namespace)
+		result, err := helpers.ConfigureInfraBaoTransit(ctx, config, c, sourceFW.Namespace, "transit", image, address, "recovery")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Phase).To(Equal(corev1.PodSucceeded), result.Logs)
+		token, err := helpers.ReadInfraBaoRootToken(ctx, c, sourceFW.Namespace, "transit")
+		Expect(err).NotTo(HaveOccurred())
+		ca, err := helpers.ReadInfraBaoTLSCACert(ctx, c, sourceFW.Namespace, "transit")
+		Expect(err).NotTo(HaveOccurred())
+		for _, namespace := range []string{sourceFW.Namespace, destinationFW.Namespace} {
+			Expect(helpers.EnsureInfraBaoSealCredentialsSecret(ctx, c, namespace, "transit-auth", token, ca, nil)).To(Succeed())
+			Expect(c.Create(ctx, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "storage",
+					Namespace: namespace,
+				},
+
+				Data: map[string][]byte{
+					"accessKeyId":     []byte(rustfsAccessKey),
+					"secretAccessKey": []byte(rustfsSecretKey),
+				},
+			})).To(Succeed())
+		}
+		prepareMinimalDestinationNetwork(ctx, c, destinationFW.Namespace, sourceFW.Namespace)
+		setMinimalDestinationApproval(ctx, c, destinationFW.Namespace, true)
+
+		requests := helpers.CreateE2ERequests(sourceFW.Namespace)
+		source = &api.OpenBaoCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "source",
+				Namespace: sourceFW.Namespace,
+			},
+			Spec: api.OpenBaoClusterSpec{
+				Profile:  api.ProfileDevelopment,
+				Version:  "2.7.0",
+				Image:    image,
+				Replicas: 1,
+				InitContainer: &api.InitContainerConfig{
+					Enabled: true,
+					Image:   configInitImage,
+				},
+				Storage: api.StorageConfig{Size: "1Gi"},
+				TLS: api.TLSConfig{
+					Enabled:        true,
+					Mode:           api.TLSModeOperatorManaged,
+					RotationPeriod: "720h",
+				},
+				SelfInit: &api.SelfInitConfig{
+					Enabled:  true,
+					OIDC:     &api.SelfInitOIDCConfig{Enabled: true},
+					Requests: requests,
+				},
+				Unseal: &api.UnsealConfig{
+					Type:                 "transit",
+					CredentialsSecretRef: &corev1.LocalObjectReference{Name: "transit-auth"},
+					Transit: &api.TransitSealConfig{
+						Address:   address,
+						MountPath: "transit",
+						KeyName:   "recovery",
+						TLSCACert: "/etc/bao/seal-creds/ca.crt",
+					},
+				},
+				Network: &api.NetworkConfig{
+					APIServerCIDR:        apiServerCIDR,
+					APIServerEndpointIPs: apiServerEndpointIPs,
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{{
+						To:    []networkingv1.NetworkPolicyPeer{{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "transit"}}}},
+						Ports: []networkingv1.NetworkPolicyPort{networkPolicyPort(corev1.ProtocolTCP, 8200)},
+					}},
+				},
+				Backup: &api.BackupSchedule{
+					Schedule: "0 0 1 1 *",
+					Image:    backupExecutorImage,
+					Target: api.BackupTarget{
+						Provider:             "s3",
+						Endpoint:             rustfsEndpoint,
+						Bucket:               rustfsBucket,
+						PathPrefix:           "minimal",
+						UsePathStyle:         true,
+						CredentialsSecretRef: &corev1.LocalObjectReference{Name: "storage"},
+					},
+				},
+				DeletionPolicy: api.DeletionPolicyDeleteAll,
+			},
+		}
+		Expect(c.Create(ctx, source)).To(Succeed())
+		Expect(c.Create(ctx, newBackupNetworkPolicy(sourceFW.Namespace, source.Name, rustfsName, 9000, "backup"))).To(Succeed())
+		sourceFW.WaitForCondition(source.Name, api.ConditionAvailable, metav1.ConditionTrue)
+		Expect(triggerManualBackup(ctx, c, source.Namespace, source.Name)).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(source), source)).To(Succeed())
+			g.Expect(source.Status.Backup).NotTo(BeNil())
+			g.Expect(source.Status.Backup.LatestSnapshot).NotTo(BeNil())
+		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+		summary := source.Status.Backup.LatestSnapshot
+		snapshot = api.RestoreSource{
+			Target: *source.Spec.Backup.Target.DeepCopy(),
+			Key:    source.Status.Backup.LastBackupName,
+
+			ExpectedClusterID: summary.ClusterID,
+			ExpectedVersion:   summary.Version,
+			ExpectedDigest:    summary.Digest,
+			ExpectedSize:      summary.Size,
+		}
+		template = &api.RestoreClusterTemplate{
+			Version: "2.7.0",
+			Image:   image,
+			Storage: source.Spec.Storage,
+			TLS:     source.Spec.TLS,
+
+			InitContainer: source.Spec.InitContainer.DeepCopy(),
+			Unseal:        *source.Spec.Unseal.DeepCopy(),
+		}
+	})
+
+	newRequest := func(name string, lifecycle api.RestoreTargetLifecycle) *api.OpenBaoRestore {
+		return &api.OpenBaoRestore{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: destinationFW.Namespace,
+			},
+			Spec: api.OpenBaoRestoreSpec{
+				Cluster:         name,
+				Source:          *snapshot.DeepCopy(),
+				ClusterTemplate: template.DeepCopy(),
+				TargetLifecycle: lifecycle,
+				Force:           true,
+				Image:           backupExecutorImage,
+			},
+		}
+	}
+	It("restores a static-sealed snapshot with the original key and removes the disposable target", Label("case:restore-minimal-static"), func() {
+		By("backing up a source with an operator-generated static key")
+		staticSource := source.DeepCopy()
+		staticSource.ObjectMeta = metav1.ObjectMeta{Name: "static-source", Namespace: sourceFW.Namespace}
+		staticSource.Status = api.OpenBaoClusterStatus{}
+		staticSource.Spec.Unseal = &api.UnsealConfig{Type: "static"}
+		Expect(c.Create(ctx, staticSource)).To(Succeed())
+		Expect(c.Create(ctx, newBackupNetworkPolicy(sourceFW.Namespace, staticSource.Name, rustfsName, 9000, "backup"))).To(Succeed())
+		sourceFW.WaitForCondition(staticSource.Name, api.ConditionAvailable, metav1.ConditionTrue)
+		Expect(triggerManualBackup(ctx, c, staticSource.Namespace, staticSource.Name)).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(staticSource), staticSource)).To(Succeed())
+			g.Expect(staticSource.Status.Backup).NotTo(BeNil())
+			g.Expect(staticSource.Status.Backup.LatestSnapshot).NotTo(BeNil())
+		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+
+		By("preparing the original key as an administrator-owned destination Secret")
+		key := &corev1.Secret{}
+		Expect(c.Get(ctx, client.ObjectKey{Namespace: sourceFW.Namespace, Name: staticSource.Name + "-unseal-key"}, key)).To(Succeed())
+		key.ObjectMeta = metav1.ObjectMeta{Name: "static-restore-key", Namespace: destinationFW.Namespace}
+		Expect(c.Create(ctx, key)).To(Succeed())
+		request := newRequest("static-recovery", api.RestoreTargetLifecycleDisposable)
+		request.Spec.ClusterTemplate.Unseal = api.UnsealConfig{
+			Type:                 "static",
+			CredentialsSecretRef: &corev1.LocalObjectReference{Name: key.Name},
+		}
+		summary := staticSource.Status.Backup.LatestSnapshot
+		request.Spec.Source.Key = staticSource.Status.Backup.LastBackupName
+		request.Spec.Source.ExpectedClusterID = summary.ClusterID
+		request.Spec.Source.ExpectedVersion = summary.Version
+		request.Spec.Source.ExpectedDigest = summary.Digest
+		request.Spec.Source.ExpectedSize = summary.Size
+		Expect(c.Create(ctx, request)).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(request), request)).To(Succeed())
+			g.Expect(request.Status.Phase).To(Equal(api.RestorePhaseCompleted), request.Status.Message)
+			g.Expect(request.Status.Target.AppliedAt).NotTo(BeNil())
+			g.Expect(request.Status.Target.Cleanup).To(Equal(api.RestoreTargetCleanupComplete))
+		}, 6*time.Minute, 2*time.Second).Should(Succeed())
+		Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: request.Spec.Cluster}, &api.OpenBaoCluster{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: "data-" + request.Spec.Cluster + "-0"}, &corev1.PersistentVolumeClaim{}))).To(BeTrue())
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(key), key)).To(Succeed())
+		Expect(key.OwnerReferences).To(BeEmpty())
+		Expect(c.Delete(ctx, request)).To(Succeed())
+		Eventually(func() bool {
+			return apierrors.IsNotFound(c.Get(ctx, client.ObjectKeyFromObject(request), &api.OpenBaoRestore{}))
+		}, time.Minute, time.Second).Should(BeTrue())
+	})
+
+	It("retains an applied target until the administrator accepts a paused handoff", Label("case:restore-minimal-retain"), func() {
+		request := newRequest("retained", "Retain")
+		Expect(c.Create(ctx, request)).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(request), request)).To(Succeed())
+			g.Expect(request.Status.Target).NotTo(BeNil(), request.Status.Message)
+			g.Expect(request.Status.Target.AppliedAt).NotTo(BeNil(), request.Status.Message)
+		}, 8*time.Minute, 2*time.Second).Should(Succeed())
+		Expect(request.Status.Target.BootstrapClusterID).NotTo(Equal(snapshot.ExpectedClusterID))
+		Expect(request.Status.SubmissionClaim.Digest).To(Equal(snapshot.ExpectedDigest))
+		cluster := &api.OpenBaoCluster{}
+		Expect(c.Get(ctx, client.ObjectKey{
+			Namespace: request.Namespace,
+			Name:      request.Spec.Cluster,
+		}, cluster)).To(Succeed())
+		Expect(cluster.Annotations[constants.AnnotationRestoreHold]).To(Equal(string(request.UID)))
+		before := request.DeepCopy()
+		request.Annotations = map[string]string{constants.AnnotationRestoreAcknowledge: string(request.UID) + "/Abandon"}
+		Expect(c.Patch(ctx, request, client.MergeFrom(before))).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(request), request)).To(Succeed())
+			g.Expect(request.Status.Phase).To(Equal(api.RestorePhaseUnknown))
+			g.Expect(request.Status.AdministratorDisposition).To(Equal(api.RestoreAdministratorAbandon))
+			g.Expect(request.Status.Target.AppliedAt).NotTo(BeNil())
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(cluster), cluster)).To(Succeed())
+			g.Expect(cluster.Spec.Paused).To(BeTrue())
+			g.Expect(cluster.Annotations[constants.AnnotationRestoreHold]).To(BeEmpty())
+		}, time.Minute, 2*time.Second).Should(Succeed())
+	})
+
+	It("cleans a disposable target when the source object is missing", Label("case:restore-minimal-missing-source"), func() {
+		request := newRequest("missing-source", "Disposable")
+		request.Spec.Source.Key = "missing-snapshot"
+		Expect(c.Create(ctx, request)).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(request), request)).To(Succeed())
+			g.Expect(request.Status.Phase).To(Equal(api.RestorePhaseFailed), request.Status.Message)
+			g.Expect(request.Status.Target.Cleanup).To(Equal(api.RestoreTargetCleanupComplete))
+			g.Expect(request.Status.SubmissionClaim).To(BeNil())
+		}, 8*time.Minute, 2*time.Second).Should(Succeed())
+	})
+
+	It("rejects changed snapshot bytes before submission", Label("case:restore-minimal-digest"), func() {
+		request := newRequest("wrong-digest", "Disposable")
+		request.Spec.Source.ExpectedDigest = "sha256:" + strings.Repeat("0", 64)
+		Expect(c.Create(ctx, request)).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(request), request)).To(Succeed())
+			g.Expect(request.Status.Target).NotTo(BeNil())
+			g.Expect(request.Status.Target.Cleanup).To(Equal(api.RestoreTargetCleanupComplete), request.Status.Message)
+			g.Expect(request.Status.Phase).To(Equal(api.RestorePhaseFailed))
+			g.Expect(request.Status.SubmissionClaim).To(BeNil())
+		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+	})
+
+	It("does not confirm application when the source identity differs", Label("case:restore-minimal-identity"), func() {
+		request := newRequest("wrong-identity", "Disposable")
+		request.Spec.Source.ExpectedClusterID = "different-source-id"
+		Expect(c.Create(ctx, request)).To(Succeed())
+		waitForHeldRestore(ctx, c, request)
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(request), request)).To(Succeed())
+			g.Expect(request.Status.Target.AppliedAt).To(BeNil())
+			g.Expect(request.Status.Target.Cleanup).To(Equal(api.RestoreTargetCleanupComplete))
+			g.Expect(request.Status.Phase).To(Equal(api.RestorePhaseFailed))
+			key := client.ObjectKey{
+				Namespace: request.Namespace,
+				Name:      request.Spec.Cluster,
+			}
+			g.Expect(apierrors.IsNotFound(c.Get(ctx, key, &api.OpenBaoCluster{}))).To(BeTrue())
+			key.Name = "data-" + request.Spec.Cluster + "-0"
+			g.Expect(apierrors.IsNotFound(c.Get(ctx, key, &corev1.PersistentVolumeClaim{}))).To(BeTrue())
+		}, 13*time.Minute, 2*time.Second).Should(Succeed())
+		Expect(c.Delete(ctx, request)).To(Succeed())
+	})
+
+	It("cleans a cancelled disposable target and its data volume", Label("case:restore-minimal-cancel"), func() {
+		request := newRequest("cancelled", "Disposable")
+		request.Spec.CleanupAfterSeconds = 300
+		Expect(c.Create(ctx, request)).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(c.Get(ctx, client.ObjectKeyFromObject(request), request)).To(Succeed())
+			g.Expect(request.Status.Target).NotTo(BeNil())
+			g.Expect(request.Status.Target.AppliedAt).NotTo(BeNil(), request.Status.Message)
+		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+		By("withdrawing approval without blocking cleanup of the admitted target")
+		setMinimalDestinationApproval(ctx, c, destinationFW.Namespace, false)
+		Eventually(func() error {
+			return c.Create(ctx, newRequest("approval-withdrawn", "Disposable"), client.DryRunAll)
+		}, time.Minute, time.Second).Should(MatchError(ContainSubstring("openbao.org/restore-target-approved")))
+		Expect(c.Delete(ctx, request)).To(Succeed())
+		Eventually(func(g Gomega) {
+			g.Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKeyFromObject(request), &api.OpenBaoRestore{}))).To(BeTrue())
+			key := client.ObjectKey{
+				Namespace: request.Namespace,
+				Name:      request.Spec.Cluster,
+			}
+			g.Expect(apierrors.IsNotFound(c.Get(ctx, key, &api.OpenBaoCluster{}))).To(BeTrue())
+			key.Name = "data-" + request.Spec.Cluster + "-0"
+			g.Expect(apierrors.IsNotFound(c.Get(ctx, key, &corev1.PersistentVolumeClaim{}))).To(BeTrue())
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
+	})
+
+	AfterAll(func() {
+		if skipCleanup {
+			return
+		}
+		if err := cleanupMinimalFixtures(ctx, c, sourceFW, destinationFW); err != nil {
+			// Shared suite cleanup has a forced-finalizer fallback. Preserve this
+			// suite's evidence instead when its own cleanup cannot finish safely.
+			skipCleanup = true
+			_, _ = fmt.Fprintf(GinkgoWriter, "Preserving restore fixtures after cleanup failure: %v\n", err)
+			Expect(err).NotTo(HaveOccurred())
+		}
+	})
+})
+
+func setMinimalDestinationApproval(ctx context.Context, c client.Client, namespace string, approved bool) {
+	ns := &corev1.Namespace{}
+	Expect(c.Get(ctx, client.ObjectKey{Name: namespace}, ns)).To(Succeed())
+	before := ns.DeepCopy()
+	if ns.Labels == nil {
+		ns.Labels = map[string]string{}
+	}
+	if approved {
+		ns.Labels["openbao.org/restore-target-approved"] = e2eStringTrue
+	} else {
+		delete(ns.Labels, "openbao.org/restore-target-approved")
+	}
+	Expect(c.Patch(ctx, ns, client.MergeFrom(before))).To(Succeed())
+}
+
+// This fixture exercises a prepared namespace on Cilium. JWT discovery shares
+// the API endpoint; this allowance cannot restrict traffic to a URL path.
+func prepareMinimalDestinationNetwork(ctx context.Context, c client.Client, namespace, sealNamespace string) {
+	base := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "prepared-boundary",
+			Namespace: namespace,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{{
+				From: []networkingv1.NetworkPolicyPeer{
+					{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": operatorNamespace}}},
+					{PodSelector: &metav1.LabelSelector{}},
+				},
+				Ports: []networkingv1.NetworkPolicyPort{networkPolicyPort(corev1.ProtocolTCP, 8200)},
+			}},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				namespaceEgressRule("kube-system", corev1.ProtocolUDP, 53), namespaceEgressRule("kube-system", corev1.ProtocolTCP, 53),
+				{
+					To: []networkingv1.NetworkPolicyPeer{{
+						NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": sealNamespace}},
+						PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"app": "transit"}},
+					}},
+					Ports: []networkingv1.NetworkPolicyPort{networkPolicyPort(corev1.ProtocolTCP, 8200)},
+				},
+			},
+		},
+	}
+	for _, ip := range apiServerEndpointIPs {
+		base.Spec.Egress = append(base.Spec.Egress, networkingv1.NetworkPolicyEgressRule{
+			To:    []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{CIDR: ip + "/32"}}},
+			Ports: []networkingv1.NetworkPolicyPort{networkPolicyPort(corev1.ProtocolTCP, 6443), networkPolicyPort(corev1.ProtocolTCP, 443)},
+		})
+	}
+	Expect(c.Create(ctx, base)).To(Succeed())
+	helper := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "prepared-executors",
+			Namespace: namespace,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{constants.LabelOpenBaoComponent: "restore"}},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			Egress:      []networkingv1.NetworkPolicyEgressRule{namespaceEgressRule(rustfsName, corev1.ProtocolTCP, 9000), namespaceEgressRule(namespace, corev1.ProtocolTCP, 8200)},
+		},
+	}
+	Expect(c.Create(ctx, helper)).To(Succeed())
+}

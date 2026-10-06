@@ -43,6 +43,10 @@ resources:
         owner: backup
         omission: scheduled backups are disabled
         enforcement: [crd-schema, admission-policy, controller]
+      - path: status.backup.latestSnapshot
+        classification: informational
+        owner: backup
+        rationale: Bounded executor observation; administrators copy it into restore requests.
       - path: spec.backup.image
         omission: controller derives the backup image repository and operator-version tag
       - path: spec.backup.jwtAuthRole
@@ -391,10 +395,34 @@ resources:
       - Restore resources are immutable job requests; changed inputs require a new resource.
       - The shared BackupTarget storage shape remains a pre-beta review unit.
     rules:
+      - path: spec.cleanupAfterSeconds
+        classification: additive-unfrozen
+        owner: restore
+      - path: spec.clusterTemplate
+        classification: additive-unfrozen
+        owner: restore
+      - path: spec.targetLifecycle
+        classification: additive-unfrozen
+        owner: restore
+      - path: spec.source.expectedClusterID
+        classification: additive-unfrozen
+      - path: spec.source.expectedVersion
+        classification: additive-unfrozen
       - path: spec.source.expectedDigest
         classification: additive-unfrozen
       - path: spec.source.expectedSize
         classification: additive-unfrozen
+      - path: status.target
+        classification: stable-automation
+        owner: restore-status
+      - path: status.target.uid
+        classification: informational
+      - path: status.target.dataPVCUID
+        classification: informational
+      - path: status.target.bootstrapClusterID
+        classification: informational
+      - path: status.target.reservedAt
+        classification: informational
       - path: spec.cluster
         classification: beta-stable
         owner: restore

@@ -300,3 +300,69 @@ func TestResumeReportsBlockedPodAndSanitizesProviderErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestRetainedResumeWaitsForManagedTemplate(t *testing.T) {
+	f, bao, originals := restartFixture(t)
+	cluster := f.cluster(t)
+	cluster.Spec.Replicas = 1
+	cluster.Spec.ReadReplicas = nil
+	request := f.restore(t)
+	cluster.Annotations[constants.AnnotationRestoreOrigin] = string(request.UID)
+	require.NoError(t, f.base.Update(t.Context(), cluster))
+	sts := &appsv1.StatefulSet{}
+	require.NoError(t, f.base.Get(t.Context(), client.ObjectKeyFromObject(cluster), sts))
+	sts.Spec.Replicas = ptr.To(int32(1))
+	require.NoError(t, f.base.Update(t.Context(), sts))
+	bao.membership.Config.Servers = bao.membership.Config.Servers[:1]
+	request.Status.Target = &api.RestoreTargetStatus{UID: cluster.UID}
+	require.NoError(t, f.base.Status().Update(t.Context(), request))
+	m := restartManager(f, bao)
+	calls := 0
+	preparationError := errors.New("template patch failed")
+	m.WithRetainedTargetPreparer(func(_ context.Context, target *api.OpenBaoCluster, uid types.UID) (string, error) {
+		calls++
+		require.Equal(t, sts.UID, uid)
+		require.Equal(t, string(request.UID), target.Annotations[constants.AnnotationRestoreHold])
+		require.NotNil(t, f.restore(t).Status.Restart, "durable authenticated intent must precede template preparation")
+		return "managed-config", preparationError
+	})
+	done, err := m.restartAcknowledgedTarget(t.Context(), request, cluster)
+	require.NoError(t, err)
+	require.False(t, done)
+	require.Zero(t, calls)
+	request = f.restore(t)
+	done, err = m.restartAcknowledgedTarget(t.Context(), request, cluster)
+	require.ErrorIs(t, err, preparationError)
+	require.False(t, done)
+	require.NoError(t, f.base.Get(t.Context(), client.ObjectKeyFromObject(&originals[0]), &corev1.Pod{}))
+	preparationError = nil
+	// Model a replacement that started during a partial handoff and cannot become
+	// Ready on the old template. It still needs the managed-template restart.
+	pod := originals[0].DeepCopy()
+	require.NoError(t, f.base.Delete(t.Context(), pod))
+	pod.ResourceVersion = ""
+	pod.UID = "old-template-replacement"
+	pod.Status.Conditions[0].Status = corev1.ConditionFalse
+	require.NoError(t, f.base.Create(t.Context(), pod))
+	done, err = m.restartAcknowledgedTarget(t.Context(), request, cluster)
+	require.ErrorContains(t, err, "Restarting Pod")
+	require.False(t, done)
+	require.True(t, apierrors.IsNotFound(f.base.Get(t.Context(), client.ObjectKeyFromObject(pod), &corev1.Pod{})))
+	pod.ResourceVersion = ""
+	pod.UID = "managed-replacement"
+	pod.Annotations = map[string]string{constants.AnnotationConfigHash: "managed-config"}
+	require.NoError(t, f.base.Create(t.Context(), pod))
+	done, err = m.restartAcknowledgedTarget(t.Context(), request, cluster)
+	require.ErrorContains(t, err, "become Ready")
+	require.False(t, done)
+	require.Nil(t, f.restore(t).Status.Restart.CompletedAt)
+	pod.Status.Conditions[0].Status = corev1.ConditionTrue
+	require.NoError(t, f.base.Status().Update(t.Context(), pod))
+	done, err = m.restartAcknowledgedTarget(t.Context(), request, cluster)
+	require.NoError(t, err)
+	require.False(t, done)
+	require.NotNil(t, f.restore(t).Status.Restart.CompletedAt)
+	done, err = m.restartAcknowledgedTarget(t.Context(), f.restore(t), cluster)
+	require.NoError(t, err)
+	require.True(t, done)
+}

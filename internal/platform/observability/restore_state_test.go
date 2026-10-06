@@ -26,6 +26,7 @@ func TestObserveRestoreStates(t *testing.T) {
 		{"abandoned", api.OpenBaoRestoreStatus{Phase: api.RestorePhaseUnknown, AdministratorDisposition: api.RestoreAdministratorAbandon}, 7},
 		{"completed", api.OpenBaoRestoreStatus{Phase: api.RestorePhaseCompleted, AdministratorDisposition: api.RestoreAdministratorResume}, 2},
 		{"failed", api.OpenBaoRestoreStatus{Phase: api.RestorePhaseFailed}, 3},
+		{"blocked cleanup", api.OpenBaoRestoreStatus{Phase: api.RestorePhaseFailed, Target: &api.RestoreTargetStatus{Cleanup: api.RestoreTargetCleanupFailed}}, 4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			request.Status = tc.status

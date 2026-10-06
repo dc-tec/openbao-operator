@@ -444,6 +444,11 @@ type UnsealConfig struct {
 	// (for example AWS access keys, GCP credentials.json, Azure client-secret keys,
 	// OCI SDK config for authTypeAPIKey mode, or plugin-backed KMS runtime files).
 	// If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
+	// For static unseal, the Secret supplies the original key instead of an
+	// operator-generated key. Its files are mounted at /etc/bao/unseal; the
+	// default currentKey reads its "key" entry. The operator does not create,
+	// modify, or take ownership of this Secret. A cluster that already owns an
+	// operator-generated unseal key keeps that key and ignores this reference.
 	// The Secret must exist in the same namespace as the OpenBaoCluster.
 	// Cross-namespace references are not allowed for security reasons.
 	// +optional

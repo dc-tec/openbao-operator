@@ -792,3 +792,34 @@ func bootstrapOwnerRef(cluster *openbaov1alpha1.OpenBaoCluster) metav1.OwnerRefe
 		Controller: &controller,
 	}
 }
+
+func TestEnsureUnsealSecret_ReferencedKeyRemainsAdministratorManaged(t *testing.T) {
+	cluster := newMinimalCluster("static-recovery", "default")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type:                 "static",
+		CredentialsSecretRef: &corev1.LocalObjectReference{Name: "snapshot-seal"},
+	}
+	c := newTestClient(t)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "snapshot-seal", Namespace: cluster.Namespace},
+		Data:       map[string][]byte{"key": []byte("administrator-provided-key")},
+	}
+	if err := c.Create(t.Context(), secret); err != nil {
+		t.Fatal(err)
+	}
+	version := secret.ResourceVersion
+	manager := NewManager(c, testScheme, "openbao-operator-system")
+	if err := manager.ensureUnsealSecret(t.Context(), logr.Discard(), cluster); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Get(t.Context(), types.NamespacedName{Namespace: cluster.Namespace, Name: secret.Name}, secret); err != nil {
+		t.Fatal(err)
+	}
+	if secret.ResourceVersion != version || len(secret.OwnerReferences) != 0 {
+		t.Fatal("bootstrap modified or adopted the administrator's Secret")
+	}
+	generated := &corev1.Secret{}
+	if err := c.Get(t.Context(), types.NamespacedName{Namespace: cluster.Namespace, Name: resourceidentity.UnsealSecretName(cluster)}, generated); !apierrors.IsNotFound(err) {
+		t.Fatalf("bootstrap must not generate a replacement key: %v", err)
+	}
+}

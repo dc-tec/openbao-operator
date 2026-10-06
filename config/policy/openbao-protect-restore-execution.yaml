@@ -2,7 +2,7 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   annotations:
-    openbao.org/admission-policy-fingerprint: sha256:2ce0f9a34eede30faafd4f494d07b15fda3d1b004e14ecd4620136713cfc3a20
+    openbao.org/admission-policy-fingerprint: sha256:315f44a7c3396f2c02fcb48d5caac9457c406def5861a3575ccc2fa4a87e6ce7
   name: openbao-protect-restore-execution
 spec:
   failurePolicy: Fail
@@ -39,6 +39,14 @@ spec:
       expression: >-
         object != null && has(object.metadata.annotations) && 'openbao.org/restore-hold' in object.metadata.annotations ?
           object.metadata.annotations['openbao.org/restore-hold'] : ''
+    - name: old_origin
+      expression: >-
+        oldObject != null && has(oldObject.metadata.annotations) && 'openbao.org/restore-origin' in oldObject.metadata.annotations ?
+          oldObject.metadata.annotations['openbao.org/restore-origin'] : ''
+    - name: new_origin
+      expression: >-
+        object != null && has(object.metadata.annotations) && 'openbao.org/restore-origin' in object.metadata.annotations ?
+          object.metadata.annotations['openbao.org/restore-origin'] : ''
     - name: submission_excluded
       expression: >-
         variables.is_restore && oldObject != null && has(oldObject.status) &&
@@ -59,6 +67,26 @@ spec:
         (has(object.status) && has(object.status.restart) ? object.status.restart : null) ==
         (oldObject != null && has(oldObject.status) && has(oldObject.status.restart) ? oldObject.status.restart : null)
       message: "Only the controller can record managed restore restarts; use the acknowledgement annotation."
+    - expression: >-
+        request.operation != 'CREATE' ||
+        !(variables.is_restore ? has(object.spec.clusterTemplate) : variables.new_origin != '') ||
+        (namespaceObject != null && has(namespaceObject.metadata.labels) &&
+         'openbao.org/restore-target-approved' in namespaceObject.metadata.labels &&
+         namespaceObject.metadata.labels['openbao.org/restore-target-approved'] == 'true')
+      message: "Fresh restore targets require openbao.org/restore-target-approved=true on the destination Namespace. Approval does not verify network isolation."
+    - expression: >-
+        !variables.is_restore || request.operation != 'UPDATE' || !has(oldObject.status) ||
+        !has(oldObject.status.target) || !has(oldObject.spec.targetLifecycle) || oldObject.spec.targetLifecycle != 'Disposable' ||
+        (has(oldObject.status.administratorDisposition) && oldObject.status.administratorDisposition == 'Abandon') ||
+        (has(oldObject.status.target.cleanup) && oldObject.status.target.cleanup == 'Complete') ||
+        !has(oldObject.metadata.finalizers) || !('openbao.org/openbaorestore-finalizer' in oldObject.metadata.finalizers) ||
+        (has(object.metadata.finalizers) && 'openbao.org/openbaorestore-finalizer' in object.metadata.finalizers)
+      message: "Disposable restores retain their finalizer until target cleanup completes."
+    - expression: >-
+        variables.is_restore || variables.is_controller || request.operation == 'DELETE' ||
+        (variables.new_origin == variables.old_origin && (variables.old_origin == '' || object.spec == oldObject.spec))
+      message: "Only the controller can create or change restricted restore targets."
+
     - expression: >-
         !variables.old_claim || request.operation == 'DELETE' ||
           (has(object.status.submissionClaim) && object.status.submissionClaim == oldObject.status.submissionClaim)
@@ -81,6 +109,7 @@ spec:
         !variables.is_restore || request.operation != 'DELETE' || !has(oldObject.status) ||
         !has(oldObject.status.execution) || oldObject.status.execution.stage == 'Prepared' || variables.submission_excluded ||
         oldObject.status.phase == 'Completed' ||
+        (has(oldObject.spec.targetLifecycle) && oldObject.spec.targetLifecycle == 'Disposable') ||
         (has(oldObject.status.administratorDisposition) && oldObject.status.administratorDisposition != '')
       message: "A committed restore requires administrator acknowledgement before deletion."
     - expression: >-
@@ -92,6 +121,7 @@ spec:
         !variables.is_restore || request.operation != 'UPDATE' || !has(oldObject.status) ||
         !has(oldObject.status.execution) || oldObject.status.execution.stage == 'Prepared' || variables.submission_excluded ||
         oldObject.status.phase == 'Completed' ||
+        (has(oldObject.status.target) && has(oldObject.status.target.cleanup) && oldObject.status.target.cleanup == 'Complete') ||
         (has(oldObject.status.administratorDisposition) && oldObject.status.administratorDisposition != '') ||
         !has(oldObject.metadata.finalizers) || !('openbao.org/openbaorestore-finalizer' in oldObject.metadata.finalizers) ||
         (has(object.metadata.finalizers) && 'openbao.org/openbaorestore-finalizer' in object.metadata.finalizers)
@@ -110,8 +140,13 @@ spec:
     - expression: >-
         !variables.is_restore || request.operation == 'DELETE' || variables.new_acknowledgement == variables.old_acknowledgement ||
         variables.new_acknowledgement == '' ||
-        (oldObject != null && has(oldObject.status) && oldObject.status.phase == 'Unknown' &&
-         (variables.new_acknowledgement == oldObject.metadata.uid + '/Abandon' ||
-          (variables.new_acknowledgement == oldObject.metadata.uid + '/Resume' &&
-           has(oldObject.status.execution) && has(oldObject.status.execution.jobUID) && oldObject.status.execution.jobUID != '')))
-      message: "Acknowledge only after Unknown. Resume requires a bound Job UID; otherwise use Abandon."
+        (oldObject != null && has(oldObject.status) &&
+         ((oldObject.status.phase == 'Unknown' &&
+           !(has(oldObject.status.target) && has(oldObject.status.target.cleanup) && oldObject.status.target.cleanup == 'Failed') &&
+           (variables.new_acknowledgement == oldObject.metadata.uid + '/Abandon' ||
+            (variables.new_acknowledgement == oldObject.metadata.uid + '/Resume' &&
+             (!has(oldObject.spec.targetLifecycle) || oldObject.spec.targetLifecycle != 'Disposable') &&
+             has(oldObject.status.execution) && has(oldObject.status.execution.jobUID) && oldObject.status.execution.jobUID != ''))) ||
+          (has(oldObject.status.target) && has(oldObject.status.target.cleanup) && oldObject.status.target.cleanup == 'Failed' &&
+           variables.new_acknowledgement == oldObject.metadata.uid + '/Abandon')))
+      message: "Acknowledge only after Unknown or blocked cleanup. Resume requires a bound Job UID and a non-disposable target without failed cleanup; otherwise use Abandon."

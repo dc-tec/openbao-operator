@@ -813,6 +813,50 @@ suites:
     nightly:
       policy: primary-version-full
 
+  - id: restore-cross-cluster
+    title: "Restore across independent Kubernetes clusters"
+    owner: backup-restore
+    riskTier: critical
+    isolation: external-cluster
+    files:
+      - test/e2e/restore_cross_cluster_test.go
+    labels:
+      - restore-cross-cluster
+      - dr
+      - restore
+      - slow
+    coverage: []
+    ci:
+      lanes:
+        - backup-restore
+      pullRequest: manual
+    nightly:
+      policy: external-cluster-scheduled
+
+  - id: restore-minimal
+    title: "Managed fresh restore targets"
+    owner: backup-restore
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/restore_minimal_test.go
+    labels:
+      - restore-minimal
+      - dr
+      - backup
+      - restore
+      - e2e-anchor
+    coverage: []
+    runtime:
+      observed: 1095.879s
+      budget: 25m
+    ci:
+      lanes:
+        - backup-restore
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
   - id: backup-restore
     title: "DR: Storage Providers Backup & Restore"
     owner: backup-restore

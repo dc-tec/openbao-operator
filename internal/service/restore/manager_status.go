@@ -27,8 +27,11 @@ func (m *Manager) patchStatus(ctx context.Context, restore *openbaov1alpha1.Open
 }
 
 // failRestore transitions the restore to Failed phase.
-func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
+func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string, reasons ...string) (ctrl.Result, error) {
 	reason := ReasonRestoreFailed
+	if len(reasons) > 0 {
+		reason = reasons[0]
+	}
 	original := restore.DeepCopy()
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseFailed
@@ -160,6 +163,13 @@ func (m *Manager) handleDeletion(ctx context.Context, logger logr.Logger, restor
 		return ctrl.Result{}, nil
 	}
 
+	if restore.Spec.TargetLifecycle == openbaov1alpha1.RestoreTargetLifecycleDisposable && restore.Status.Target != nil {
+		if needsTargetCleanup(restore) {
+			return m.cleanupTarget(ctx, logger, restore)
+		}
+		return m.finalizeRestoreDeletion(ctx, logger, restore)
+	}
+
 	if !restoreSubmissionExcluded(restore) && restore.Status.AdministratorDisposition == "" &&
 		restore.Status.Phase != openbaov1alpha1.RestorePhaseCompleted {
 		if restore.Status.Phase != openbaov1alpha1.RestorePhaseUnknown {
@@ -186,6 +196,9 @@ func (m *Manager) finalizeRestoreDeletion(
 	logger logr.Logger,
 	restore *openbaov1alpha1.OpenBaoRestore,
 ) (ctrl.Result, error) {
+	if err := m.releaseUnsubmittedTarget(ctx, restore); err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to release cluster operation lock during restore deletion: %w", err)
 	}

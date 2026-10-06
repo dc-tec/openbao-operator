@@ -20,3 +20,6 @@ const (
 	// AnnotationOpenBaoOwnerUID ties retained operator-managed resources to the owning OpenBaoCluster UID.
 	AnnotationOpenBaoOwnerUID = "openbao.org/owner-uid"
 )
+
+// AnnotationRestoreOrigin binds restricted fresh-target workloads to a restore request.
+const AnnotationRestoreOrigin = "openbao.org/restore-origin"

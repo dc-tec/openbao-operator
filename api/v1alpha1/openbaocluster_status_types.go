@@ -299,6 +299,9 @@ type UpgradeRequestStatus struct {
 
 // BackupStatus tracks the state of backups for a cluster.
 type BackupStatus struct {
+	// LatestSnapshot contains the latest executor's source observation.
+	// +optional
+	LatestSnapshot *BackupSnapshotSummary `json:"latestSnapshot,omitempty"`
 	// LastBackupTime is the timestamp of the last successful backup.
 	// +optional
 	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`

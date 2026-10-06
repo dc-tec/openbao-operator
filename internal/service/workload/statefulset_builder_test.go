@@ -343,3 +343,27 @@ func TestBuildStatefulSet_SourceGenerationDoesNotRollPods(t *testing.T) {
 		t.Fatal("source generation alone must not change the Pod template")
 	}
 }
+
+func TestFreshRestorePodHasNoKubernetesCredential(t *testing.T) {
+	cluster := newMinimalCluster("fresh", "recovery")
+	cluster.Annotations = map[string]string{constants.AnnotationRestoreOrigin: "request"}
+	sts, err := buildStatefulSetWithRevision(cluster, "test-config", false, "", "", "", constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pod := sts.Spec.Template.Spec
+	if pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken ||
+		pod.EnableServiceLinks == nil || *pod.EnableServiceLinks {
+		t.Fatal("fresh server must disable API credential automount and service links")
+	}
+	for _, volume := range pod.Volumes {
+		if volume.Projected == nil {
+			continue
+		}
+		for _, source := range volume.Projected.Sources {
+			if source.ServiceAccountToken != nil {
+				t.Fatalf("unexpected ServiceAccount token projection in %s", volume.Name)
+			}
+		}
+	}
+}

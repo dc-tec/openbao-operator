@@ -4517,6 +4517,11 @@ spec:
                       (for example AWS access keys, GCP credentials.json, Azure client-secret keys,
                       OCI SDK config for authTypeAPIKey mode, or plugin-backed KMS runtime files).
                       If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
+                      For static unseal, the Secret supplies the original key instead of an
+                      operator-generated key. Its files are mounted at /etc/bao/unseal; the
+                      default currentKey reads its "key" entry. The operator does not create,
+                      modify, or take ownership of this Secret. A cluster that already owns an
+                      operator-generated unseal key keeps that key and ignores this reference.
                       The Secret must exist in the same namespace as the OpenBaoCluster.
                       Cross-namespace references are not allowed for security reasons.
                     properties:
@@ -5298,6 +5303,37 @@ spec:
                       LastHandledManualTrigger is the last observed manual trigger token that
                       has progressed into an actual backup attempt.
                     type: string
+                  latestSnapshot:
+                    description: LatestSnapshot contains the latest executor's source
+                      observation.
+                    properties:
+                      clusterID:
+                        description: ClusterID is the source native cluster ID observed
+                          during the backup.
+                        maxLength: 128
+                        type: string
+                      digest:
+                        description: 'Digest is sha256: followed by the lowercase
+                          digest of the uploaded snapshot.'
+                        pattern: ^sha256:[a-f0-9]{64}$
+                        type: string
+                      size:
+                        description: Size is the snapshot size in bytes.
+                        format: int64
+                        maximum: 8589934592
+                        minimum: 1
+                        type: integer
+                      version:
+                        description: Version is the source OpenBao version observed
+                          during the backup.
+                        maxLength: 64
+                        type: string
+                    required:
+                    - clusterID
+                    - digest
+                    - size
+                    - version
+                    type: object
                   nextScheduledBackup:
                     description: NextScheduledBackup is when the next backup is scheduled.
                     format: date-time

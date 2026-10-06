@@ -43,7 +43,8 @@ func preferRestoreState(request, previous *api.OpenBaoRestore) bool {
 
 func unresolvedRestore(request *api.OpenBaoRestore) bool {
 	return request.Status.AdministratorDisposition == "" &&
-		request.Status.Phase == api.RestorePhaseUnknown
+		(request.Status.Phase == api.RestorePhaseUnknown ||
+			(request.Status.Target != nil && request.Status.Target.Cleanup == api.RestoreTargetCleanupFailed))
 }
 
 func observedRestoreState(request *api.OpenBaoRestore) float64 {

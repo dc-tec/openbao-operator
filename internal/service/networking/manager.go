@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
 )
 
@@ -45,6 +46,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 	if err := m.ensureHeadlessService(ctx, logger, cluster); err != nil {
 		return err
+	}
+	// Restored data can contain active integrations. The administrator prepares
+	// destination isolation; additive ordinary policies would weaken that boundary.
+	if cluster.Annotations[constants.AnnotationRestoreOrigin] != "" {
+		return nil
 	}
 	if err := m.ensureExternalService(ctx, logger, cluster); err != nil {
 		return err

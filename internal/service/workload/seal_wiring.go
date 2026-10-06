@@ -84,12 +84,17 @@ func (p *staticSealWiringProvider) VolumeMounts() []corev1.VolumeMount {
 }
 
 func (p *staticSealWiringProvider) Volumes() []corev1.Volume {
+	secretName := resourceidentity.UnsealSecretName(p.cluster)
+	if p.cluster.Spec.Unseal != nil && p.cluster.Spec.Unseal.CredentialsSecretRef != nil {
+		secretName = p.cluster.Spec.Unseal.CredentialsSecretRef.Name
+	}
+
 	return []corev1.Volume{
 		{
 			Name: unsealVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName:  resourceidentity.UnsealSecretName(p.cluster),
+					SecretName:  secretName,
 					DefaultMode: ptr.To(secretFileMode),
 				},
 			},

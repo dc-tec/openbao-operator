@@ -2,11 +2,11 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  annotations:
-    openbao.org/admission-policy-fingerprint: sha256:98fad50f9845a72a6ff55f569167fddee66acd015ab4f35daac59e17bc6baaec
   name: {{ include "openbao-operator.fullname" . }}-openbao-lock-controller-statefulset-mutations
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
+  annotations:
+    openbao.org/admission-policy-fingerprint: sha256:71df31f013ae60eb423266e14891db3753db4276907db82d070f9ae088c028ae
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -28,10 +28,45 @@ spec:
     - name: is_controller
       expression: >-
         request.userInfo.username == variables.controller_principal
+    # Resume can add only the normal Kubernetes API projection. This cannot
+    # select another Secret, ConfigMap, ServiceAccount, or token audience.
+    - name: api_volumes
+      expression: object.spec.template.spec.volumes.filter(v, v.name == 'kube-api-access')
+    - name: handoff
+      expression: >-
+        oldObject.spec.replicas == 1 && object.spec.replicas == 1 &&
+        object.spec.updateStrategy.type == 'OnDelete' &&
+        oldObject.spec.template.spec.enableServiceLinks == false &&
+        object.spec.template.spec.automountServiceAccountToken == false &&
+        object.spec.template.spec.serviceAccountName == oldObject.spec.template.spec.serviceAccountName &&
+        object.metadata.ownerReferences == oldObject.metadata.ownerReferences &&
+        oldObject.metadata.ownerReferences.exists(o, o.apiVersion == 'openbao.org/v1alpha1' && o.kind == 'OpenBaoCluster' && o.controller) &&
+        oldObject.spec.template.spec.volumes.all(v, v.name != 'kube-api-access') &&
+        variables.api_volumes.size() == 1 &&
+        variables.api_volumes.all(v,
+          has(v.projected) && v.projected.defaultMode == 288 && v.projected.sources.size() == 3 &&
+          has(v.projected.sources[0].serviceAccountToken) &&
+          v.projected.sources[0].serviceAccountToken.path == 'token' &&
+          v.projected.sources[0].serviceAccountToken.expirationSeconds == 3600 &&
+          (!has(v.projected.sources[0].serviceAccountToken.audience) || v.projected.sources[0].serviceAccountToken.audience == '') &&
+          has(v.projected.sources[1].configMap) && v.projected.sources[1].configMap.name == 'kube-root-ca.crt' &&
+          (!has(v.projected.sources[1].configMap.optional) || !v.projected.sources[1].configMap.optional) &&
+          v.projected.sources[1].configMap.items.size() == 1 &&
+          v.projected.sources[1].configMap.items[0].key == 'ca.crt' &&
+          v.projected.sources[1].configMap.items[0].path == 'ca.crt' &&
+          !has(v.projected.sources[1].configMap.items[0].mode) &&
+          has(v.projected.sources[2].downwardAPI) && v.projected.sources[2].downwardAPI.items.size() == 1 &&
+          v.projected.sources[2].downwardAPI.items[0].path == 'namespace' &&
+          !has(v.projected.sources[2].downwardAPI.items[0].mode) &&
+          has(v.projected.sources[2].downwardAPI.items[0].fieldRef) &&
+          v.projected.sources[2].downwardAPI.items[0].fieldRef.apiVersion == 'v1' &&
+          v.projected.sources[2].downwardAPI.items[0].fieldRef.fieldPath == 'metadata.namespace')
   validations:
     - expression: >-
         !variables.is_controller ||
-        object.spec.template.spec.volumes == oldObject.spec.template.spec.volumes
+        object.spec.template.spec.volumes == oldObject.spec.template.spec.volumes ||
+        (variables.handoff &&
+          object.spec.template.spec.volumes.filter(v, v.name != 'kube-api-access') == oldObject.spec.template.spec.volumes)
       message: OpenBao controller cannot modify StatefulSet volumes.
     - expression: >-
         !variables.is_controller ||
@@ -47,6 +82,13 @@ spec:
       message: OpenBao controller cannot modify init container commands or args.
     - expression: >-
         !variables.is_controller ||
+        (has(object.spec.template.spec.initContainers) ? object.spec.template.spec.initContainers : [])
+          .map(c, {'name': c.name, 'securityContext': c.securityContext, 'volumeMounts': c.volumeMounts}) ==
+        (has(oldObject.spec.template.spec.initContainers) ? oldObject.spec.template.spec.initContainers : [])
+          .map(c, {'name': c.name, 'securityContext': c.securityContext, 'volumeMounts': c.volumeMounts})
+      message: OpenBao controller cannot modify init container securityContext or volumeMounts.
+    - expression: >-
+        !variables.is_controller ||
         object.spec.template.spec.automountServiceAccountToken ==
           oldObject.spec.template.spec.automountServiceAccountToken
       message: OpenBao controller cannot modify automountServiceAccountToken.
@@ -57,7 +99,17 @@ spec:
     - expression: >-
         !variables.is_controller ||
         object.spec.template.spec.containers.map(c, {'name': c.name, 'securityContext': c.securityContext, 'volumeMounts': c.volumeMounts}) ==
-        oldObject.spec.template.spec.containers.map(c, {'name': c.name, 'securityContext': c.securityContext, 'volumeMounts': c.volumeMounts})
+        oldObject.spec.template.spec.containers.map(c, {'name': c.name, 'securityContext': c.securityContext, 'volumeMounts': c.volumeMounts}) ||
+        (variables.handoff &&
+          object.spec.template.spec.containers.map(c, {'name': c.name, 'securityContext': c.securityContext,
+            'volumeMounts': dyn(c.volumeMounts.filter(m, m.name != 'kube-api-access'))}) ==
+          oldObject.spec.template.spec.containers.map(c, {'name': c.name, 'securityContext': c.securityContext, 'volumeMounts': c.volumeMounts}) &&
+          object.spec.template.spec.containers.all(c,
+            c.volumeMounts.filter(m, m.name == 'kube-api-access').all(m,
+              c.name == 'openbao' && m.mountPath == '/var/run/secrets/kubernetes.io/serviceaccount' && m.readOnly &&
+              (!has(m.subPath) || m.subPath == '') && (!has(m.subPathExpr) || m.subPathExpr == '') &&
+              (!has(m.mountPropagation) || m.mountPropagation == 'None') &&
+              !has(m.recursiveReadOnly))))
       message: OpenBao controller cannot modify container securityContext or volumeMounts.
 ---
 apiVersion: admissionregistration.k8s.io/v1

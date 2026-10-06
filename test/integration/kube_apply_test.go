@@ -124,10 +124,16 @@ func newImpersonatedClientWithGroups(t *testing.T, username string, groups ...st
 	return c
 }
 
-func newControllerClient(t *testing.T) client.Client {
+func newControllerClient(t *testing.T) client.WithWatch {
 	t.Helper()
 
-	return newPrivilegedImpersonatedClient(t, controllerUsername)
+	config := rest.CopyConfig(cfg)
+	config.Impersonate = rest.ImpersonationConfig{UserName: controllerUsername, Groups: []string{"system:masters"}}
+	c, err := client.NewWithWatch(config, client.Options{Scheme: k8sScheme})
+	if err != nil {
+		t.Fatalf("create controller client: %v", err)
+	}
+	return c
 }
 
 func kustomizeBuild(t *testing.T, dir string) []byte {

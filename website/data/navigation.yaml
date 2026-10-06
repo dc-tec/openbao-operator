@@ -82,8 +82,12 @@ primary:
         items:
           - title: Recover an uncertain restore
             url: docs/operate/restore/recover-uncertain/
+          - title: Restore into a new cluster
+            url: docs/operate/restore/new-cluster/
           - title: Restore a snapshot manually
             url: docs/operate/restore/manual/
+          - title: Prepare a recovery namespace
+            url: docs/operate/restore/prepare-namespace/
           - title: Restore authentication
             url: docs/operate/restore/authentication/
       - title: Decommission a cluster

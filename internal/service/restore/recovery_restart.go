@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -26,12 +27,18 @@ type RecoveryClient interface {
 // RecoveryClientFactory connects directly to a named Pod using operator credentials.
 type RecoveryClientFactory func(context.Context, *api.OpenBaoCluster, string) (RecoveryClient, error)
 
+// RetainedTargetPreparer prepares a fresh target template and returns its config hash.
+type RetainedTargetPreparer func(context.Context, *api.OpenBaoCluster, types.UID) (string, error)
+
 // restartAcknowledgedTarget keeps the hold and lock until every recorded Pod has
-// a ready replacement. The administrator remains responsible for process fencing.
+// a ready replacement. Fresh retained targets first receive the normal workload
+// configuration. The administrator remains responsible for process fencing.
 func (m *Manager) restartAcknowledgedTarget(ctx context.Context, request *api.OpenBaoRestore, cluster *api.OpenBaoCluster) (bool, error) {
 	restart := request.Status.Restart
 
-	if restart != nil && restart.CompletedAt != nil {
+	handoff := request.Status.Target != nil && cluster.Annotations[constants.AnnotationRestoreOrigin] == string(request.UID)
+
+	if restart != nil && restart.CompletedAt != nil && !handoff {
 		return true, nil
 	}
 
@@ -40,9 +47,23 @@ func (m *Manager) restartAcknowledgedTarget(ctx context.Context, request *api.Op
 		!restoreOperationLock(request).IsHeldBy(cluster.Status.OperationLock) {
 		return false, recoveryBlocked("managed Resume requires the original held, locked, unpaused target; use Abandon for administrator recovery")
 	}
+	configHash, err := m.prepareRecoveryWorkload(ctx, request, cluster, handoff)
+	if err != nil {
+		return false, err
+	}
 	pods, err := m.recoveryPods(ctx, cluster)
 	if err != nil {
 		return false, err
+	}
+	// A controller crash between the ConfigMap and template writes can leave a
+	// replacement on the old template. Resume already recorded authenticated
+	// membership before preparing this single-voter target, so replace that Pod
+	// even if its old configuration cannot start. Never touch a replacement pool.
+	if configHash != "" && len(pods) == 1 && pods[0].Annotations[constants.AnnotationConfigHash] != configHash {
+		if pods[0].Name != restart.Pods[0].Name || metav1.GetControllerOf(&pods[0]).UID != restart.Pods[0].StatefulSetUID {
+			return false, recoveryBlocked("workload identity changed during Resume; use Abandon")
+		}
+		return m.restartRecoveryPod(ctx, &pods[0], 0, 1)
 	}
 	if ready, err := checkRecoveryPods(pods, restart); !ready || err != nil {
 		return false, err
@@ -238,6 +259,23 @@ func (m *Manager) recoveryLeaderForTarget(ctx context.Context, cluster *api.Open
 	}
 
 	return leader, nil
+}
+
+func (m *Manager) prepareRecoveryWorkload(ctx context.Context, request *api.OpenBaoRestore, cluster *api.OpenBaoCluster, handoff bool) (string, error) {
+	if !handoff || request.Status.Restart == nil {
+		return "", nil
+	}
+	restart := request.Status.Restart
+	if m.prepareRetainedTarget == nil || len(restart.Pods) != 1 {
+		return "", recoveryBlocked("retained target workload preparation is unavailable; use Abandon for administrator recovery")
+	}
+	return m.prepareRetainedTarget(ctx, cluster, restart.Pods[0].StatefulSetUID)
+}
+
+// RetainedTargetBlocked reports an operator-defined handoff precondition from a
+// RetainedTargetPreparer. The message is shown in restore status.
+func RetainedTargetBlocked(message string) error {
+	return recoveryBlocked("%s; use Abandon for administrator recovery", message)
 }
 
 // recoveryBlocked reports an operator-defined Resume precondition in status. It

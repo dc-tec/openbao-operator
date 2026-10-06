@@ -34,13 +34,15 @@ cleanup. You control submission, recovery, validation, and return to service. Fo
   recovery is validated. If the source must be unavailable, provide independent access to storage and the unseal
   provider.
 - Isolate the target from production clients, peers, and integrations; restored configuration can contain live
-  credentials and endpoints. On Kubernetes, configure and verify ingress and egress isolation before starting the target.
+  credentials and endpoints. On Kubernetes, see the
+  [network boundary requirements](../prepare-namespace/#prepare-the-network-boundary). The namespace approval label
+  does not apply to this path, but the boundary still does.
 
 ## Prepare an operator-managed target
 
 Skip this section if the target has no operator. If you provision it as an `OpenBaoCluster`:
 
-1. Wait for initialization, unseal, and healthy single-voter leadership. Do not configure backups or
+1. Wait for initialization, unseal, and healthy single-voter leadership. Do not configure backups, restore tests, or
    read replicas on it yet.
 2. Suspend GitOps changes for the target, or declare the maintenance and pause settings below in its desired state.
 3. Enable [maintenance mode](../../maintenance/#authorize-direct-maintenance-only-when-required) and wait for the

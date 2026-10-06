@@ -16,7 +16,9 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,6 +49,7 @@ func installRestoreExecutionPolicy(t *testing.T) {
 func TestRestoreClaimAdmissionAndConcurrency(t *testing.T) {
 	installRestoreExecutionPolicy(t)
 	namespace := newTestNamespace(t)
+	setRestoreDestinationApproval(t, namespace, "true")
 	request := newClaimRequest(t, namespace, "competing")
 	beforeAck := request.DeepCopy()
 	request.Annotations = map[string]string{constants.AnnotationRestoreAcknowledge: string(request.UID) + "/Resume"}
@@ -147,6 +150,49 @@ func TestRestoreClaimAdmissionAndConcurrency(t *testing.T) {
 		require.NoError(t, k8sClient.Status().Update(ctx, failed))
 		require.NoError(t, k8sClient.Delete(ctx, failed))
 	})
+
+	t.Run("blocked disposable cleanup permits administrator handoff", func(t *testing.T) {
+		verifyBlockedCleanupHandoff(t, namespace)
+	})
+}
+
+func verifyBlockedCleanupHandoff(t *testing.T, namespace string) {
+	t.Helper()
+	request := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{Name: "blocked-cleanup", Namespace: namespace,
+			Finalizers: []string{openbaov1alpha1.OpenBaoRestoreFinalizer}},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{Cluster: "missing-original", TargetLifecycle: openbaov1alpha1.RestoreTargetLifecycleDisposable, Force: true,
+			Source: openbaov1alpha1.RestoreSource{Key: "snapshot", ExpectedClusterID: "source", ExpectedVersion: "2.7.0",
+				Target: openbaov1alpha1.BackupTarget{Bucket: "snapshots", Endpoint: "https://storage.example"}},
+			ClusterTemplate: &openbaov1alpha1.RestoreClusterTemplate{Version: "2.7.0", Storage: openbaov1alpha1.StorageConfig{Size: "1Gi"},
+				TLS: openbaov1alpha1.TLSConfig{Enabled: true, Mode: openbaov1alpha1.TLSModeOperatorManaged, RotationPeriod: "720h"},
+				Unseal: openbaov1alpha1.UnsealConfig{Type: "transit", Transit: &openbaov1alpha1.TransitSealConfig{Address: "https://seal.example", MountPath: "transit", KeyName: "recovery"},
+					CredentialsSecretRef: &corev1.LocalObjectReference{Name: "transit"}}},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, request))
+	setRestoreDestinationApproval(t, namespace, "")
+	request.Status = openbaov1alpha1.OpenBaoRestoreStatus{Phase: openbaov1alpha1.RestorePhaseUnknown,
+		Target: &openbaov1alpha1.RestoreTargetStatus{ReservedAt: metav1.Now(), UID: "original", Cleanup: openbaov1alpha1.RestoreTargetCleanupFailed}}
+	require.NoError(t, k8sClient.Status().Update(ctx, request))
+	before := request.DeepCopy()
+	request.Finalizers = nil
+	requireAdmissionDenied(t, newControllerClient(t).Patch(ctx, request, client.MergeFrom(before), client.DryRunAll))
+	request = before.DeepCopy()
+	request.Annotations = map[string]string{constants.AnnotationRestoreAcknowledge: string(request.UID) + "/Resume"}
+	requireAdmissionDenied(t, k8sClient.Patch(ctx, request, client.MergeFrom(before), client.DryRunAll))
+	request.Annotations[constants.AnnotationRestoreAcknowledge] = string(request.UID) + "/Abandon"
+	require.NoError(t, k8sClient.Patch(ctx, request, client.MergeFrom(before)))
+	manager := restoremanager.NewManager(newControllerClient(t), k8sScheme, nil, nil, "")
+	_, err := manager.Reconcile(ctx, logr.Discard(), request)
+	require.NoError(t, err)
+	require.Equal(t, openbaov1alpha1.RestoreAdministratorAbandon, request.Status.AdministratorDisposition)
+	require.Equal(t, openbaov1alpha1.RestoreTargetCleanupFailed, request.Status.Target.Cleanup)
+	require.NoError(t, k8sClient.Delete(ctx, request))
+	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(request), request))
+	_, err = manager.Reconcile(ctx, logr.Discard(), request)
+	require.NoError(t, err)
+	require.True(t, apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(request), request)))
 }
 
 func newClaimRequest(t *testing.T, namespace, name string) *openbaov1alpha1.OpenBaoRestore {
@@ -170,11 +216,18 @@ func newClaimRequest(t *testing.T, namespace, name string) *openbaov1alpha1.Open
 func TestRestoreResumePrerequisitesAndMissingTargetFeedback(t *testing.T) {
 	installRestoreExecutionPolicy(t)
 	namespace := newTestNamespace(t)
-	for _, state := range []string{"no-job-uid", "no-execution", "missing-target", "replaced-target"} {
+	setRestoreDestinationApproval(t, namespace, "true")
+	for _, state := range []string{"disposable", "no-job-uid", "no-execution", "failed-cleanup", "missing-target", "replaced-target"} {
 		t.Run(state, func(t *testing.T) {
-			request := newClaimRequest(t, namespace, state)
+			request := newFreshRestoreRequest(namespace, state)
+			request.Spec.TargetLifecycle = openbaov1alpha1.RestoreTargetLifecycleRetain
+			if state == "disposable" {
+				request.Spec.TargetLifecycle = openbaov1alpha1.RestoreTargetLifecycleDisposable
+			}
+			require.NoError(t, k8sClient.Create(ctx, request))
 			request.Status = openbaov1alpha1.OpenBaoRestoreStatus{
-				Phase: openbaov1alpha1.RestorePhaseUnknown,
+				Phase:  openbaov1alpha1.RestorePhaseUnknown,
+				Target: &openbaov1alpha1.RestoreTargetStatus{UID: "original-target", ReservedAt: metav1.Now()},
 				Execution: &openbaov1alpha1.RestoreExecutionStatus{OperationID: string(request.UID),
 					TargetUID: "original-target", JobName: "restore", JobUID: "job", Stage: openbaov1alpha1.RestoreExecutionStageCreated},
 			}
@@ -183,6 +236,8 @@ func TestRestoreResumePrerequisitesAndMissingTargetFeedback(t *testing.T) {
 				request.Status.Execution.JobUID = ""
 			case "no-execution":
 				request.Status.Execution = nil
+			case "failed-cleanup":
+				request.Status.Target.Cleanup = openbaov1alpha1.RestoreTargetCleanupFailed
 			case "replaced-target":
 				createMinimalCluster(t, namespace, request.Spec.Cluster)
 			}

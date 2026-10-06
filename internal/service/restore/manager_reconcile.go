@@ -40,7 +40,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *op
 		// Terminal states: remove the retained Job and ensure lock cleanup eventually succeeds.
 		return m.ensureTerminalCleanup(ctx, logger, restore)
 	case openbaov1alpha1.RestorePhaseUnknown:
-		return m.reconcileAcknowledgement(ctx, logger, restore)
+		return m.reconcileTargetRecovery(ctx, logger, restore)
 	default:
 		logger.Info("Unknown restore phase", "phase", restore.Status.Phase)
 		return ctrl.Result{}, nil
@@ -48,6 +48,12 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *op
 }
 
 func (m *Manager) ensureTerminalCleanup(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
+	if needsTargetCleanup(restore) {
+		return m.cleanupTarget(ctx, logger, restore)
+	}
+	if err := m.releaseUnsubmittedTarget(ctx, restore); err != nil {
+		return ctrl.Result{}, err
+	}
 	if restore.Status.Execution != nil && restore.Status.Execution.JobName != "" {
 		jobDeleted, err := m.deleteRestoreJob(ctx, logger, restore)
 		if err != nil {
@@ -92,6 +98,10 @@ func (m *Manager) handlePending(ctx context.Context, logger logr.Logger, restore
 
 // handleValidating validates preconditions and transitions to Running.
 func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
+	if ready, result, err := m.prepareTarget(ctx, logger, restore); !ready || err != nil {
+		return result, err
+	}
+
 	// Validate and get target cluster
 	cluster, result, err := m.validateCluster(ctx, logger, restore)
 	if result != nil || err != nil {

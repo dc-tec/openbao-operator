@@ -43,6 +43,12 @@ func usesStaticSeal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 // memory and attempts to create the Secret without reading Secret data. If a
 // Secret already exists, only metadata ownership proof is accepted.
 func (m *Manager) ensureUnsealSecret(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	// Referenced keys are administrator-managed. Kubernetes mounts the Secret;
+	// the operator neither reads its key bytes nor adopts it.
+	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.CredentialsSecretRef != nil {
+		return nil
+	}
+
 	secretName := resourceidentity.UnsealSecretName(cluster)
 
 	// Generate key in memory

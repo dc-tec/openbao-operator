@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
   annotations:
-    openbao.org/admission-policy-fingerprint: sha256:cc749d55f3d9ac98744efae1629b38f6373ede43a6efe273566530a4a01f32a5
+    openbao.org/admission-policy-fingerprint: sha256:62a128ede9c7a9a872cb2c423ebc8c1323e0832d2358bbdd80c0fdbe883e213f
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -15,6 +15,12 @@ spec:
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["openbaoclusters"]
+  matchConditions:
+    - name: skip-garbage-collector-finalization
+      expression: >-
+        !(request.operation == 'UPDATE' && oldObject != null &&
+          has(oldObject.metadata.deletionTimestamp) && object.spec == oldObject.spec &&
+          request.userInfo.username in ['system:kube-controller-manager', 'system:serviceaccount:kube-system:generic-garbage-collector'])
   variables:
     - name: has_listener_tls_policy
       expression: >-
@@ -45,6 +51,19 @@ spec:
     - name: is_operator_controller
       expression: >-
         request.userInfo.username == variables.controller_principal
+    - name: old_static_unseal
+      expression: >-
+        oldObject != null && (!has(oldObject.spec.unseal) || !has(oldObject.spec.unseal.type) || oldObject.spec.unseal.type == 'static')
+    - name: new_static_unseal
+      expression: >-
+        !has(object.spec.unseal) || !has(object.spec.unseal.type) || object.spec.unseal.type == 'static'
+    - name: old_unseal_secret
+      expression: >-
+        oldObject != null && has(oldObject.spec.unseal) && has(oldObject.spec.unseal.credentialsSecretRef) ?
+          oldObject.spec.unseal.credentialsSecretRef.name : ''
+    - name: new_unseal_secret
+      expression: >-
+        has(object.spec.unseal) && has(object.spec.unseal.credentialsSecretRef) ? object.spec.unseal.credentialsSecretRef.name : ''
     - name: requested_upgrade_strategy
       expression: >-
         has(object.spec.upgrade) && has(object.spec.upgrade.strategy) && object.spec.upgrade.strategy != "" ? object.spec.upgrade.strategy : "RollingUpdate"
@@ -366,6 +385,12 @@ spec:
           )
         )
   validations:
+    # A static key source change remounts a different key and leaves Pods sealed.
+    - expression: >-
+        request.operation != 'UPDATE' || !variables.old_static_unseal || !variables.new_static_unseal ||
+        variables.old_unseal_secret == variables.new_unseal_secret
+      message: "spec.unseal.credentialsSecretRef cannot be added, changed, or removed on a static-unseal cluster; a different key source would leave OpenBao sealed."
+
     - expression: >-
         !has(object.spec.controllerJWTMode) || object.spec.controllerJWTMode != "Target" ||
         (has(object.spec.selfInit) && object.spec.selfInit.enabled &&
@@ -956,6 +981,7 @@ spec:
       message: "Users configuring ServiceMonitor TLS references must be authorized to use the referenced Secret or ConfigMap, or get it."
     # Confused-deputy protection: users configuring unseal Secret credentials must be able to read that Secret.
     - expression: >-
+        variables.is_operator_controller ||
         !has(object.spec.unseal) ||
         !has(object.spec.unseal.credentialsSecretRef) ||
         authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.unseal.credentialsSecretRef.name).check("get").allowed()

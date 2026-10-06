@@ -139,6 +139,7 @@ generate_line() {
           line = substr(line, 1, RSTART - 1) "`" url "`" substr(line, RSTART + RLENGTH)
         }
         if (resource == "openbaocluster") {
+          gsub(/\[RestoreClusterTemplate\]\(#restoreclustertemplate\)/, "[RestoreClusterTemplate](../openbaorestore/#restoreclustertemplate)", line)
           gsub(/\[RestoreSource\]\(#restoresource\)/, "[RestoreSource](../openbaorestore/#restoresource)", line)
           gsub(/\[OpenBaoRestoreSpec\]\(#openbaorestorespec\)/, "[OpenBaoRestoreSpec](../openbaorestore/#openbaorestorespec)", line)
         }

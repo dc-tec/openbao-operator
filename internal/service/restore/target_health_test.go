@@ -8,9 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
@@ -34,7 +31,8 @@ func TestTargetHealthRequiresHealthyVotersAndOneLeader(t *testing.T) {
 		{name: "read failure", voters: []portopenbao.HealthStatus{leader}, readError: errors.New("connection failed"), wantError: "read target voter 0 health"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c, cluster := healthFixture(t)
+			c, request := freshTargetFixture(t)
+			cluster := projectRestoreTarget(request)
 			cluster.Spec.Replicas = int32(len(tc.voters))
 			m := NewManager(c, c.Scheme(), nil, nil, "")
 			reads := 0
@@ -66,7 +64,8 @@ func TestTargetHealthResolvesTrustAndDirectVoterAddresses(t *testing.T) {
 			name = "system roots"
 		}
 		t.Run(name, func(t *testing.T) {
-			c, cluster := healthFixture(t)
+			c, request := freshTargetFixture(t)
+			cluster := projectRestoreTarget(request)
 			cluster.Spec.TLS = api.TLSConfig{Enabled: true, Mode: api.TLSModeOperatorManaged}
 			var expectedCA []byte
 			if systemRoots {
@@ -92,16 +91,4 @@ func TestTargetHealthResolvesTrustAndDirectVoterAddresses(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
-}
-
-func healthFixture(t *testing.T) (client.WithWatch, *api.OpenBaoCluster) {
-	t.Helper()
-	scheme := runtime.NewScheme()
-	require.NoError(t, api.AddToScheme(scheme))
-	require.NoError(t, corev1.AddToScheme(scheme))
-	cluster := &api.OpenBaoCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "fresh", Namespace: "recovery"},
-		Spec:       api.OpenBaoClusterSpec{Replicas: 1, TLS: api.TLSConfig{Mode: api.TLSModeACME}},
-	}
-	return fake.NewClientBuilder().WithScheme(scheme).Build(), cluster
 }

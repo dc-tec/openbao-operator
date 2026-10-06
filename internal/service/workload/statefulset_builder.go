@@ -51,6 +51,11 @@ func buildStatefulSetForSpec(cluster *openbaov1alpha1.OpenBaoCluster, configCont
 		return nil, err
 	}
 
+	var enableServiceLinks *bool
+	if cluster.Annotations[constants.AnnotationRestoreOrigin] != "" {
+		enableServiceLinks = ptr.To(false)
+	}
+
 	statefulSetName := statefulSetNameForSpec(cluster, spec)
 	// Stamp only StatefulSet metadata, so a source generation change alone does
 	// not roll Pods. SSA publishes this marker atomically with the rendered template.
@@ -83,6 +88,7 @@ func buildStatefulSetForSpec(cluster *openbaov1alpha1.OpenBaoCluster, configCont
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
+					EnableServiceLinks: enableServiceLinks,
 					// RESTORE ISOLATION: Always false (safe default)
 					// The wrapper binary runs as PID 1 in the OpenBao container and manages
 					// the OpenBao process directly, eliminating the need for ShareProcessNamespace

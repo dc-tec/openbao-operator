@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
@@ -53,9 +56,30 @@ func run(ctx context.Context) error {
 		_ = storageClient.Close()
 	}()
 
-	objInfo, err := publishBackupSnapshot(ctx, baoClient, storageClient, backupKey)
+	before, err := baoClient.Health(ctx)
+	if err != nil {
+		return categorizef(errSnapshotCategory, "observe snapshot source identity: %w", err)
+	}
+
+	digest := sha256.New()
+	objInfo, err := publishBackupSnapshot(ctx, baoClient, storageClient, backupKey, digest)
 	if err != nil {
 		return err
+	}
+
+	after, err := baoClient.Health(ctx)
+	if err != nil || before.ClusterID == "" || before.ClusterID != after.ClusterID || before.Version != after.Version {
+		return categorizef(errSnapshotCategory, "source identity or version was not stable across snapshot streaming")
+	}
+	report, err := json.Marshal(api.BackupSnapshotSummary{
+		ClusterID: after.ClusterID, Version: after.Version,
+		Size: objInfo.Size, Digest: fmt.Sprintf("sha256:%x", digest.Sum(nil)),
+	})
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile("/dev/termination-log", report, 0600); err != nil {
+		return categorizef(errSnapshotCategory, "write snapshot source observation: %w", err)
 	}
 
 	_, _ = fmt.Fprintf(os.Stdout, "Backup completed successfully: %s (size: %d bytes)\n", backupKey, objInfo.Size)
@@ -67,8 +91,9 @@ func publishBackupSnapshot(
 	baoClient portopenbao.ClusterActions,
 	storageClient blobstore.BlobStore,
 	backupKey string,
+	digest ...io.Writer,
 ) (*blobstore.ObjectInfo, error) {
-	written, err := uploadBackupSnapshot(ctx, baoClient, storageClient, backupKey)
+	written, err := uploadBackupSnapshot(ctx, baoClient, storageClient, backupKey, digest...)
 	if err != nil {
 		return nil, cleanupFailedBackup(ctx, storageClient, backupKey, err)
 	}
@@ -138,6 +163,7 @@ func uploadBackupSnapshot(
 	baoClient portopenbao.ClusterActions,
 	storageClient blobstore.BlobStore,
 	backupKey string,
+	digest ...io.Writer,
 ) (int64, error) {
 	pr, pw := io.Pipe()
 	type snapshotStreamResult struct {
@@ -153,7 +179,11 @@ func uploadBackupSnapshot(
 		}
 	}()
 
-	body := &countingReader{r: pr}
+	var reader io.Reader = pr
+	if len(digest) > 0 {
+		reader = io.TeeReader(pr, digest[0])
+	}
+	body := &countingReader{r: reader}
 	uploadErr := storageClient.Upload(ctx, backupKey, body)
 	var uploadAbortErr error
 	if uploadErr != nil {

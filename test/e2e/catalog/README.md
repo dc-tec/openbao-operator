@@ -11,9 +11,9 @@ Notes:
 
 ## Summary
 
-- Files: `21`
-- Specs: `86`
-- Explicit case IDs: `38`
+- Files: `23`
+- Specs: `94`
+- Explicit case IDs: `46`
 - Coverage tags: `54`
 
 ## Suites
@@ -41,6 +41,8 @@ Notes:
 | [Upgrade Strategies: Blue/Green Drift](suites/Upgrade_Target_Drift_test.md) | 1 | 1 | 0 | `upgrade`, `bluegreen`, `slow` | `test/e2e/Upgrade_Target_Drift_test.go` |
 | [Security: Anti-Tamper Policy](suites/anti_tamper_policy_test.md) | 2 | 2 | 0 | `security`, `tamper`, `cluster`, `slow` | `test/e2e/anti_tamper_policy_test.go` |
 | [DR: Storage Providers Backup & Restore](suites/backup_restore_test.md) | 7 | 5 | 0 | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke`, `read-replicas`, `read-replicas-restore`, `failure-injection` | `test/e2e/backup_restore_test.go` |
+| [Restore across independent Kubernetes clusters](suites/restore_cross_cluster_test.md) | 2 | 2 | 0 | `restore-cross-cluster`, `dr`, `restore`, `slow` | `test/e2e/restore_cross_cluster_test.go` |
+| [Managed fresh restore targets](suites/restore_minimal_test.md) | 6 | 6 | 0 | `restore-minimal`, `dr`, `backup`, `restore`, `e2e-anchor` | `test/e2e/restore_minimal_test.go` |
 
 ## Coverage Tags
 
