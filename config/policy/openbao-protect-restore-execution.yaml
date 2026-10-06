@@ -1,0 +1,117 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  annotations:
+    openbao.org/admission-policy-fingerprint: sha256:2ce0f9a34eede30faafd4f494d07b15fda3d1b004e14ecd4620136713cfc3a20
+  name: openbao-protect-restore-execution
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE", "DELETE"]
+        resources: ["openbaorestores", "openbaorestores/status", "openbaoclusters"]
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE"]
+        resources: ["openbaoclusters", "openbaorestores"]
+  variables:
+    - name: operator_namespace
+      expression: "'openbao-operator-system'"
+    - name: controller_serviceaccount_name
+      expression: "'openbao-operator-controller'"
+    - name: is_controller
+      expression: "request.userInfo.username == 'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name"
+    - name: is_restore
+      expression: "request.resource.resource == 'openbaorestores'"
+    - name: old_claim
+      expression: "variables.is_restore && oldObject != null && has(oldObject.status) && has(oldObject.status.submissionClaim)"
+    - name: helper
+      expression: >-
+        variables.is_restore && oldObject != null && request.userInfo.username ==
+          'system:serviceaccount:' + request.namespace + ':' + oldObject.spec.cluster + '-restore-serviceaccount'
+    - name: old_hold
+      expression: >-
+        oldObject != null && has(oldObject.metadata.annotations) && 'openbao.org/restore-hold' in oldObject.metadata.annotations ?
+          oldObject.metadata.annotations['openbao.org/restore-hold'] : ''
+    - name: new_hold
+      expression: >-
+        object != null && has(object.metadata.annotations) && 'openbao.org/restore-hold' in object.metadata.annotations ?
+          object.metadata.annotations['openbao.org/restore-hold'] : ''
+    - name: submission_excluded
+      expression: >-
+        variables.is_restore && oldObject != null && has(oldObject.status) &&
+        !has(oldObject.status.submissionClaim) && has(oldObject.status.execution) &&
+        oldObject.status.phase == 'Failed' && oldObject.status.execution.stage == 'TerminalObserved' &&
+        oldObject.status.execution.terminalResult == 'Failed'
+    - name: old_acknowledgement
+      expression: >-
+        oldObject != null && has(oldObject.metadata.annotations) && 'openbao.org/restore-acknowledge' in oldObject.metadata.annotations ?
+          oldObject.metadata.annotations['openbao.org/restore-acknowledge'] : ''
+    - name: new_acknowledgement
+      expression: >-
+        object != null && has(object.metadata.annotations) && 'openbao.org/restore-acknowledge' in object.metadata.annotations ?
+          object.metadata.annotations['openbao.org/restore-acknowledge'] : ''
+  validations:
+    - expression: >-
+        !variables.is_restore || variables.is_controller || request.operation == 'DELETE' ||
+        (has(object.status) && has(object.status.restart) ? object.status.restart : null) ==
+        (oldObject != null && has(oldObject.status) && has(oldObject.status.restart) ? oldObject.status.restart : null)
+      message: "Only the controller can record managed restore restarts; use the acknowledgement annotation."
+    - expression: >-
+        !variables.old_claim || request.operation == 'DELETE' ||
+          (has(object.status.submissionClaim) && object.status.submissionClaim == oldObject.status.submissionClaim)
+      message: "A submission claim cannot be changed or removed."
+    - expression: >-
+        !variables.helper ||
+        (request.subResource == 'status' && request.operation == 'UPDATE' &&
+         !variables.old_claim && has(object.status.submissionClaim) &&
+         oldObject.status.phase == 'Running' && oldObject.status.execution.stage == 'Created' &&
+         oldObject.status.execution.operationID == oldObject.metadata.uid &&
+         !has(oldObject.metadata.deletionTimestamp) &&
+         'authentication.kubernetes.io/pod-uid' in request.userInfo.extra &&
+         request.userInfo.extra['authentication.kubernetes.io/pod-uid'] == [object.status.submissionClaim.podUID] &&
+         object.metadata.all(k, k == "managedFields" || (k in oldObject.metadata && object.metadata[k] == oldObject.metadata[k])) &&
+         oldObject.metadata.all(k, k == "managedFields" || k in object.metadata) &&
+         object.status.all(k, k == 'submissionClaim' || (k in oldObject.status && object.status[k] == oldObject.status[k])) &&
+         oldObject.status.all(k, k in object.status))
+      message: "The executor can only append its own Pod-bound submission claim."
+    - expression: >-
+        !variables.is_restore || request.operation != 'DELETE' || !has(oldObject.status) ||
+        !has(oldObject.status.execution) || oldObject.status.execution.stage == 'Prepared' || variables.submission_excluded ||
+        oldObject.status.phase == 'Completed' ||
+        (has(oldObject.status.administratorDisposition) && oldObject.status.administratorDisposition != '')
+      message: "A committed restore requires administrator acknowledgement before deletion."
+    - expression: >-
+        variables.is_restore || variables.is_controller ||
+        (request.operation in ['CREATE', 'UPDATE'] && variables.new_hold == variables.old_hold) ||
+        (request.operation == 'DELETE' && variables.old_hold == '')
+      message: "Only the controller can change a restore hold; acknowledge the restore before deleting its target."
+    - expression: >-
+        !variables.is_restore || request.operation != 'UPDATE' || !has(oldObject.status) ||
+        !has(oldObject.status.execution) || oldObject.status.execution.stage == 'Prepared' || variables.submission_excluded ||
+        oldObject.status.phase == 'Completed' ||
+        (has(oldObject.status.administratorDisposition) && oldObject.status.administratorDisposition != '') ||
+        !has(oldObject.metadata.finalizers) || !('openbao.org/openbaorestore-finalizer' in oldObject.metadata.finalizers) ||
+        (has(object.metadata.finalizers) && 'openbao.org/openbaorestore-finalizer' in object.metadata.finalizers)
+      message: "A committed restore retains its finalizer until administrator acknowledgement."
+    - expression: >-
+        !variables.is_restore || variables.is_controller || request.operation == 'DELETE' ||
+        (has(object.status) && has(object.status.administratorDisposition) ? object.status.administratorDisposition : '') ==
+        (oldObject != null && has(oldObject.status) && has(oldObject.status.administratorDisposition) ? oldObject.status.administratorDisposition : '')
+      message: "Only the controller can record administrator disposition; use the acknowledgement annotation."
+    - expression: >-
+        !variables.is_restore || request.operation == 'DELETE' || variables.new_acknowledgement == variables.old_acknowledgement ||
+        variables.new_acknowledgement == '' || oldObject == null || !has(oldObject.status) ||
+        !has(oldObject.status.administratorDisposition) || oldObject.status.administratorDisposition == '' ||
+        variables.new_acknowledgement == oldObject.metadata.uid + '/' + oldObject.status.administratorDisposition
+      message: "Recovery has already been released. The recorded Resume or Abandon decision cannot be changed; manage the target directly."
+    - expression: >-
+        !variables.is_restore || request.operation == 'DELETE' || variables.new_acknowledgement == variables.old_acknowledgement ||
+        variables.new_acknowledgement == '' ||
+        (oldObject != null && has(oldObject.status) && oldObject.status.phase == 'Unknown' &&
+         (variables.new_acknowledgement == oldObject.metadata.uid + '/Abandon' ||
+          (variables.new_acknowledgement == oldObject.metadata.uid + '/Resume' &&
+           has(oldObject.status.execution) && has(oldObject.status.execution.jobUID) && oldObject.status.execution.jobUID != '')))
+      message: "Acknowledge only after Unknown. Resume requires a bound Job UID; otherwise use Abandon."

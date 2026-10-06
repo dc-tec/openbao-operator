@@ -137,6 +137,7 @@ func TestCreateRestoreJob_WithoutPolicyReadiness(t *testing.T) {
 	scheme := newRestoreEventScheme(t)
 	cluster := newRestoreEventCluster()
 	cluster.Spec.ReconcilePolicies = true // Recovery must work without policy reconciliation status.
+	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{Operation: openbaov1alpha1.ClusterOperationRestore, Holder: "openbaorestore/test-restore"}
 	restore := newRestoreEventResource()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
 	restore.Status.Execution = newRestoreExecutionStatus(restore)

@@ -21,6 +21,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	controllermetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -68,6 +69,37 @@ func TestOpenBaoRestore_SetupWithManager_InitializesRestoreStatusFromPending(t *
 			current.Status.SnapshotKey == "snapshots/backup.snap" &&
 			slices.Contains(current.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
 	}, 20*time.Second, 200*time.Millisecond, "expected manager-driven reconcile to initialize restore status and leave pending phase")
+
+	// Restore a persisted, already-released Unknown request. The manager must
+	// publish its state without replaying an earlier transition event.
+	require.Eventually(t, func() bool {
+		return liveClient.Get(ctx, restoreKey, restore) == nil && restore.Status.Phase == openbaov1alpha1.RestorePhaseFailed
+	}, 10*time.Second, 100*time.Millisecond)
+	before := restore.DeepCopy()
+	restore.Status.Phase = openbaov1alpha1.RestorePhaseUnknown
+	restore.Status.AdministratorDisposition = openbaov1alpha1.RestoreAdministratorResume
+	require.NoError(t, liveClient.Status().Patch(ctx, restore, client.MergeFrom(before)))
+	require.Eventually(t, func() bool {
+		families, err := controllermetrics.Registry.Gather()
+		if err != nil {
+			return false
+		}
+		for _, family := range families {
+			if family.GetName() != "openbao_restore_state" {
+				continue
+			}
+			for _, metric := range family.Metric {
+				labels := map[string]string{}
+				for _, label := range metric.Label {
+					labels[label.GetName()] = label.GetValue()
+				}
+				if labels["namespace"] == namespace && labels["name"] == restore.Spec.Cluster {
+					return metric.GetGauge().GetValue() == 6
+				}
+			}
+		}
+		return false
+	}, 10*time.Second, 100*time.Millisecond, "expected persisted Resume to replace running/failed telemetry")
 }
 
 func setAdmissionReady(t *testing.T) {

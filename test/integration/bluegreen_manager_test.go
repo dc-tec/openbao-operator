@@ -88,10 +88,10 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	controllerClient := newControllerClient(t)
 	workloadMgr := workloadsvc.NewManager(controllerClient, k8sScheme, "").WithReader(controllerClient)
 	manager := bluegreen.NewManager(
-		k8sClient,
+		controllerClient,
 		k8sScheme,
 		workloadMgr,
-		backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme),
+		backup.NewUpgradeStrategyRuntime(controllerClient, k8sScheme),
 		portopenbao.ClientConfig{},
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
@@ -285,10 +285,10 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabel_AdvancesAfterDemotion(t *test
 	controllerClient := newControllerClient(t)
 	workloadMgr := workloadsvc.NewManager(controllerClient, k8sScheme, "").WithReader(controllerClient)
 	mgr := bluegreen.NewManager(
-		k8sClient,
+		controllerClient,
 		k8sScheme,
 		workloadMgr,
-		backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme),
+		backup.NewUpgradeStrategyRuntime(controllerClient, k8sScheme),
 		portopenbao.ClientConfig{},
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),

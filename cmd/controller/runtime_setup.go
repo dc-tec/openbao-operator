@@ -27,11 +27,13 @@ import (
 	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 	"github.com/dc-tec/openbao-operator/internal/service/configuration"
 	initmanager "github.com/dc-tec/openbao-operator/internal/service/init"
+	"github.com/dc-tec/openbao-operator/internal/service/restore"
 )
 
 type controllerProcessRuntime struct {
 	operatorNamespace        string
 	platform                 string
+	restoreRecoveryClientFor restore.RecoveryClientFactory
 	singleTenantMode         bool
 	admissionTracker         *admission.Tracker
 	oidcRuntime              appopenbaocluster.RuntimeOIDCConfig
@@ -103,10 +105,11 @@ func buildControllerProcessRuntime(
 	}
 
 	return controllerProcessRuntime{
-		operatorNamespace: operatorNamespace,
-		platform:          platform,
-		singleTenantMode:  singleTenantMode,
-		admissionTracker:  admissionTracker,
+		operatorNamespace:        operatorNamespace,
+		platform:                 platform,
+		restoreRecoveryClientFor: restoreRecoveryClientFactory(clientset, clientMgr, tokens),
+		singleTenantMode:         singleTenantMode,
+		admissionTracker:         admissionTracker,
 		oidcRuntime: appopenbaocluster.RuntimeOIDCConfig{
 			Issuer:              oidcConfig.IssuerURL,
 			DiscoveryURL:        oidcConfig.OIDCDiscoveryURL,
@@ -168,6 +171,7 @@ func setupControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) error 
 			OperatorImageVerifier: runtime.imageVerificationRuntime.OperatorImageVerifier,
 			Platform:              runtime.platform,
 			ClientConfig:          runtime.openBaoRuntime.SmartClientConfig,
+			RecoveryClientFor:     runtime.restoreRecoveryClientFor,
 		}),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller %s: %w", controllerNameOpenBaoRestore, err)

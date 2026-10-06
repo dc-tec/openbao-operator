@@ -107,7 +107,7 @@ func authenticate(ctx context.Context, cfg *backupconfig.ExecutorConfig, leaderU
 func openClusterClient(
 	cfg *backupconfig.ExecutorConfig,
 	purpose, leaderURL, token string,
-) (portopenbao.ClusterActions, func(), error) {
+) (*openbao.Client, func(), error) {
 	clientMgr := openbao.NewClientManager(newOpenBaoClientConfig(cfg))
 	factory := clientMgr.FactoryFor(purpose, cfg.TLSCACert)
 	var baoClient *openbao.Client

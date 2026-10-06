@@ -14,18 +14,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
 	"github.com/dc-tec/openbao-operator/internal/platform/statuspatch"
+
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 )
 
 func (m *Manager) patchStatus(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore, original *openbaov1alpha1.OpenBaoRestore) error {
-	return statuspatch.PatchMerge(ctx, m.client, restore, original)
+	return statuspatch.PatchMerge(ctx, m.client, restore, original, client.MergeFromWithOptimisticLock{})
 }
 
 // failRestore transitions the restore to Failed phase.
 func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, message string) (ctrl.Result, error) {
+	reason := ReasonRestoreFailed
 	original := restore.DeepCopy()
 	now := metav1.Now()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseFailed
@@ -36,7 +39,7 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 		Type:               string(RestoreConditionType),
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: restore.Generation,
-		Reason:             ReasonRestoreFailed,
+		Reason:             reason,
 		Message:            message,
 		LastTransitionTime: now,
 	})
@@ -157,29 +160,16 @@ func (m *Manager) handleDeletion(ctx context.Context, logger logr.Logger, restor
 		return ctrl.Result{}, nil
 	}
 
-	if restoreExecutionCommitted(restore.Status.Execution) {
-		switch restore.Status.Phase {
-		case openbaov1alpha1.RestorePhaseRunning:
-			result, err := m.handleRunning(ctx, logger, restore)
-			if err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to drain committed restore execution during deletion: %w", err)
-			}
-			if result.RequeueAfter == 0 {
-				result.RequeueAfter = restoreRequeueImmediately
-			}
-			return result, nil
-		case openbaov1alpha1.RestorePhaseUnknown:
-			return m.handleUnknownRestoreDeletion(ctx, logger, restore)
-		case openbaov1alpha1.RestorePhaseCompleted, openbaov1alpha1.RestorePhaseFailed:
-			// The terminal result and any required follow-through are durable. The
-			// retained Job can now be removed deliberately.
-		default:
-			return ctrl.Result{}, fmt.Errorf("committed restore deletion has unsupported phase %q", restore.Status.Phase)
+	if !restoreSubmissionExcluded(restore) && restore.Status.AdministratorDisposition == "" &&
+		restore.Status.Phase != openbaov1alpha1.RestorePhaseCompleted {
+		if restore.Status.Phase != openbaov1alpha1.RestorePhaseUnknown {
+			return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore, "Deletion requested after execution commitment; administrator acknowledgement is required.")
 		}
+		return m.reconcileAcknowledgement(ctx, logger, restore)
 	}
-
-	// Pending, Validating, and Prepared restores are cancelable because Job
-	// creation has not crossed the durable commitment boundary.
+	if restore.Status.AdministratorDisposition != "" {
+		return m.finalizeRestoreDeletion(ctx, logger, restore)
+	}
 	jobDeleted, err := m.deleteRestoreJob(ctx, logger, restore)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -189,39 +179,6 @@ func (m *Manager) handleDeletion(ctx context.Context, logger logr.Logger, restor
 	}
 
 	return m.finalizeRestoreDeletion(ctx, logger, restore)
-}
-
-func (m *Manager) handleUnknownRestoreDeletion(
-	ctx context.Context,
-	logger logr.Logger,
-	restore *openbaov1alpha1.OpenBaoRestore,
-) (ctrl.Result, error) {
-	job, err := opslifecycle.ReadManagedJob(
-		ctx,
-		m.reader,
-		types.NamespacedName{Namespace: restore.Namespace, Name: restore.Status.Execution.JobName},
-		restore,
-		openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"),
-		"drain unknown restore",
-	)
-	if apierrors.IsNotFound(err) {
-		return m.finalizeRestoreDeletion(ctx, logger, restore)
-	}
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to inspect unknown restore Job during deletion: %w", err)
-	}
-	if err := validateRestoreExecutionJob(restore.Status.Execution, job); err != nil {
-		return ctrl.Result{}, fmt.Errorf("refusing to delete or adopt restore Job with inconsistent execution identity: %w", err)
-	}
-
-	original := restore.DeepCopy()
-	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
-	restore.Status.Execution.Stage = openbaov1alpha1.RestoreExecutionStageCreated
-	restore.Status.Message = fmt.Sprintf("Restore Job %s became observable during deletion; draining the committed execution.", job.Name)
-	if err := m.patchStatus(ctx, restore, original); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to resume observable restore execution during deletion: %w", err)
-	}
-	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
 }
 
 func (m *Manager) finalizeRestoreDeletion(
@@ -285,6 +242,18 @@ func (m *Manager) releaseClusterLock(ctx context.Context, logger logr.Logger, re
 		return fmt.Errorf("failed to get target cluster for lock release: %w", err)
 	}
 
+	if execution := restore.Status.Execution; execution != nil && execution.TargetUID != "" && execution.TargetUID != cluster.UID {
+		return nil
+	}
+	// A lost commitment response can leave a hold on an uncommitted request.
+	// No executor can claim that request, so cancellation can release this hold.
+	if restoreSubmissionExcluded(restore) && cluster.Annotations[constants.AnnotationRestoreHold] == restoreExecutionOperationID(restore) {
+		before := cluster.DeepCopy()
+		delete(cluster.Annotations, constants.AnnotationRestoreHold)
+		if err := m.client.Patch(ctx, cluster, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+			return err
+		}
+	}
 	lock := restoreOperationLock(restore)
 	if err := opslifecycle.ReleaseWithReader(ctx, m.reader, m.client, cluster, lock); err != nil {
 		if opslifecycle.IsLockHeld(err) {

@@ -244,6 +244,7 @@ serviceBoundaries:
     allowAdapterImports:
       - internal/adapter/auth
       - internal/adapter/kube
+      - internal/adapter/openbao
       - internal/adapter/security
       - internal/adapter/storageenv
   - name: upgrade

@@ -11,10 +11,10 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `dr-azure-provider-backup-smoke` | executes a manual backup to Azure | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke` |
 | `backup-restore-restores-from-azure-backup-using-openbaorestore-b3ea354a` | restores from Azure backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
 | `dr-gcs-provider-backup-smoke` | executes a manual backup to GCS | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke` |
-| `dr-s3-restore-controller-restart` | completes restore deterministically after controller restart while running | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `failure-injection` |
 | `dr-s3-restorable-backup` | creates a restorable S3 backup | active | `lifecycle-job-owner-proof` | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore` |
 | `backup-restore-handles-transient-s3-auth-failure-with-10300347` | handles transient S3 auth failure with backup retry after controller restart | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `failure-injection` |
 | `dr-s3-restore-cr` | restores from S3 backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore` |
+| `dr-s3-restore-controller-restart` | retains the restore hold after controller restart while running | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `failure-injection` |
 
 ## `dr-azure-provider-backup-smoke`
 
@@ -48,7 +48,6 @@ Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
 
 Recorded checkpoints:
 - creating an OpenBaoRestore resource from the Azure backup key
-- waiting for the Azure restore to complete
 
 
 ## `dr-gcs-provider-backup-smoke`
@@ -68,25 +67,6 @@ Recorded checkpoints:
 - forcing a reconcile after the manual GCS backup trigger
 - waiting for a GCS backup job to be created
 - waiting for the GCS backup job to complete successfully
-
-
-## `dr-s3-restore-controller-restart`
-
-Path: `DR: Storage Providers Backup & Restore > S3 Backup & Restore with RustFS > completes restore deterministically after controller restart while running`
-
-State: `active`
-
-Generated fallback ID: `backup-restore-completes-restore-deterministically-after-controller-restart-d873984e`
-
-Covers: _none_
-
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `failure-injection`
-
-Recorded checkpoints:
-- waiting for restore to enter Running phase
-- restarting controller deployment during restore execution
-- waiting for restore completion
-- ensuring restore remains terminally completed
 
 
 ## `dr-s3-restorable-backup`
@@ -143,6 +123,26 @@ Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-
 Recorded checkpoints:
 - recording voter Pod identities before restore
 - verifying restore configuration is accepted before execution
-- waiting for restore to drain steady read replicas before execution continues
+- verifying the operator did not restart voters on HTTP acceptance
+- acknowledging recovery and waiting for managed voter and read-replica restarts
 - Verifying secret persists after restore
 - Verifying restore metrics are emitted
+
+
+## `dr-s3-restore-controller-restart`
+
+Path: `DR: Storage Providers Backup & Restore > S3 Backup & Restore with RustFS > retains the restore hold after controller restart while running`
+
+State: `active`
+
+Generated fallback ID: `backup-restore-retains-the-restore-hold-after-controller-0a16537a`
+
+Covers: _none_
+
+Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `failure-injection`
+
+Recorded checkpoints:
+- switching the idle cluster to BlueGreen so voters use OnDelete
+- waiting for restore to enter Running phase
+- restarting controller deployment during restore execution
+- authorizing managed voter and read-replica restarts

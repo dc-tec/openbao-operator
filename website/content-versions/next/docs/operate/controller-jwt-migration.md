@@ -100,4 +100,4 @@ share a deliberate recovery authentication domain; unrelated tenants must not jo
 
 After recovery, reapply the intended role configuration and repeat the positive and negative authentication checks.
 The controller remains in Target mode and can report authentication failures until this is complete. See
-[restore controller authentication](../restore/#restore-controller-authentication).
+[restore authentication](../restore/authentication/).

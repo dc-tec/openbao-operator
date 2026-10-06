@@ -82,15 +82,12 @@ func runRestoreLifecycleModel(t *rapid.T, scenario restoreLifecycleScenario) {
 	cluster := createRestoreModelCluster(t, namespace)
 	restoreObj := createRestoreModelRequest(t, namespace, cluster.Name, scenario)
 	controllerClient := newRestoreModelControllerClient(t)
-	mgr := withIntegrationRestoreStatusPersistence(
-		restore.NewManager(
-			controllerClient,
-			k8sScheme,
-			nil,
-			security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-			"",
-		),
+	mgr := restore.NewManager(
 		controllerClient,
+		k8sScheme,
+		nil,
+		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+		"",
 	)
 
 	latest := getRestoreModelRequest(t, namespace, restoreObj.Name)
@@ -151,31 +148,25 @@ func runRestoreLifecycleModel(t *rapid.T, scenario restoreLifecycleScenario) {
 		assertRestoreModelJobCount(t, namespace, latest.Name, 1)
 	}
 
-	switch scenario.Path {
-	case restoreLifecycleFailedJob:
-		markRestoreModelJobStatus(t, namespace, latest.Name, 0, 1)
-		reconcileRestoreModel(t, mgr, latest, "failed job")
-		latest = getRestoreModelRequest(t, namespace, restoreObj.Name)
-		assertRestoreModelTerminal(t, latest, openbaov1alpha1.RestorePhaseFailed)
-	case restoreLifecycleSuccess, restoreLifecycleBlockedThenRelease, restoreLifecycleForceOverride:
-		markRestoreModelJobStatus(t, namespace, latest.Name, 1, 0)
-		reconcileRestoreModel(t, mgr, latest, "successful job requests voter restart")
-		latest = getRestoreModelRequest(t, namespace, restoreObj.Name)
-		assertRestoreModelPhase(t, latest, openbaov1alpha1.RestorePhaseRunning)
-		assertRestoreModelLock(t, namespace, cluster.Name, openbaov1alpha1.ClusterOperationRestore, true)
-		cluster = getRestoreModelCluster(t, namespace, cluster.Name)
-		if cluster.Status.Restore == nil || cluster.Status.Restore.UID != string(latest.UID) {
-			t.Fatalf("cluster restore status = %+v, want UID %q", cluster.Status.Restore, latest.UID)
-		}
-		createSettledRestoreVoterStatefulSet(controllerClient, cluster, latest, t.Fatalf)
-		reconcileRestoreModel(t, mgr, latest, "voter restart completed")
-		latest = getRestoreModelRequest(t, namespace, restoreObj.Name)
-		assertRestoreModelTerminal(t, latest, openbaov1alpha1.RestorePhaseCompleted)
-	default:
-		t.Fatalf("unexpected restore lifecycle path %q", scenario.Path)
+	succeeded, failed := int32(1), int32(0)
+	if scenario.Path == restoreLifecycleFailedJob {
+		succeeded, failed = 0, 1
 	}
-
-	assertRestoreModelLockReleased(t, namespace, cluster.Name)
+	markRestoreModelJobStatus(t, namespace, latest.Name, succeeded, failed)
+	reconcileRestoreModel(t, mgr, latest, "terminal Job retains management hold")
+	latest = getRestoreModelRequest(t, namespace, restoreObj.Name)
+	if scenario.Path == restoreLifecycleFailedJob {
+		assertRestoreModelTerminal(t, latest, openbaov1alpha1.RestorePhaseFailed)
+		assertRestoreModelLockReleased(t, namespace, cluster.Name)
+		reconcileRestoreModelTerminalRetries(t, mgr, latest, scenario.TerminalReconcileRetries)
+		maybeDeleteRestoreModelRequest(t, mgr, namespace, latest.Name, scenario.DeleteAfterTerminal)
+		return
+	}
+	assertRestoreModelPhase(t, latest, openbaov1alpha1.RestorePhaseUnknown)
+	assertRestoreModelLock(t, namespace, cluster.Name, openbaov1alpha1.ClusterOperationRestore, true)
+	if latest.Status.CompletionTime != nil || getRestoreModelCluster(t, namespace, cluster.Name).Status.Restore != nil {
+		t.Fatal("Job acceptance must not complete restore or restart voters")
+	}
 	reconcileRestoreModelTerminalRetries(t, mgr, latest, scenario.TerminalReconcileRetries)
 	maybeDeleteRestoreModelRequest(t, mgr, namespace, latest.Name, scenario.DeleteAfterTerminal)
 }
@@ -211,7 +202,7 @@ func reconcileRestoreModelTerminalRetries(
 		if latest.Status.Message != message {
 			t.Fatalf("terminal message changed from %q to %q", message, latest.Status.Message)
 		}
-		if completionTime == nil || latest.Status.CompletionTime == nil {
+		if (completionTime == nil) != (latest.Status.CompletionTime == nil) {
 			t.Fatalf("completionTime changed unexpectedly: before=%v after=%v", completionTime, latest.Status.CompletionTime)
 		}
 		restoreObj = latest
@@ -231,6 +222,14 @@ func maybeDeleteRestoreModelRequest(
 	}
 
 	latest := getRestoreModelRequest(t, namespace, name)
+	if latest.Status.Phase == openbaov1alpha1.RestorePhaseUnknown {
+		latest.Annotations = map[string]string{constants.AnnotationRestoreAcknowledge: latest.Status.Execution.OperationID + "/Abandon"}
+		if err := k8sClient.Update(ctx, latest); err != nil {
+			t.Fatal(err)
+		}
+		reconcileRestoreModel(t, mgr, latest, "administrator abandons held restore")
+		latest = getRestoreModelRequest(t, namespace, name)
+	}
 	if err := k8sClient.Delete(ctx, latest); err != nil {
 		t.Fatalf("delete terminal restore: %v", err)
 	}
@@ -550,8 +549,6 @@ func markRestoreModelJobStatus(t rapid.TB, namespace, restoreName string, succee
 		t.Fatalf("get restore job %s/%s: %v", namespace, jobName, err)
 	}
 	setRestoreJobTerminalStatus(job, succeeded, failed)
-	now := metav1.Now()
-	job.Status.StartTime = &now
 	if err := k8sClient.Status().Update(ctx, job); err != nil {
 		t.Fatalf("update restore job status %s/%s: %v", namespace, jobName, err)
 	}

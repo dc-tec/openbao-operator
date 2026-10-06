@@ -2,10 +2,8 @@ package openbaocluster
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -13,70 +11,6 @@ import (
 )
 
 func TestShouldStageSteadyReadReplicasDown(t *testing.T) {
-	t.Run("restore lock forces read pool drain", func(t *testing.T) {
-		cluster := &openbaov1alpha1.OpenBaoCluster{
-			Spec: openbaov1alpha1.OpenBaoClusterSpec{
-				ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
-			},
-			Status: openbaov1alpha1.OpenBaoClusterStatus{
-				OperationLock: &openbaov1alpha1.OperationLockStatus{
-					Operation: openbaov1alpha1.ClusterOperationRestore,
-					Holder:    "openbaorestore/example",
-				},
-			},
-		}
-
-		require.True(t, shouldStageSteadyReadReplicasDown(cluster))
-	})
-
-	t.Run("restore lock allows read pool recovery after voter restart", func(t *testing.T) {
-		acquiredAt := metav1.NewTime(time.Unix(100, 0))
-		restartCompletedAt := metav1.NewTime(time.Unix(200, 0))
-		cluster := &openbaov1alpha1.OpenBaoCluster{
-			Spec: openbaov1alpha1.OpenBaoClusterSpec{
-				ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
-			},
-			Status: openbaov1alpha1.OpenBaoClusterStatus{
-				Restore: &openbaov1alpha1.ClusterRestoreStatus{
-					Name:               "example",
-					UID:                "restore-uid",
-					RestartCompletedAt: &restartCompletedAt,
-				},
-				OperationLock: &openbaov1alpha1.OperationLockStatus{
-					Operation:  openbaov1alpha1.ClusterOperationRestore,
-					Holder:     constants.ControllerNameOpenBaoRestore + "/example",
-					AcquiredAt: &acquiredAt,
-				},
-			},
-		}
-
-		require.False(t, shouldStageSteadyReadReplicasDown(cluster))
-	})
-
-	t.Run("new restore lock ignores a stale voter restart receipt", func(t *testing.T) {
-		restartCompletedAt := metav1.NewTime(time.Unix(100, 0))
-		acquiredAt := metav1.NewTime(time.Unix(200, 0))
-		cluster := &openbaov1alpha1.OpenBaoCluster{
-			Spec: openbaov1alpha1.OpenBaoClusterSpec{
-				ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
-			},
-			Status: openbaov1alpha1.OpenBaoClusterStatus{
-				Restore: &openbaov1alpha1.ClusterRestoreStatus{
-					Name:               "example",
-					UID:                "old-restore-uid",
-					RestartCompletedAt: &restartCompletedAt,
-				},
-				OperationLock: &openbaov1alpha1.OperationLockStatus{
-					Operation:  openbaov1alpha1.ClusterOperationRestore,
-					Holder:     constants.ControllerNameOpenBaoRestore + "/example",
-					AcquiredAt: &acquiredAt,
-				},
-			},
-		}
-
-		require.True(t, shouldStageSteadyReadReplicasDown(cluster))
-	})
-
 	t.Run("bluegreen phase forces read pool drain", func(t *testing.T) {
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -149,10 +83,11 @@ func TestApplyOperationalReadReplicaStageDown(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+			Upgrade:      &openbaov1alpha1.UpgradeConfig{Strategy: openbaov1alpha1.UpdateStrategyBlueGreen},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			OperationLock: &openbaov1alpha1.OperationLockStatus{
-				Operation: openbaov1alpha1.ClusterOperationRestore,
+				Operation: openbaov1alpha1.ClusterOperationUpgrade,
 				Holder:    "openbaorestore/example",
 			},
 		},

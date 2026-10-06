@@ -52,7 +52,6 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 			ReconcileOnAcceptedUpgradeStrategy: true,
 			ReconcileOnBlueGreenStatus:         true,
 			ReconcileOnOperationLock:           true,
-			ReconcileOnRestoreStatus:           true,
 		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 2,
@@ -121,7 +120,6 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 			ReconcileOnAcceptedUpgradeStrategy: true,
 			ReconcileOnBlueGreenStatus:         true,
 			ReconcileOnOperationLock:           true,
-			ReconcileOnRestoreStatus:           true,
 		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 2,

@@ -449,3 +449,11 @@ func assertStrictYAML(t *testing.T, rendered []byte) {
 		}
 	}
 }
+
+func TestRestorePolicyBindingUsesReleaseName(t *testing.T) {
+	got := transformPolicyToHelm("policyName: openbao-protect-restore-execution")
+	want := `policyName: {{ include "openbao-operator.fullname" . }}-openbao-protect-restore-execution`
+	if got != want {
+		t.Fatalf("restore binding = %q, want %q", got, want)
+	}
+}

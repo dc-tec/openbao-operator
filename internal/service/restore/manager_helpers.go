@@ -38,18 +38,18 @@ func restoreWaitingForOperationLockStatusMessage(err error) string {
 }
 
 func restoreJobRunningStatusMessage(jobName string) string {
-	return fmt.Sprintf("Restore Job %s is running; waiting for completion.", jobName)
+	return fmt.Sprintf("Waiting for terminal conditions and executor termination for restore Job %s.", jobName)
 }
 
 func restoreJobFailedStatusMessage(job *batchv1.Job, failureHint string) string {
 	message := ""
 	if job == nil {
-		message = "Restore Job failed. Check the restore Job logs and create a new OpenBaoRestore to retry."
+		message = "Restore Job failed. Check the restore Job logs."
 	} else {
 		for _, cond := range job.Status.Conditions {
 			if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue && cond.Message != "" {
 				message = fmt.Sprintf(
-					"Restore Job %s failed: %s. Check kubectl logs job/%s -n %s and create a new OpenBaoRestore to retry.",
+					"Restore Job %s failed: %s. Check kubectl logs job/%s -n %s.",
 					job.Name,
 					cond.Message,
 					job.Name,
@@ -62,7 +62,7 @@ func restoreJobFailedStatusMessage(job *batchv1.Job, failureHint string) string 
 
 	if message == "" && job != nil {
 		message = fmt.Sprintf(
-			"Restore Job %s failed. Check kubectl logs job/%s -n %s and create a new OpenBaoRestore to retry.",
+			"Restore Job %s failed. Check kubectl logs job/%s -n %s.",
 			job.Name,
 			job.Name,
 			job.Namespace,

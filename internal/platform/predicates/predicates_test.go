@@ -134,14 +134,6 @@ func TestShouldReconcileOpenBaoClusterUpdate_StatusOptions(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "restore status change with option enabled",
-			opts: OpenBaoClusterPredicateOptions{ReconcileOnRestoreStatus: true},
-			mutate: func(newC *openbaov1alpha1.OpenBaoCluster) {
-				newC.Status.Restore = &openbaov1alpha1.ClusterRestoreStatus{Name: "restore-b", UID: "uid-b"}
-			},
-			want: true,
-		},
-		{
 			name: "bluegreen status change with option enabled",
 			opts: OpenBaoClusterPredicateOptions{ReconcileOnBlueGreenStatus: true},
 			mutate: func(newC *openbaov1alpha1.OpenBaoCluster) {

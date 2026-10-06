@@ -41,6 +41,9 @@ const (
 	// RestoreConfigurationConditionType reports whether operator-known restore prerequisites are satisfied.
 	RestoreConfigurationConditionType = "RestoreConfigurationReady"
 
+	// RestoreRecoveryReleasedConditionType records administrator release of a restore hold.
+	RestoreRecoveryReleasedConditionType = "RecoveryReleased"
+
 	// ConditionTypeOperationLockOverride is the condition type used when an operation
 	// lock is forcefully overridden (e.g., during disaster recovery restore).
 	ConditionTypeOperationLockOverride = "OperationLockOverride"

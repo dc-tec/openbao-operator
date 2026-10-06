@@ -3,6 +3,7 @@
 package restore
 
 import (
+	"context"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -10,7 +11,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/port/adminops"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -35,17 +35,10 @@ type Manager struct {
 	scheme                *runtime.Scheme
 	recorder              events.EventRecorder
 	operatorImageVerifier imageverify.Verifier
-	adminOpsMutator       adminops.StatusMutator
+	readHealth            func(context.Context, portopenbao.ClientConfig) (*portopenbao.HealthStatus, error)
 	clientConfig          portopenbao.ClientConfig
+	recoveryClientFor     RecoveryClientFactory
 	Platform              string
-}
-
-// WithAdminOpsStatusMutator configures the adminops-plane status persistence hook.
-func (m *Manager) WithAdminOpsStatusMutator(mutator adminops.StatusMutator) *Manager {
-	if mutator != nil {
-		m.adminOpsMutator = mutator
-	}
-	return m
 }
 
 // NewManager creates a new restore Manager.
@@ -69,6 +62,7 @@ func NewManager(
 		recorder:              recorder,
 		operatorImageVerifier: operatorImageVerifier,
 		clientConfig:          clientConfig,
+		readHealth:            readTargetHealth,
 		Platform:              platform,
 	}
 }
@@ -78,5 +72,11 @@ func (m *Manager) WithReader(reader client.Reader) *Manager {
 	if reader != nil {
 		m.reader = reader
 	}
+	return m
+}
+
+// WithRecoveryClientFactory configures authenticated, Pod-local recovery actions.
+func (m *Manager) WithRecoveryClientFactory(factory RecoveryClientFactory) *Manager {
+	m.recoveryClientFor = factory
 	return m
 }

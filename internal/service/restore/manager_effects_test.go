@@ -89,9 +89,9 @@ func TestHandleRunning_TerminalReceiptFailureOrdering(t *testing.T) {
 		wantClusterReads int
 	}{
 		{
-			name: "success receipt precedes recovery lock renewal", succeeded: true,
+			name: "success receipt precedes Unknown persistence", succeeded: true,
 			wantStage:  openbaov1alpha1.RestoreExecutionStageTerminalObserved,
-			wantResult: openbaov1alpha1.RestoreExecutionResultSucceeded, wantClusterReads: 2,
+			wantResult: openbaov1alpha1.RestoreExecutionResultSucceeded, wantClusterReads: 1,
 		},
 		{
 			name:      "failed job renews lock before recording failure",
@@ -151,7 +151,7 @@ func TestHandleRunning_TerminalReceiptFailureOrdering(t *testing.T) {
 						return c.Get(ctx, key, obj, opts...)
 					},
 					SubResourcePatch: func(ctx context.Context, c client.Client, subResource string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
-						if _, ok := obj.(*openbaov1alpha1.OpenBaoRestore); ok && tt.failReceiptWrite {
+						if r, ok := obj.(*openbaov1alpha1.OpenBaoRestore); ok && (tt.failReceiptWrite || (tt.succeeded && r.Status.Phase == openbaov1alpha1.RestorePhaseUnknown)) {
 							return injectedErr
 						}
 						return c.SubResource(subResource).Patch(ctx, obj, patch, opts...)

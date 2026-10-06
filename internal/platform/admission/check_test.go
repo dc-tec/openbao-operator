@@ -30,14 +30,17 @@ func TestDefaultDependencies(t *testing.T) {
 			BindingName: dependencyBindingValidateOpenBaoTenant,
 		},
 		{
-			Name:        dependencyOpenBaoValidateOpenBaoRestore,
-			PolicyName:  dependencyOpenBaoValidateOpenBaoRestore,
-			BindingName: dependencyBindingValidateOpenBaoRestore,
+			Name:                dependencyOpenBaoValidateOpenBaoRestore,
+			PolicyName:          dependencyOpenBaoValidateOpenBaoRestore,
+			BindingName:         dependencyBindingValidateOpenBaoRestore,
+			ExpectedFingerprint: fingerprintOpenBaoValidateOpenBaoRestore,
 		},
+		{Name: dependencyProtectRestoreExecution, PolicyName: dependencyProtectRestoreExecution, BindingName: dependencyProtectRestoreExecutionBinding, ExpectedFingerprint: fingerprintProtectRestoreExecution},
 		{
-			Name:        dependencyOpenBaoLockControllerStatefulSetMutations,
-			PolicyName:  dependencyOpenBaoLockControllerStatefulSetMutations,
-			BindingName: dependencyBindingLockControllerStatefulSetMutations,
+			Name:                dependencyOpenBaoLockControllerStatefulSetMutations,
+			PolicyName:          dependencyOpenBaoLockControllerStatefulSetMutations,
+			BindingName:         dependencyBindingLockControllerStatefulSetMutations,
+			ExpectedFingerprint: fingerprintLockControllerStatefulSetMutations,
 		},
 		{
 			Name:        dependencyOpenBaoRestrictProvisionerRBAC,

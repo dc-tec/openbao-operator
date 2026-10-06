@@ -24,6 +24,7 @@ type restoreSettings struct {
 	region       string
 	usePathStyle bool
 	force        bool
+	beforeSubmit func(context.Context, portopenbao.ClusterActions, string, int64) error
 }
 
 // runRestore executes the restore operation.
@@ -59,17 +60,11 @@ func runRestore(ctx context.Context) error {
 	}
 	defer func() { _ = storageClient.Close() }()
 
+	connection := &restoreConnection{config: cfg}
+	settings.beforeSubmit = connection.claim
 	return executeRestore(ctx, prepareCtx, storageClient, settings, constants.PathRestoreScratch,
 		func(ctx context.Context) (portopenbao.ClusterActions, func(), error) {
-			leaderURL, err := findRestoreLeader(ctx, cfg)
-			if err != nil {
-				return nil, nil, categorizef(errLeaderCategory, "failed to find leader: %w", err)
-			}
-			token, err := authenticate(ctx, cfg, leaderURL)
-			if err != nil {
-				return nil, nil, categorizef(errAuthCategory, "failed to authenticate: %w", err)
-			}
-			return openClusterClient(cfg, "restore", leaderURL, token)
+			return connection.connect(ctx)
 		})
 }
 
@@ -99,6 +94,14 @@ func executeRestore(
 		return categorizef(errSnapshotCategory, "restore preparation expired: %w", err)
 	}
 
+	if settings.beforeSubmit != nil {
+		if err := settings.beforeSubmit(prepareCtx, baoClient, staged.digest, staged.size); err != nil {
+			return err
+		}
+	}
+	if err := prepareCtx.Err(); err != nil {
+		return fmt.Errorf("submission claim expired before POST: %w", err)
+	}
 	fmt.Println("Submitting staged snapshot to cluster...")
 	// The HTTP transport owns its request body, but staging owns this descriptor.
 	// Hide Close so transport cleanup cannot close the file before our cleanup.

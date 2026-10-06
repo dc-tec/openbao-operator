@@ -16,7 +16,7 @@ import (
 
 // LoadClusterTrustBundle resolves the effective trust bundle for internal
 // cluster clients. A nil CA bundle means the client should rely on system roots.
-func LoadClusterTrustBundle(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
+func LoadClusterTrustBundle(ctx context.Context, c client.Reader, cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
 	source, err := portopenbao.ResolveClientTrustBundle(cluster)
 	if err != nil {
 		return nil, err
@@ -40,8 +40,8 @@ func LoadClusterTrustBundle(ctx context.Context, c client.Client, cluster *openb
 	}
 
 	caCert, ok := secret.Data[source.SecretKey]
-	if !ok {
-		return nil, fmt.Errorf("trust bundle key %q missing from secret %s/%s", source.SecretKey, secretRef.Namespace, secretRef.Name)
+	if !ok || len(caCert) == 0 {
+		return nil, fmt.Errorf("trust bundle key %q missing or empty in secret %s/%s", source.SecretKey, secretRef.Namespace, secretRef.Name)
 	}
 	return caCert, nil
 }

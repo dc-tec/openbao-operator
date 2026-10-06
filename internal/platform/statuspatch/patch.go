@@ -8,7 +8,7 @@ import (
 )
 
 // PatchMerge applies a status merge patch using the original object as the patch base.
-func PatchMerge(ctx context.Context, c client.Client, obj client.Object, original client.Object) error {
+func PatchMerge(ctx context.Context, c client.Client, obj client.Object, original client.Object, options ...client.MergeFromOption) error {
 	if c == nil {
 		return fmt.Errorf("client is required")
 	}
@@ -19,5 +19,5 @@ func PatchMerge(ctx context.Context, c client.Client, obj client.Object, origina
 		return fmt.Errorf("original object is required")
 	}
 
-	return c.Status().Patch(ctx, obj, client.MergeFrom(original))
+	return c.Status().Patch(ctx, obj, client.MergeFromWithOptions(original, options...))
 }

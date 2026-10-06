@@ -40,6 +40,7 @@ type restoreState struct {
 	jobState       restoreJobState
 	unknownMessage string
 	waitMessage    string
+	failureMessage string
 }
 
 type restoreDecision struct {
@@ -48,6 +49,9 @@ type restoreDecision struct {
 }
 
 func decideRestore(state restoreState) restoreDecision {
+	if state.failureMessage != "" {
+		return restoreDecision{kind: restoreDecisionFailRestore, message: state.failureMessage}
+	}
 	if state.unknownMessage != "" {
 		return restoreDecision{kind: restoreDecisionMarkUnknown, message: state.unknownMessage}
 	}
@@ -86,6 +90,8 @@ func decideRestore(state restoreState) restoreDecision {
 			}
 		}
 	case openbaov1alpha1.RestoreExecutionStageFollowThroughComplete:
+		// Older controllers recorded this after post-restore follower restarts.
+		// Honor the receipt without repeating snapshot submission or recovery.
 		return restoreDecision{kind: restoreDecisionCompleteRestore}
 	case openbaov1alpha1.RestoreExecutionStageUnknown:
 		return restoreDecision{kind: restoreDecisionIdle}

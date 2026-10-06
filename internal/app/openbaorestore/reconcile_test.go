@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
@@ -77,4 +78,36 @@ func TestReconcileOpenBaoRestore(t *testing.T) {
 			t.Fatalf("expected manager to receive the supplied restore object")
 		}
 	})
+}
+
+func TestResumeRequiresCurrentAdmissionPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name, acknowledgement      string
+		restart, released, allowed bool
+	}{
+		{name: "observation", allowed: true},
+		{name: "new Resume", acknowledgement: "operation/Resume"},
+		{name: "persisted Resume", restart: true},
+		{name: "Abandon during restart", acknowledgement: "operation/Abandon", restart: true, allowed: true},
+		{name: "released request", restart: true, released: true, allowed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{UID: "operation", Annotations: map[string]string{constants.AnnotationRestoreAcknowledge: tc.acknowledgement}},
+				Status: openbaov1alpha1.OpenBaoRestoreStatus{
+					Phase:     openbaov1alpha1.RestorePhaseUnknown,
+					Execution: &openbaov1alpha1.RestoreExecutionStatus{Stage: openbaov1alpha1.RestoreExecutionStageUnknown},
+				},
+			}
+			if tc.restart {
+				request.Status.Restart = &openbaov1alpha1.RestoreRestartStatus{}
+			}
+			if tc.released {
+				request.Status.AdministratorDisposition = openbaov1alpha1.RestoreAdministratorResume
+			}
+			if allowed := CanContinueWithoutAdmission(request); allowed != tc.allowed {
+				t.Fatalf("CanContinueWithoutAdmission() = %t, want %t", allowed, tc.allowed)
+			}
+		})
+	}
 }

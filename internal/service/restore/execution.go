@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 const restoreExecutionIDAnnotation = "openbao.org/restore-execution-id"
@@ -117,15 +118,6 @@ func (m *Manager) markRestoreExecutionTerminal(
 	return m.patchStatus(ctx, restore, original)
 }
 
-func (m *Manager) markRestoreFollowThroughComplete(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore) error {
-	original := restore.DeepCopy()
-	now := metav1.Now()
-	restore.Status.Execution.Stage = openbaov1alpha1.RestoreExecutionStageFollowThroughComplete
-	restore.Status.Execution.FollowThroughCompletedAt = &now
-	restore.Status.Message = "Post-restore voter and read-replica recovery completed."
-	return m.patchStatus(ctx, restore, original)
-}
-
 func (m *Manager) markRestoreExecutionUnknown(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore, message string) error {
 	original := restore.DeepCopy()
 	now := metav1.Now()
@@ -136,6 +128,12 @@ func (m *Manager) markRestoreExecutionUnknown(ctx context.Context, restore *open
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseUnknown
 	restore.Status.Message = message
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
+		Type: constants.RestoreRecoveryReleasedConditionType, Status: metav1.ConditionFalse,
+		Reason:             ReasonRecoveryAwaitingAcknowledgement,
+		Message:            "Inspect the restored target before acknowledging Resume or Abandon",
+		ObservedGeneration: restore.Generation,
+	})
+	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
 		Type:               string(RestoreConditionType),
 		Status:             metav1.ConditionUnknown,
 		ObservedGeneration: restore.Generation,
@@ -144,4 +142,17 @@ func (m *Manager) markRestoreExecutionUnknown(ctx context.Context, restore *open
 		LastTransitionTime: now,
 	})
 	return m.patchStatus(ctx, restore, original)
+}
+
+func restoreSubmissionExcluded(request *openbaov1alpha1.OpenBaoRestore) bool {
+	if request.Status.SubmissionClaim != nil {
+		return false
+	}
+	if !restoreExecutionCommitted(request.Status.Execution) {
+		return true
+	}
+
+	return request.Status.Phase == openbaov1alpha1.RestorePhaseFailed &&
+		request.Status.Execution.Stage == openbaov1alpha1.RestoreExecutionStageTerminalObserved &&
+		request.Status.Execution.TerminalResult == openbaov1alpha1.RestoreExecutionResultFailed
 }

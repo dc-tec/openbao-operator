@@ -54,6 +54,16 @@ func TestKustomizeCustomIdentityOverlay_RewritesOperatorIdentityFields(t *testin
 	controller := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedControllerSA)
 	provisioner := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedProvisionerSA)
 	controllerPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-restrict-controller-rbac")
+	for _, name := range []string{"openbao-protect-restore-execution", "openbao-validate-openbaorestore"} {
+		policy := mustFindPolicy(t, objs, "demo-openbao-operator-"+name)
+		if got := policyVariableExpression(t, policy, "operator_namespace"); got != testQuotedCustomOperatorNS {
+			t.Fatalf("%s namespace = %q", name, got)
+		}
+		if got := policyVariableExpression(t, policy, "controller_serviceaccount_name"); got != testQuotedPrefixedCtrlSA {
+			t.Fatalf("%s controller = %q", name, got)
+		}
+	}
+
 	controllerServiceAccountPolicy := mustFindPolicy(
 		t,
 		objs,
@@ -331,6 +341,16 @@ func TestKustomizeSingleTenantCustomIdentityOverlay_RewritesControllerIdentityAn
 	controller := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedControllerSA)
 	roleBinding := mustFindRoleBinding(t, objs, "demo-openbao-operator-single-tenant")
 	controllerPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-restrict-controller-rbac")
+	for _, name := range []string{"openbao-protect-restore-execution", "openbao-validate-openbaorestore"} {
+		policy := mustFindPolicy(t, objs, "demo-openbao-operator-"+name)
+		if got := policyVariableExpression(t, policy, "operator_namespace"); got != testQuotedCustomOperatorNS {
+			t.Fatalf("%s namespace = %q", name, got)
+		}
+		if got := policyVariableExpression(t, policy, "controller_serviceaccount_name"); got != testQuotedPrefixedCtrlSA {
+			t.Fatalf("%s controller = %q", name, got)
+		}
+	}
+
 	controllerServiceAccountPolicy := mustFindPolicy(
 		t,
 		objs,

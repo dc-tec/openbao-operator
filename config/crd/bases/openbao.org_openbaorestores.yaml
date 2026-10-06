@@ -23,6 +23,9 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
+    - jsonPath: .status.conditions[?(@.type=='RecoveryReleased')].reason
+      name: Recovery
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -111,6 +114,15 @@ spec:
               source:
                 description: Source defines where the snapshot comes from.
                 properties:
+                  expectedDigest:
+                    description: ExpectedDigest pins the staged bytes before submission.
+                    pattern: ^sha256:[a-f0-9]{64}$
+                    type: string
+                  expectedSize:
+                    format: int64
+                    maximum: 8589934592
+                    minimum: 1
+                    type: integer
                   key:
                     description: |-
                       Key is the full path to the snapshot object in the bucket.
@@ -329,6 +341,13 @@ spec:
           status:
             description: OpenBaoRestoreStatus defines the observed state of OpenBaoRestore.
             properties:
+              administratorDisposition:
+                description: AdministratorDisposition records an operation-bound recovery
+                  acknowledgement.
+                enum:
+                - Resume
+                - Abandon
+                type: string
               completionTime:
                 description: CompletionTime is when the restore operation completed
                   (success or failure).
@@ -441,6 +460,10 @@ spec:
                     - FollowThroughComplete
                     - Unknown
                     type: string
+                  targetUID:
+                    description: TargetUID prevents a replacement cluster from inheriting
+                      this execution.
+                    type: string
                   terminalObservedAt:
                     description: TerminalObservedAt is when the controller persisted
                       the terminal Job result.
@@ -472,6 +495,43 @@ spec:
                 - Failed
                 - Unknown
                 type: string
+              restart:
+                description: Restart records managed workload recovery after administrator
+                  Resume.
+                properties:
+                  completedAt:
+                    description: CompletedAt records that all bound Pods were replaced
+                      and became ready.
+                    format: date-time
+                    type: string
+                  pods:
+                    description: Pods contains the original voters and read replicas.
+                    items:
+                      description: RestoreRestartPod binds a managed restart to an
+                        original Pod and its StatefulSet.
+                      properties:
+                        name:
+                          description: Name is the original Pod name.
+                          type: string
+                        statefulSetUID:
+                          description: StatefulSetUID identifies the StatefulSet that
+                            owned the original Pod.
+                          type: string
+                        uid:
+                          description: UID identifies the original Pod; a different
+                            UID marks a replacement.
+                          type: string
+                      required:
+                      - name
+                      - statefulSetUID
+                      - uid
+                      type: object
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-type: atomic
+                required:
+                - pods
+                type: object
               snapshotKey:
                 description: SnapshotKey is the key of the snapshot that was restored.
                 type: string
@@ -484,6 +544,54 @@ spec:
                 description: StartTime is when the restore operation started.
                 format: date-time
                 type: string
+              submissionClaim:
+                description: SubmissionClaim reserves the only permitted snapshot
+                  submission.
+                properties:
+                  claimedAt:
+                    description: ClaimedAt records when submission was reserved.
+                    format: date-time
+                    type: string
+                  digest:
+                    description: 'Digest is sha256: followed by the lowercase digest
+                      of the staged snapshot bytes.'
+                    pattern: ^sha256:[a-f0-9]{64}$
+                    type: string
+                  podUID:
+                    description: PodUID identifies the executor Pod that won the claim.
+                    type: string
+                  size:
+                    description: Size is the staged snapshot size in bytes.
+                    format: int64
+                    maximum: 8589934592
+                    minimum: 1
+                    type: integer
+                  targetContainerID:
+                    description: TargetContainerID identifies the OpenBao container
+                      that received the snapshot.
+                    type: string
+                  targetPodIP:
+                    description: TargetPodIP is the address the executor connected
+                      to.
+                    type: string
+                  targetPodName:
+                    description: TargetPodName is the OpenBao Pod that received the
+                      snapshot.
+                    type: string
+                  targetPodUID:
+                    description: TargetPodUID identifies the OpenBao Pod that received
+                      the snapshot.
+                    type: string
+                required:
+                - claimedAt
+                - digest
+                - podUID
+                - size
+                - targetContainerID
+                - targetPodIP
+                - targetPodName
+                - targetPodUID
+                type: object
             type: object
         required:
         - spec

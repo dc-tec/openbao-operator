@@ -377,19 +377,17 @@ type ReadReplicaStatus struct {
 	Storage ReadReplicaStorageStatus `json:"storage,omitempty"`
 }
 
-// ClusterRestoreStatus tracks the post-snapshot workload restart for the most
-// recent restore applied to the cluster.
+// ClusterRestoreStatus retains restart observations from earlier operator releases.
+// New restores report status, including managed restarts, on OpenBaoRestore.
 type ClusterRestoreStatus struct {
-	// Name is the name of the OpenBaoRestore whose snapshot was applied.
+	// Name identifies the OpenBaoRestore recorded by an earlier release.
 	// +optional
 	Name string `json:"name,omitempty"`
-	// UID is the UID of the OpenBaoRestore whose snapshot was applied. The
-	// workload controller uses this value as a durable Pod-template rollout
-	// token.
+	// UID identifies the OpenBaoRestore recorded by an earlier release.
 	// +optional
 	UID string `json:"uid,omitempty"`
-	// RestartCompletedAt is when all voter Pods completed the post-restore
-	// restart and became ready.
+	// RestartCompletedAt is the legacy timestamp for a controller-observed voter
+	// restart. Administrator-led recovery does not update this field.
 	// +optional
 	RestartCompletedAt *metav1.Time `json:"restartCompletedAt,omitempty"`
 }
@@ -449,8 +447,9 @@ type OpenBaoClusterStatus struct {
 	// +optional
 	// +kubebuilder:validation:Nullable
 	Backup *BackupStatus `json:"backup,omitempty"`
-	// Restore tracks the post-snapshot workload restart for the most recent
-	// OpenBaoRestore applied to this cluster.
+	// Restore retains post-restore restart status written by earlier releases.
+	// It is deprecated: new restores report status on OpenBaoRestore, and the
+	// operator reads this field only to preserve legacy Pod templates.
 	// +optional
 	// +kubebuilder:validation:Nullable
 	Restore *ClusterRestoreStatus `json:"restore,omitempty"`

@@ -9,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	adminopsapp "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminops"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
@@ -49,6 +50,10 @@ func (a *Applications) ReconcileWorkload(
 		return recon.Result{}, fmt.Errorf("workload application client is required")
 	}
 
+	if cluster != nil && cluster.Annotations[constants.AnnotationRestoreHold] != "" {
+		return recon.Result{}, nil
+	}
+
 	return RunWorkloadReconcilers(
 		ctx,
 		a.config.Client,
@@ -72,6 +77,10 @@ func (a *Applications) ReconcileAdminOps(
 ) (recon.Result, error) {
 	if a == nil || a.config.AdminOpsApplication == nil {
 		return recon.Result{}, fmt.Errorf("admin operations application is required")
+	}
+
+	if cluster != nil && cluster.Annotations[constants.AnnotationRestoreHold] != "" {
+		return recon.Result{}, nil
 	}
 
 	return a.config.AdminOpsApplication.Reconcile(
@@ -103,6 +112,9 @@ func (a *Applications) HandleDeletion(
 ) error {
 	if a == nil {
 		return fmt.Errorf("deletion application is required")
+	}
+	if cluster != nil && cluster.Annotations[constants.AnnotationRestoreHold] != "" {
+		return fmt.Errorf("cluster remains held for administrator restore recovery")
 	}
 	return HandleDeletion(ctx, logger, a.config.DeletionDependencies, cluster)
 }

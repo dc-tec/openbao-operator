@@ -152,8 +152,20 @@ patchesJson6902:
   - target:
       group: admissionregistration.k8s.io
       version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-protect-restore-execution
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
       kind: ValidatingAdmissionPolicyBinding
       name: openbao-operator-openbao-restrict-controller-rbac-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-protect-restore-execution-binding
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
@@ -282,6 +294,26 @@ replacements:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-validate-openbaorestore
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-protect-restore-execution
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-controller-serviceaccounts
         fieldPaths:
           - spec.variables.[name=controller_serviceaccount_name].expression
@@ -349,6 +381,26 @@ replacements:
           version: v1
           kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-controller-rbac
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-validate-openbaorestore
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-protect-restore-execution
         fieldPaths:
           - spec.variables.[name=operator_namespace].expression
         options:
@@ -524,6 +576,20 @@ replacements:
           version: v1
           kind: ValidatingAdmissionPolicyBinding
           name: openbao-operator-openbao-restrict-controller-rbac-binding
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-protect-restore-execution
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-openbao-protect-restore-execution-binding
         fieldPaths:
           - spec.policyName
   - source:

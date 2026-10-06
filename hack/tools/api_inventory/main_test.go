@@ -329,6 +329,7 @@ func TestRepositoryInventoryTracksProducedConditionTypes(t *testing.T) {
 		constants.ConditionTypeOperationLockOverride,
 		constants.RestoreConditionType,
 		constants.RestoreConfigurationConditionType,
+		constants.RestoreRecoveryReleasedConditionType,
 	})
 	assertStableValues(t, report, "OpenBaoTenant", "status.conditions", []string{
 		constants.TenantProvisionedConditionType,

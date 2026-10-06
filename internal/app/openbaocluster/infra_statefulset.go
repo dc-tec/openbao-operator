@@ -24,7 +24,6 @@ func (r *infraReconciler) computeStatefulSetSpec(
 		Image:              verifiedImageDigest,
 		InitContainerImage: verifiedInitContainerDigest,
 		Replicas:           cluster.Spec.Replicas,
-		RestoreRevision:    clusterRestoreRevision(cluster),
 		DisableSelfInit:    false,
 		SkipReconciliation: false,
 	}
@@ -75,15 +74,7 @@ func (r *infraReconciler) computeReadReplicaStatefulSetSpec(
 		Image:              verifiedImageDigest,
 		InitContainerImage: verifiedInitContainerDigest,
 		Replicas:           replicas,
-		RestoreRevision:    clusterRestoreRevision(cluster),
 		DisableSelfInit:    true,
 		SkipReconciliation: cluster.Spec.ReadReplicas == nil,
 	}
-}
-
-func clusterRestoreRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	if cluster == nil || cluster.Status.Restore == nil {
-		return ""
-	}
-	return cluster.Status.Restore.UID
 }

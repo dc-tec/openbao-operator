@@ -145,6 +145,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `submissionClaim` _[RestoreSubmissionClaim](#restoresubmissionclaim)_ | SubmissionClaim reserves the only permitted snapshot submission. |  | Optional: \{\} <br /> |
+| `restart` _[RestoreRestartStatus](#restorerestartstatus)_ | Restart records managed workload recovery after administrator Resume. |  | Optional: \{\} <br /> |
+| `administratorDisposition` _[RestoreAdministratorDisposition](#restoreadministratordisposition)_ | AdministratorDisposition records an operation-bound recovery acknowledgement. |  | Enum: [Resume Abandon] <br />Optional: \{\} <br /> |
 | `phase` _[RestorePhase](#restorephase)_ | Phase represents the current phase of the restore operation. | Pending | Enum: [Pending Validating Running Completed Failed Unknown] <br /> |
 | `startTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | StartTime is when the restore operation started. |  | Optional: \{\} <br /> |
 | `completionTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | CompletionTime is when the restore operation completed (success or failure). |  | Optional: \{\} <br /> |
@@ -153,6 +156,23 @@ _Appears in:_
 | `snapshotSize` _integer_ | SnapshotSize is the size of the restored snapshot in bytes. |  | Optional: \{\} <br /> |
 | `message` _string_ | Message provides additional details about the current phase. |  | Optional: \{\} <br /> |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions represent the latest available observations of the restore's state. |  | Optional: \{\} <br /> |
+
+
+#### RestoreAdministratorDisposition
+
+_Underlying type:_ _string_
+
+RestoreAdministratorDisposition records the administrator's recovery decision.
+
+
+
+_Appears in:_
+- [OpenBaoRestoreStatus](#openbaorestorestatus)
+
+| Field | Description |
+| --- | --- |
+| `Resume` |  |
+| `Abandon` |  |
 
 
 #### RestoreExecutionResult
@@ -208,6 +228,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `targetUID` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#uid-types-pkg)_ | TargetUID prevents a replacement cluster from inheriting this execution. |  | Optional: \{\} <br /> |
 | `operationID` _string_ | OperationID identifies this immutable restore execution. |  |  |
 | `stage` _[RestoreExecutionStage](#restoreexecutionstage)_ | Stage is the latest durable execution boundary observed by the controller. |  | Enum: [Prepared Committed Created TerminalObserved FollowThroughComplete Unknown] <br /> |
 | `jobName` _string_ | JobName is the expected restore Job name for this execution. |  |  |
@@ -242,6 +263,42 @@ _Appears in:_
 | `Unknown` | RestorePhaseUnknown indicates the controller cannot determine whether the<br />destructive restore operation ran. The controller does not retry an<br />execution in this phase.<br /> |
 
 
+#### RestoreRestartPod
+
+
+
+RestoreRestartPod binds a managed restart to an original Pod and its StatefulSet.
+
+
+
+_Appears in:_
+- [RestoreRestartStatus](#restorerestartstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the original Pod name. |  |  |
+| `uid` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#uid-types-pkg)_ | UID identifies the original Pod; a different UID marks a replacement. |  |  |
+| `statefulSetUID` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#uid-types-pkg)_ | StatefulSetUID identifies the StatefulSet that owned the original Pod. |  |  |
+
+
+#### RestoreRestartStatus
+
+
+
+RestoreRestartStatus records Resume before restarting workloads. Replacement
+Pod UIDs provide retry evidence; this status does not prove snapshot application.
+
+
+
+_Appears in:_
+- [OpenBaoRestoreStatus](#openbaorestorestatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `pods` _[RestoreRestartPod](#restorerestartpod) array_ | Pods contains the original voters and read replicas. |  | MinItems: 1 <br /> |
+| `completedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | CompletedAt records that all bound Pods were replaced and became ready. |  | Optional: \{\} <br /> |
+
+
 #### RestoreSource
 
 
@@ -255,8 +312,34 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `expectedDigest` _string_ | ExpectedDigest pins the staged bytes before submission. |  | Pattern: `^sha256:[a-f0-9]\{64\}$` <br />Optional: \{\} <br /> |
+| `expectedSize` _integer_ |  |  | Maximum: 8.589934592e+09 <br />Minimum: 1 <br />Optional: \{\} <br /> |
 | `target` _[BackupTarget](#backuptarget)_ | Target reuses BackupTarget for storage connection details.<br />This includes endpoint, bucket, region, credentials, etc. |  |  |
 | `key` _string_ | Key is the full path to the snapshot object in the bucket.<br />For example, "clusters/prod/2025-10-14-120000.snap". |  | MinLength: 1 <br /> |
+
+
+#### RestoreSubmissionClaim
+
+
+
+RestoreSubmissionClaim is a one-way submission reservation. A persisted claim
+never authorizes a restarted executor to submit again.
+
+
+
+_Appears in:_
+- [OpenBaoRestoreStatus](#openbaorestorestatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `podUID` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#uid-types-pkg)_ | PodUID identifies the executor Pod that won the claim. |  |  |
+| `targetPodName` _string_ | TargetPodName is the OpenBao Pod that received the snapshot. |  |  |
+| `targetPodUID` _[UID](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#uid-types-pkg)_ | TargetPodUID identifies the OpenBao Pod that received the snapshot. |  |  |
+| `targetPodIP` _string_ | TargetPodIP is the address the executor connected to. |  |  |
+| `targetContainerID` _string_ | TargetContainerID identifies the OpenBao container that received the snapshot. |  |  |
+| `digest` _string_ | Digest is sha256: followed by the lowercase digest of the staged snapshot bytes. |  | Pattern: `^sha256:[a-f0-9]\{64\}$` <br /> |
+| `size` _integer_ | Size is the staged snapshot size in bytes. |  | Maximum: 8.589934592e+09 <br />Minimum: 1 <br /> |
+| `claimedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | ClaimedAt records when submission was reserved. |  |  |
 
 
 #### WorkloadIdentityConfig

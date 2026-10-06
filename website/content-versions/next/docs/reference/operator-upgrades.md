@@ -26,12 +26,18 @@ operator installation. Changes to the OpenBao workload version use `spec.version
 Take and verify a current backup for every managed production cluster. An operator rollback is not a data rollback.
 {{< /callout >}}
 
-## Restore executor changes in Next
+## Restore changes in this release
 
-Restore executors stage snapshots before submission and reject snapshots larger than 8 GiB. Each executor requests
-about 9 GiB of ephemeral storage. Check node capacity and namespace quotas before upgrading. Restore Jobs use a
-40-minute deadline and do not retry failed containers or follow HTTP redirects. Finish in-flight restores before
-upgrading because an older executor does not provide these guarantees.
+- Finish in-flight restores before upgrading. Requests from older releases do not use the submission claim.
+- A restore into an existing cluster now ends `Unknown` and waits for an administrator acknowledgement. The operator
+  no longer drains read replicas or restarts voters automatically; `Resume` runs a managed restart instead. See
+  [Recover an uncertain restore](../../operate/restore/recover-uncertain/).
+- `status.restore` on `OpenBaoCluster` is deprecated and no longer written.
+- `openbao_restore_state` adds values 4–7. An unresolved recovery takes precedence; otherwise the newest retained
+  request determines the value. Update alerts that assume the previous values.
+- Static-unseal clusters can use `spec.unseal.credentialsSecretRef` as their key source, and admission prevents
+  changing it later. Earlier releases ignored this field for static clusters. A cluster that already has an
+  operator-generated `<cluster>-unseal-key` keeps using that key, so an existing reference stays ignored.
 
 ## Upgrade a Helm installation
 

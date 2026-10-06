@@ -46,7 +46,7 @@ func EnsureRestoreServiceAccount(
 }
 
 // EnsureRestoreRBAC creates or updates Role/RoleBinding required by restore Jobs for pod discovery.
-func EnsureRestoreRBAC(ctx context.Context, c client.Client, scheme *runtime.Scheme, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func EnsureRestoreRBAC(ctx context.Context, c client.Client, scheme *runtime.Scheme, cluster *openbaov1alpha1.OpenBaoCluster, requests ...string) error {
 	saName := restoreServiceAccountName(cluster)
 	roleName := saName + "-role"
 	roleBindingName := saName + "-rolebinding"
@@ -71,6 +71,12 @@ func EnsureRestoreRBAC(ctx context.Context, c client.Client, scheme *runtime.Sch
 		},
 	}
 
+	if len(requests) != 0 {
+		role.Rules = append(role.Rules,
+			rbacv1.PolicyRule{APIGroups: []string{"openbao.org"}, Resources: []string{"openbaorestores"}, ResourceNames: requests, Verbs: []string{"get"}},
+			rbacv1.PolicyRule{APIGroups: []string{"openbao.org"}, Resources: []string{"openbaorestores/status"}, ResourceNames: requests, Verbs: []string{"patch"}},
+		)
+	}
 	if err := resourceapply.ApplyOwned(ctx, c, scheme, cluster, role); err != nil {
 		return fmt.Errorf("failed to ensure Role %s/%s: %w", cluster.Namespace, roleName, err)
 	}

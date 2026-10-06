@@ -43,7 +43,8 @@ Use `kubectl describe` on the parent custom resource to see status and recent Ev
 | Strict NetworkPolicy | `APIServerNetworkReady` |
 | Scheduled backups | `BackupConfigurationReady`, `BackingUp` |
 | File audit storage | `AuditFileStorageReady`; inspect `Degraded` when recreation is required |
-| Restore | `RestoreConfigurationReady`, then `RestoreComplete` |
+| Restore | `RestoreConfigurationReady`, then `RestoreComplete`; `RecoveryReleased` after an uncertain outcome |
+| Restore tests | `Passed` in `status.backup.restoreTest.conditions` on the source cluster |
 | Approved policy repair | `PolicyReconciliationReady`; inspect warning events when false |
 
 ## OpenBaoCluster status
@@ -120,13 +121,16 @@ for how backup and upgrade use them, and [policy enrollment](../../operate/opera
 
 ## OpenBaoRestore status
 
-`status.phase` moves through `Pending`, `Validating`, `Running`, and either `Completed` or `Failed`.
+`status.phase` moves through `Pending`, `Validating`, and `Running`, then ends `Completed`, `Failed`, or `Unknown`.
+`Unknown` means the snapshot was submitted but its application is not confirmed; see
+[Recover an uncertain restore](../../operate/restore/recover-uncertain/).
 
 | Type | Signal |
 | --- | --- |
 | `RestoreConfigurationReady` | Operator-known authentication, storage, identity, and egress prerequisites |
 | `RestoreComplete` | Terminal restore result |
 | `OperationLockOverride` | A forced disaster-recovery restore cleared another operation lock |
+| `RecoveryReleased` | Whether management was handed back after an uncertain outcome; the reason names the current step |
 
 `AmbientIdentityAssumed` means the operator identified a provider default chain. It does not prove that the cloud-side
 role, service account, or permission binding works.

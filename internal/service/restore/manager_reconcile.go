@@ -40,9 +40,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, restore *op
 		// Terminal states: remove the retained Job and ensure lock cleanup eventually succeeds.
 		return m.ensureTerminalCleanup(ctx, logger, restore)
 	case openbaov1alpha1.RestorePhaseUnknown:
-		// Unknown is fail-closed. Keep the operation lock until an operator deletes
-		// the immutable restore request after investigating the execution.
-		return ctrl.Result{}, nil
+		return m.reconcileAcknowledgement(ctx, logger, restore)
 	default:
 		logger.Info("Unknown restore phase", "phase", restore.Status.Phase)
 		return ctrl.Result{}, nil
@@ -147,6 +145,7 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 	original := restore.DeepCopy()
 	restore.Status.Phase = openbaov1alpha1.RestorePhaseRunning
 	restore.Status.Execution = newRestoreExecutionStatus(restore)
+	restore.Status.Execution.TargetUID = cluster.UID
 	restore.Status.Message = fmt.Sprintf("Restore execution %s prepared; waiting to commit Job %s.", restore.Status.Execution.OperationID, restore.Status.Execution.JobName)
 
 	if err := m.patchStatus(ctx, restore, original); err != nil {

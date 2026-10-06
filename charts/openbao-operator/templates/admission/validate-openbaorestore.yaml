@@ -2,6 +2,8 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  annotations:
+    openbao.org/admission-policy-fingerprint: sha256:25303ada192441de20c0ca5ff2cf6668fbe49089e804e57d44c81ae55e656269
   name: {{ include "openbao-operator.fullname" . }}-openbao-validate-openbaorestore
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
@@ -14,6 +16,17 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["openbaorestores"]
   variables:
+    - name: operator_namespace
+      expression: "'{{ .Release.Namespace }}'"
+    - name: controller_serviceaccount_name
+      expression: "'{{ include "openbao-operator.controllerServiceAccountName" . }}'"
+    - name: is_controller
+      expression: >-
+        request.userInfo.username == 'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name
+    - name: delegated_authority
+      expression: >-
+        variables.is_controller ||
+        (oldObject != null && object.spec == oldObject.spec)
     - name: restore_endpoint
       expression: >-
         has(object.spec.source.target.endpoint) ? object.spec.source.target.endpoint.trim() : ""
@@ -71,19 +84,20 @@ spec:
               size(object.spec.source.target.workloadIdentity.podLabels) > 0)
           ))
   validations:
-    # API contract: restore specs are immutable after creation.
     - expression: >-
         oldObject == null || object.spec == oldObject.spec
       message: "spec is immutable; create a new OpenBaoRestore for changed restore parameters."
     # Destructive restore target authorization: restore can replace data, policies, and keys.
     - expression: >-
-        variables.restore_authorized
+        variables.is_controller || variables.restore_authorized
       message: "Users creating or updating an OpenBaoRestore must be authorized to restore the target OpenBaoCluster."
     # Reference authorization: restore cloud identity metadata delegates cloud authority
     # to the generated restore ServiceAccount or Job pod.
     - expression: >-
-        !variables.has_restore_cloud_identity_metadata ||
-        variables.cloud_identities_authorized
+        variables.delegated_authority || (
+          !variables.has_restore_cloud_identity_metadata ||
+          variables.cloud_identities_authorized
+        )
       message: "Users configuring restore S3 roleArn or workloadIdentity metadata must be authorized to use cloud identities on the target OpenBaoCluster."
     # Safety: overrideOperationLock requires force=true (break-glass is explicit).
     - expression: >-
@@ -125,16 +139,20 @@ spec:
     # Confused-deputy protection: custom restore helper images run with restore credentials.
     # Existing usehelperimages grants are accepted as a compatibility alias.
     - expression: >-
-        !has(object.spec.image) ||
-        object.spec.image == "" ||
-        variables.custom_executables_authorized
+        variables.delegated_authority || (
+          !has(object.spec.image) ||
+          object.spec.image == "" ||
+          variables.custom_executables_authorized
+        )
       message: "Users configuring custom restore helper images must be authorized to use custom executables on the target OpenBaoCluster."
     # Confused-deputy protection: users configuring restore Secret credentials must be able to read those Secrets.
     - expression: >-
-        (!has(object.spec.source.target.credentialsSecretRef) ||
-          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.source.target.credentialsSecretRef.name).check("get").allowed()) &&
-        (!has(object.spec.tokenSecretRef) ||
-          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.tokenSecretRef.name).check("get").allowed())
+        variables.delegated_authority || (
+          (!has(object.spec.source.target.credentialsSecretRef) ||
+            authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.source.target.credentialsSecretRef.name).check("get").allowed()) &&
+          (!has(object.spec.tokenSecretRef) ||
+            authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.tokenSecretRef.name).check("get").allowed())
+        )
       message: "Users configuring restore credentials must be authorized to get referenced restore Secrets."
     # Confused-deputy protection: Block references to system secrets (restore auth + object store credentials)
     - expression: >-

@@ -173,3 +173,46 @@ func TestRestorePreparationDeadline(t *testing.T) {
 		require.Equal(t, deadline, got)
 	})
 }
+
+func TestExecuteRestoreClaimFailureOrExpiryPreventsPOST(t *testing.T) {
+	t.Parallel()
+	for _, expires := range []bool{false, true} {
+		name := map[bool]string{false: "claim acknowledgement lost", true: "claim preparation expired"}[expires]
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			store := &restoreFlowStore{backupFlowBlobStore: backupFlowBlobStore{object: []byte("snapshot")}}
+			prepareCtx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			claimError := errors.New("claim write acknowledgement lost")
+			calls := 0
+			settings := restoreSettings{key: "snapshot", beforeSubmit: func(
+				_ context.Context, _ portopenbao.ClusterActions, digest string, size int64,
+			) error {
+				calls++
+				require.NotEmpty(t, digest)
+				require.Equal(t, int64(8), size)
+				if expires {
+					cancel()
+					return nil
+				}
+				return claimError
+			}}
+			err := executeRestore(t.Context(), prepareCtx, store, settings, dir,
+				func(context.Context) (portopenbao.ClusterActions, func(), error) {
+					return &openbaotest.MockClusterActions{RestoreFunc: func(
+						context.Context, io.Reader, portopenbao.RestoreOptions,
+					) error {
+						t.Fatal("an unacknowledged or expired claim must never submit")
+						return nil
+					}}, func() {}, nil
+				})
+			if expires {
+				require.ErrorIs(t, err, context.Canceled)
+			} else {
+				require.ErrorIs(t, err, claimError)
+			}
+			require.Equal(t, 1, calls)
+			assertRestoreScratchEmpty(t, dir)
+		})
+	}
+}

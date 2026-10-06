@@ -194,6 +194,7 @@ is still required. Workload and administrative operations retain their immediate
 | Reconciliation | `openbao_reconcile_errors_total` and `openbao_reconcile_duration_seconds` |
 | Kubernetes API requests | `openbao_kube_client_requests_total` |
 | Backup | `openbao_backup_last_success_timestamp` and backup readiness or failure state |
+| Restore | `openbao_restore_state` reports outcome and administrator recovery state. |
 | Upgrade | `openbao_upgrade_in_progress`, failure, rollback, and duration metrics |
 | Read pool | `openbao_cluster_read_replicas_desired`, `_ready`, `_registered`, and `_healthy` |
 

@@ -88,7 +88,7 @@ func TestRestoreCreationRecoversWithFreshManager(t *testing.T) {
 				return
 			}
 			f.requireCreatedIdentity(t)
-			f.finishSuccessfulRestore(t)
+			f.finishAcceptedRestore(t)
 		})
 	}
 }
@@ -135,7 +135,7 @@ func TestRestoreAmbiguousCreateRecoversWithFreshManager(t *testing.T) {
 			require.NoError(t, f.step(t))
 			f.requireCreatedIdentity(t)
 			require.Equal(t, jobUID, f.restore(t).Status.Execution.JobUID)
-			f.finishSuccessfulRestore(t)
+			f.finishAcceptedRestore(t)
 		})
 	}
 }
@@ -181,13 +181,6 @@ func TestRestoreTerminalWritesRecoverWithFreshManager(t *testing.T) {
 					require.NoError(t, f.step(t))
 					f.requireCreatedIdentity(t)
 					f.markJobTerminal(t, succeeded)
-					if succeeded && terminalPhase {
-						// First request the restart and prove that an unsettled voter
-						// workload retains the lock before allowing terminal completion.
-						require.NoError(t, f.step(t))
-						f.requireRestartRequested(t)
-						f.setVotersReady(t)
-					}
 					injected := errors.New("terminal restore status response failed")
 					failed := false
 					f.client = interceptor.NewClient(f.base, interceptor.Funcs{
@@ -195,7 +188,7 @@ func TestRestoreTerminalWritesRecoverWithFreshManager(t *testing.T) {
 							r, ok := obj.(*openbaov1alpha1.OpenBaoRestore)
 							matches := ok && r.Status.Execution.Stage == openbaov1alpha1.RestoreExecutionStageTerminalObserved
 							if ok && terminalPhase {
-								matches = r.Status.Phase == openbaov1alpha1.RestorePhaseCompleted || r.Status.Phase == openbaov1alpha1.RestorePhaseFailed
+								matches = r.Status.Phase == openbaov1alpha1.RestorePhaseUnknown
 							}
 							if matches && !failed {
 								failed = true
@@ -213,7 +206,8 @@ func TestRestoreTerminalWritesRecoverWithFreshManager(t *testing.T) {
 					f.requireLockHeld(t)
 					stored := f.restore(t)
 					if terminalPhase && writeApplied {
-						require.NotNil(t, stored.Status.CompletionTime)
+						require.Equal(t, openbaov1alpha1.RestorePhaseUnknown, stored.Status.Phase)
+						require.Nil(t, stored.Status.CompletionTime)
 					} else {
 						require.Equal(t, openbaov1alpha1.RestorePhaseRunning, stored.Status.Phase)
 						require.Nil(t, stored.Status.CompletionTime)
@@ -222,122 +216,14 @@ func TestRestoreTerminalWritesRecoverWithFreshManager(t *testing.T) {
 						require.Equal(t, openbaov1alpha1.RestoreExecutionStageCreated, stored.Status.Execution.Stage)
 					}
 					require.NoError(t, f.step(t))
-					if succeeded && !terminalPhase {
-						f.requireRestartRequested(t)
-						f.setVotersReady(t)
-						require.NoError(t, f.step(t))
-					}
-					f.requireTerminalCleanup(t, succeeded)
+					f.requireUncertainExecutionHeld(t, succeeded)
 				})
 			}
 		}
 	}
 }
 
-func TestRestoreFailedJobCleanupRecoversWithFreshManager(t *testing.T) {
-	t.Parallel()
-	f := newRestoreRecoveryFixture(t)
-	require.NoError(t, f.step(t))
-	f.requireCreatedIdentity(t)
-	f.markJobTerminal(t, false)
-	require.NoError(t, f.step(t))
-	failedStatus := f.restore(t).Status
-	require.Equal(t, openbaov1alpha1.RestorePhaseFailed, failedStatus.Phase)
-	injected := errors.New("retained restore Job deletion failed")
-	deleteFailed := false
-	f.client = interceptor.NewClient(f.base, interceptor.Funcs{
-		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
-			if _, ok := obj.(*batchv1.Job); ok && !deleteFailed {
-				deleteFailed = true
-				return injected
-			}
-			return c.Delete(ctx, obj, opts...)
-		},
-	})
-	require.ErrorIs(t, f.step(t), injected)
-	require.True(t, deleteFailed)
-	require.Equal(t, failedStatus, f.restore(t).Status)
-	require.Equal(t, failedStatus.Execution.JobUID, f.job(t).UID)
-	f.requireTerminalCleanup(t, false)
-}
-
-func TestRestoreRestartWritesRecoverWithFreshManager(t *testing.T) {
-	t.Parallel()
-	for _, completing := range []bool{false, true} {
-		for _, readBackLost := range []bool{false, true} {
-			name := fmt.Sprintf("completing=%t/readBackLost=%t", completing, readBackLost)
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-				f := newRestoreRecoveryFixture(t)
-				require.NoError(t, f.step(t))
-				f.requireCreatedIdentity(t)
-				f.markJobTerminal(t, true)
-				if completing {
-					require.NoError(t, f.step(t))
-					f.requireRestartRequested(t)
-					f.setVotersReady(t)
-				}
-				injected := errors.New("restart status persistence failed")
-				failed := false
-				failReadBack := false
-				applyCalls := 0
-				f.client = interceptor.NewClient(f.base, interceptor.Funcs{
-					SubResourceApply: func(ctx context.Context, c client.Client, subresource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
-						applyCalls++
-						if !failed {
-							failed = true
-							if !readBackLost {
-								return injected
-							}
-							require.NoError(t, c.SubResource(subresource).Apply(ctx, obj, opts...))
-							failReadBack = true
-							return nil
-						}
-						return c.SubResource(subresource).Apply(ctx, obj, opts...)
-					},
-					Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-						if _, ok := obj.(*openbaov1alpha1.OpenBaoCluster); ok && failReadBack {
-							failReadBack = false
-							return injected
-						}
-						return c.Get(ctx, key, obj, opts...)
-					},
-				})
-
-				require.ErrorIs(t, f.step(t), injected)
-				require.True(t, failed)
-				f.requireLockHeld(t)
-				require.Equal(t, openbaov1alpha1.RestorePhaseRunning, f.restore(t).Status.Phase)
-				restart := f.cluster(t).Status.Restore
-				if completing {
-					require.NotNil(t, restart)
-					require.Equal(t, readBackLost, restart.RestartCompletedAt != nil)
-				} else if readBackLost {
-					require.NotNil(t, restart)
-					require.Equal(t, string(f.restore(t).UID), restart.UID)
-				} else {
-					require.Nil(t, restart)
-				}
-				require.NoError(t, f.step(t))
-				if readBackLost {
-					require.Equal(t, 1, applyCalls, "the durable restart receipt must be reused after lost read-back")
-				} else {
-					require.Equal(t, 2, applyCalls, "a rejected restart write must be retried")
-				}
-				if !completing {
-					f.requireRestartRequested(t)
-					f.setVotersReady(t)
-					require.NoError(t, f.step(t))
-				}
-				f.requireTerminalCleanup(t, true)
-			})
-		}
-	}
-}
-
-// These fixtures test recovery decisions across injected client failures. Child
-// Job completion and StatefulSet convergence are supplied observations, not proof
-// of API-server SSA semantics, controller watches, or real Pod restarts.
+// The fixture supplies Job observations and injects failures across fresh managers.
 type restoreRecoveryFixture struct {
 	scheme     *runtime.Scheme
 	base       client.WithWatch
@@ -420,7 +306,7 @@ func (f *restoreRecoveryFixture) job(t *testing.T) *batchv1.Job {
 func (f *restoreRecoveryFixture) step(t *testing.T) error {
 	t.Helper()
 	// Every call discards the previous Manager and all in-memory API objects.
-	manager := withTestAdminOpsStatusPersistence(NewManager(f.client, f.scheme, nil, nil, ""), f.client)
+	manager := NewManager(f.client, f.scheme, nil, nil, "")
 	_, err := manager.Reconcile(t.Context(), testLogger(), f.restore(t))
 	return err
 }
@@ -459,67 +345,78 @@ func (f *restoreRecoveryFixture) markJobTerminal(t *testing.T, succeeded bool) {
 	require.NoError(t, f.base.Status().Update(t.Context(), job))
 }
 
-func (f *restoreRecoveryFixture) requireRestartRequested(t *testing.T) {
-	t.Helper()
-	r := f.restore(t)
-	require.Equal(t, openbaov1alpha1.RestorePhaseRunning, r.Status.Phase)
-	restart := f.cluster(t).Status.Restore
-	require.NotNil(t, restart)
-	require.Equal(t, r.Name, restart.Name)
-	require.Equal(t, string(r.UID), restart.UID)
-	require.Nil(t, restart.RestartCompletedAt)
-	require.Equal(t, r.Status.Execution.JobUID, f.job(t).UID)
-	f.requireLockHeld(t)
-}
-
-func (f *restoreRecoveryFixture) setVotersReady(t *testing.T) {
-	t.Helper()
-	sts := &appsv1.StatefulSet{}
-	require.NoError(t, f.base.Get(t.Context(), f.clusterKey, sts))
-	sts.Spec.Template.Annotations = map[string]string{constants.AnnotationRestoreRevision: string(f.restore(t).UID)}
-	require.NoError(t, f.base.Update(t.Context(), sts))
-	sts.Status = appsv1.StatefulSetStatus{
-		ObservedGeneration: sts.Generation, Replicas: 3, ReadyReplicas: 3, UpdatedReplicas: 3, CurrentReplicas: 3,
-		CurrentRevision: "restored-revision", UpdateRevision: "restored-revision",
-	}
-	require.NoError(t, f.base.Status().Update(t.Context(), sts))
-}
-
-func (f *restoreRecoveryFixture) finishSuccessfulRestore(t *testing.T) {
+func (f *restoreRecoveryFixture) finishAcceptedRestore(t *testing.T) {
 	t.Helper()
 	f.markJobTerminal(t, true)
 	require.NoError(t, f.step(t))
-	f.requireRestartRequested(t)
-	f.setVotersReady(t)
-	require.NoError(t, f.step(t))
-	f.requireTerminalCleanup(t, true)
+	f.requireUncertainExecutionHeld(t, true)
 }
 
-func (f *restoreRecoveryFixture) requireTerminalCleanup(t *testing.T, succeeded bool) {
+func (f *restoreRecoveryFixture) requireUncertainExecutionHeld(t *testing.T, succeeded bool) {
 	t.Helper()
 	r := f.restore(t)
-	wantPhase := openbaov1alpha1.RestorePhaseFailed
 	wantResult := openbaov1alpha1.RestoreExecutionResultFailed
 	if succeeded {
-		wantPhase = openbaov1alpha1.RestorePhaseCompleted
 		wantResult = openbaov1alpha1.RestoreExecutionResultSucceeded
-		require.Equal(t, openbaov1alpha1.RestoreExecutionStageFollowThroughComplete, r.Status.Execution.Stage)
-		restart := f.cluster(t).Status.Restore
-		require.NotNil(t, restart)
-		require.Equal(t, string(r.UID), restart.UID)
-		require.NotNil(t, restart.RestartCompletedAt)
 	}
-	require.Equal(t, wantPhase, r.Status.Phase)
+	require.Equal(t, openbaov1alpha1.RestorePhaseUnknown, r.Status.Phase)
 	require.Equal(t, wantResult, r.Status.Execution.TerminalResult)
 	require.Equal(t, types.UID("restore-job-1"), r.Status.Execution.JobUID)
-	require.NotNil(t, r.Status.CompletionTime)
+	require.Nil(t, r.Status.CompletionTime)
 	for range 2 {
 		require.NoError(t, f.step(t))
-		require.Equal(t, r.Status, f.restore(t).Status, "terminal receipts must remain unchanged")
+		require.Equal(t, r.Status, f.restore(t).Status)
 	}
-	require.Nil(t, f.cluster(t).Status.OperationLock)
-	jobs := &batchv1.JobList{}
-	require.NoError(t, f.base.List(t.Context(), jobs))
-	require.Empty(t, jobs.Items)
-	require.Equal(t, 1, f.jobCreates, "cleanup must not replay the restore")
+	f.requireLockHeld(t)
+	require.Equal(t, r.Status.Execution.OperationID, f.cluster(t).Annotations[constants.AnnotationRestoreHold])
+	require.Nil(t, f.cluster(t).Status.Restore, "acceptance must not restart voters")
+	require.Equal(t, r.Status.Execution.JobUID, f.job(t).UID)
+	require.Equal(t, 1, f.jobCreates, "uncertainty must not replay the restore")
+}
+
+func TestFailedExecutionClosesClaimsBeforeReleasingHold(t *testing.T) {
+	for _, concurrentClaim := range []bool{false, true} {
+		t.Run(map[bool]string{false: "no claim", true: "claim races terminal receipt"}[concurrentClaim], func(t *testing.T) {
+			f := newRestoreRecoveryFixture(t)
+			r := f.restore(t)
+			r.Status.Execution.TargetUID = f.cluster(t).UID
+			require.NotEmpty(t, r.Status.Execution.TargetUID)
+			require.NoError(t, f.base.Status().Update(t.Context(), r))
+			require.NoError(t, f.step(t))
+			f.markJobTerminal(t, false)
+			if concurrentClaim {
+				f.client = interceptor.NewClient(f.base, interceptor.Funcs{SubResourcePatch: func(ctx context.Context, c client.Client, subresource string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+					if value, ok := obj.(*openbaov1alpha1.OpenBaoRestore); ok && value.Status.Execution.Stage == openbaov1alpha1.RestoreExecutionStageTerminalObserved {
+						live := f.restore(t)
+						live.Status.SubmissionClaim = &openbaov1alpha1.RestoreSubmissionClaim{PodUID: "executor"}
+						require.NoError(t, c.Status().Update(ctx, live))
+					}
+					return c.SubResource(subresource).Patch(ctx, obj, patch, opts...)
+				}})
+				require.True(t, apierrors.IsConflict(f.step(t)))
+				f.client = f.base
+			}
+			require.NoError(t, f.step(t))
+			if concurrentClaim {
+				require.Equal(t, openbaov1alpha1.RestorePhaseUnknown, f.restore(t).Status.Phase)
+				f.requireLockHeld(t)
+			} else {
+				require.Equal(t, openbaov1alpha1.RestorePhaseFailed, f.restore(t).Status.Phase)
+				require.Empty(t, f.cluster(t).Annotations[constants.AnnotationRestoreHold])
+				require.Nil(t, f.cluster(t).Status.OperationLock)
+			}
+		})
+	}
+}
+
+func TestReplacementBeforeCommitFailsWithoutTouchingReplacement(t *testing.T) {
+	f := newRestoreRecoveryFixture(t)
+	r := f.restore(t)
+	r.Status.Execution.TargetUID = "original-target"
+	require.NoError(t, f.base.Status().Update(t.Context(), r))
+	require.NoError(t, f.step(t))
+	require.Equal(t, openbaov1alpha1.RestorePhaseFailed, f.restore(t).Status.Phase)
+	require.Equal(t, openbaov1alpha1.RestoreExecutionStagePrepared, f.restore(t).Status.Execution.Stage)
+	require.Zero(t, f.jobCreates)
+	require.Empty(t, f.cluster(t).Annotations[constants.AnnotationRestoreHold])
 }

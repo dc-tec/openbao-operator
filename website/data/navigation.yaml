@@ -79,6 +79,13 @@ primary:
         url: docs/operate/recover-failed-rollback/
       - title: Restore a snapshot
         url: docs/operate/restore/
+        items:
+          - title: Recover an uncertain restore
+            url: docs/operate/restore/recover-uncertain/
+          - title: Restore a snapshot manually
+            url: docs/operate/restore/manual/
+          - title: Restore authentication
+            url: docs/operate/restore/authentication/
       - title: Decommission a cluster
         url: docs/operate/decommission/
   - title: Security

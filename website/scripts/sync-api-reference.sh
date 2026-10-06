@@ -140,9 +140,14 @@ generate_line() {
         }
         if (resource == "openbaocluster") {
           gsub(/\[RestoreSource\]\(#restoresource\)/, "[RestoreSource](../openbaorestore/#restoresource)", line)
+          gsub(/\[OpenBaoRestoreSpec\]\(#openbaorestorespec\)/, "[OpenBaoRestoreSpec](../openbaorestore/#openbaorestorespec)", line)
         }
         if (resource == "openbaorestore") {
+          gsub(/\[ReadReplicaTemplateConfig\]\(#readreplicatemplateconfig\)/, "[ReadReplicaTemplateConfig](../openbaocluster/#readreplicatemplateconfig)", line)
           gsub(/\[BackupSchedule\]\(#backupschedule\)/, "[BackupSchedule](../openbaocluster/#backupschedule)", line)
+          gsub(/\[OpenBaoClusterSpec\]\(#openbaoclusterspec\)/, "[OpenBaoClusterSpec](../openbaocluster/#openbaoclusterspec)", line)
+          gsub(/\[RestoreTest\]\(#restoretest\)/, "[RestoreTest](../openbaocluster/#restoretest)", line)
+          gsub(/\[UnsealConfig\]\(#unsealconfig\)/, "[UnsealConfig](../openbaocluster/#unsealconfig)", line)
         }
         if (apply_errata == "true" && resource == "openbaocluster" && index(line, "| `tokenSecretRef`") == 1 && index(line, "backup operations") > 0) {
           line = "| `tokenSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | TokenSecretRef optionally references a same-namespace Secret containing an OpenBao API token for backup operations.<br />Set either `jwtAuthRole` or `tokenSecretRef`; 0.4.2 runtime readiness does not fall back to the generated root-token Secret.<br />If `jwtAuthRole` is set, this field is ignored in favor of JWT Auth. |  | Optional: \\{\\} <br /> |"

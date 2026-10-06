@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -143,4 +144,21 @@ func TestApplicationsRequireConfiguredBoundary(t *testing.T) {
 func TestApplicationsReportsConfiguredInitialization(t *testing.T) {
 	applications := NewApplications(ApplicationsConfig{InitializationConfigured: true})
 	assert.True(t, applications.InitializationConfigured())
+}
+
+func TestRestoreHoldStopsManagement(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	app := NewApplications(ApplicationsConfig{
+		Client:              fake.NewClientBuilder().WithScheme(scheme).Build(),
+		AdminOpsApplication: &AdminOpsApplication{},
+	})
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	cluster.Annotations = map[string]string{constants.AnnotationRestoreHold: "operation"}
+	// Unconfigured collaborators would fail if either management plane ran.
+	_, err := app.ReconcileWorkload(t.Context(), logr.Discard(), cluster.DeepCopy(), cluster, nil)
+	require.NoError(t, err)
+	_, err = app.ReconcileAdminOps(t.Context(), logr.Discard(), cluster.DeepCopy(), cluster, nil)
+	require.NoError(t, err)
+	require.ErrorContains(t, app.HandleDeletion(t.Context(), logr.Discard(), cluster), "held")
 }

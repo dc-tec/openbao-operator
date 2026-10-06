@@ -28,16 +28,29 @@ func (m *Manager) observeRestore(
 		Namespace: restore.Namespace,
 		Name:      restore.Spec.Cluster,
 	}, cluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			if restore.Status.Execution != nil && !restoreExecutionCommitted(restore.Status.Execution) {
+				return restoreObservation{state: restoreState{failureMessage: "Original target disappeared before execution commitment"}}, nil
+			}
+			return unknownRestoreObservation(nil, "Original target is absent; acknowledge Abandon after administrator inspection."), nil
+		}
 		return restoreObservation{}, fmt.Errorf("failed to get target cluster: %w", err)
 	}
 
+	if restore.Status.Execution != nil && restore.Status.Execution.TargetUID != "" &&
+		restore.Status.Execution.TargetUID != cluster.UID {
+		if !restoreExecutionCommitted(restore.Status.Execution) {
+			return restoreObservation{cluster: cluster, state: restoreState{failureMessage: "Original target cluster was replaced before execution commitment"}}, nil
+		}
+		return unknownRestoreObservation(cluster, "Original target cluster was replaced; administrator investigation is required."), nil
+	}
 	if restore.Status.Execution == nil {
 		return m.observeLegacyRestoreJob(ctx, restore, cluster)
 	}
 	if err := validateRestoreExecutionIdentity(restore); err != nil {
 		return unknownRestoreObservation(
 			cluster,
-			fmt.Sprintf("Restore execution identity is inconsistent: %v. The operator will not create or recreate a restore Job. Investigate the existing Job and delete this OpenBaoRestore only after the cluster state is known.", err),
+			fmt.Sprintf("Restore execution identity is inconsistent: %v. The operator will not create or recreate a restore Job. Follow the administrator recovery runbook and acknowledge Resume or Abandon.", err),
 		), nil
 	}
 
@@ -69,7 +82,7 @@ func (m *Manager) observeLegacyRestoreJob(
 	if apierrors.IsNotFound(err) {
 		return unknownRestoreObservation(
 			cluster,
-			"Restore is Running without an execution receipt and its Job is missing. The Job may have completed before the controller recorded it, so the operator will not recreate it. Verify the cluster state, then delete this OpenBaoRestore to release the operation lock.",
+			"Restore is Running without an execution receipt and its Job is missing. The Job may have completed before the controller recorded it, so the operator will not recreate it. Follow the administrator recovery runbook and acknowledge Resume or Abandon.",
 		), nil
 	}
 	if err != nil {
@@ -109,9 +122,9 @@ func (m *Manager) observeRestoreJob(
 	}, restore, openbaov1alpha1.GroupVersion.WithKind("OpenBaoRestore"), operation)
 	if apierrors.IsNotFound(err) {
 		if committed {
-			observation.state.unknownMessage = fmt.Sprintf("Committed restore Job %s is missing before a creation receipt was persisted. Its execution result is unknown, so the operator will not recreate it. Verify the cluster state, then delete this OpenBaoRestore to release the operation lock.", restore.Status.Execution.JobName)
+			observation.state.unknownMessage = fmt.Sprintf("Committed restore Job %s is missing before a creation receipt was persisted. Its execution result is unknown, so the operator will not recreate it. Follow the administrator recovery runbook and acknowledge Resume or Abandon.", restore.Status.Execution.JobName)
 		} else {
-			observation.state.unknownMessage = fmt.Sprintf("Restore Job %s is missing after its creation receipt was persisted. Its execution result is unknown, so the operator will not recreate it. Verify the cluster state, then delete this OpenBaoRestore to release the operation lock.", restore.Status.Execution.JobName)
+			observation.state.unknownMessage = fmt.Sprintf("Restore Job %s is missing after its creation receipt was persisted. Its execution result is unknown, so the operator will not recreate it. Follow the administrator recovery runbook and acknowledge Resume or Abandon.", restore.Status.Execution.JobName)
 		}
 		return observation, nil
 	}
@@ -124,6 +137,15 @@ func (m *Manager) observeRestoreJob(
 		} else {
 			observation.state.unknownMessage = fmt.Sprintf("Restore Job identity no longer matches its creation receipt: %v. The operator will not recreate it.", err)
 		}
+		return observation, nil
+	}
+
+	claimIssue, err := m.validateClaimExecutor(ctx, restore)
+	if err != nil {
+		return restoreObservation{}, err
+	}
+	if claimIssue != "" {
+		observation.state.unknownMessage = "Submission claim requires administrator investigation: " + claimIssue
 		return observation, nil
 	}
 

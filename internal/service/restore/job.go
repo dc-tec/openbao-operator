@@ -101,7 +101,19 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 
 	// Build volumes and mounts
 	volumes := buildRestoreVolumes(restore, cluster, tlsTrust)
+	volumes = append(volumes, corev1.Volume{Name: "claim-api", VolumeSource: corev1.VolumeSource{
+		Projected: &corev1.ProjectedVolumeSource{Sources: []corev1.VolumeProjection{
+			{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Path: "token", ExpirationSeconds: ptr.To(int64(3600))}},
+			{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}, Items: []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}}}},
+		}},
+	}})
 	volumeMounts := buildRestoreVolumeMounts(restore, cluster, tlsTrust)
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "claim-api", MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true})
+	envVars = append(envVars, corev1.EnvVar{Name: "RESTORE_REQUEST_NAME", Value: restore.Name},
+		corev1.EnvVar{Name: "RESTORE_REQUEST_UID", Value: string(restore.UID)})
+	for _, field := range []struct{ name, path string }{{"POD_NAME", "metadata.name"}, {"POD_UID", "metadata.uid"}} {
+		envVars = append(envVars, corev1.EnvVar{Name: field.name, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: field.path}}})
+	}
 	scratchLimit := resource.NewQuantity(constants.DefaultRestoreScratchLimitBytes, resource.BinarySI)
 	volumes = append(volumes, corev1.Volume{
 		Name:         "restore-scratch",

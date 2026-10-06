@@ -23,3 +23,5 @@ resources:
   - openbao-restrict-provisioner-namespace-mutations-binding.yaml
   - openbao-restrict-provisioner-tenant-governance.yaml
   - openbao-restrict-provisioner-tenant-governance-binding.yaml
+  - openbao-protect-restore-execution.yaml
+  - openbao-protect-restore-execution-binding.yaml

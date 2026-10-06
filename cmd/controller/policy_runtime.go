@@ -13,6 +13,7 @@ import (
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/configuration"
+	"github.com/dc-tec/openbao-operator/internal/service/restore"
 )
 
 func operatorPolicyClientFactory(
@@ -21,14 +22,6 @@ func operatorPolicyClientFactory(
 	tokens portauth.ControllerTokenProvider,
 ) configuration.PolicyClientFactory {
 	return func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (portopenbao.PolicyClient, error) {
-		trust, err := openbaotls.ReadClientTrustBundle(ctx, clientset, cluster)
-		if err != nil {
-			return nil, err
-		}
-		jwt, err := tokens.Token(ctx, cluster)
-		if err != nil {
-			return nil, err
-		}
 		service := cluster.Name
 		if cluster.Spec.Service != nil ||
 			(cluster.Spec.Ingress != nil && cluster.Spec.Ingress.Enabled) ||
@@ -36,7 +29,34 @@ func operatorPolicyClientFactory(
 			service += "-public"
 		}
 		baseURL := fmt.Sprintf("https://%s.%s.svc:%d", service, cluster.Namespace, constants.PortAPI)
-		factory := manager.FactoryFor(cluster.Namespace+"/"+cluster.Name, trust.CACert, trust.TLSServerName)
-		return factory.NewWithJWT(ctx, baseURL, portauth.RoleNameOperator, jwt)
+		return authenticatedOperatorClient(ctx, clientset, manager, tokens, cluster, baseURL)
 	}
+}
+
+func restoreRecoveryClientFactory(
+	clientset kubernetes.Interface,
+	manager *openbao.ClientManager,
+	tokens portauth.ControllerTokenProvider,
+) restore.RecoveryClientFactory {
+	return func(
+		ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string,
+	) (restore.RecoveryClient, error) {
+		baseURL := fmt.Sprintf("https://%s.%s.%s.svc:%d", podName, cluster.Name, cluster.Namespace, constants.PortAPI)
+		return authenticatedOperatorClient(ctx, clientset, manager, tokens, cluster, baseURL)
+	}
+}
+
+func authenticatedOperatorClient(ctx context.Context, clientset kubernetes.Interface, manager *openbao.ClientManager,
+	tokens portauth.ControllerTokenProvider, cluster *openbaov1alpha1.OpenBaoCluster, baseURL string,
+) (*openbao.Client, error) {
+	trust, err := openbaotls.ReadClientTrustBundle(ctx, clientset, cluster)
+	if err != nil {
+		return nil, err
+	}
+	jwt, err := tokens.Token(ctx, cluster)
+	if err != nil {
+		return nil, err
+	}
+	factory := manager.FactoryFor(cluster.Namespace+"/"+cluster.Name, trust.CACert, trust.TLSServerName)
+	return factory.NewWithJWT(ctx, baseURL, portauth.RoleNameOperator, jwt)
 }

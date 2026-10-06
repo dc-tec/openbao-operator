@@ -2,6 +2,8 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  annotations:
+    openbao.org/admission-policy-fingerprint: sha256:98fad50f9845a72a6ff55f569167fddee66acd015ab4f35daac59e17bc6baaec
   name: {{ include "openbao-operator.fullname" . }}-openbao-lock-controller-statefulset-mutations
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}

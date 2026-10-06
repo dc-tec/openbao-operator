@@ -56,7 +56,8 @@ func (m *Manager) applyRestoreDecision(
 		if err := m.markRestoreExecutionTerminal(ctx, restore, openbaov1alpha1.RestoreExecutionResultSucceeded); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to persist successful restore Job receipt: %w", err)
 		}
-		return m.continueRestoreRecovery(ctx, logger, restore, observation.cluster)
+		return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore,
+			"Snapshot request accepted; application is unconfirmed. Follow the administrator recovery runbook before acknowledging Resume or Abandon.")
 	case restoreDecisionRecordFailedJob:
 		if done, err := m.renewRunningRestoreLock(ctx, logger, restore, observation.cluster); done || err != nil {
 			return ctrl.Result{}, err
@@ -64,7 +65,11 @@ func (m *Manager) applyRestoreDecision(
 		if err := m.markRestoreExecutionTerminal(ctx, restore, openbaov1alpha1.RestoreExecutionResultFailed); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to persist failed restore Job receipt: %w", err)
 		}
-		return m.failRestore(ctx, logger, restore, restoreJobFailedStatusMessage(observation.job, workloadidentity.FailureHint(restore.Spec.Source.Target, restoreServiceAccountName(observation.cluster))))
+		if restore.Status.SubmissionClaim == nil && restore.Status.Execution.TargetUID != "" {
+			return m.failRestore(ctx, logger, restore, restoreJobFailedStatusMessage(observation.job, "Failed before submission; no snapshot was submitted."))
+		}
+		return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore,
+			restoreJobFailedStatusMessage(observation.job, "Snapshot application is uncertain; inspect the target and acknowledge administrator recovery."))
 	case restoreDecisionPollJob:
 		if done, err := m.renewRunningRestoreLock(ctx, logger, restore, observation.cluster); done || err != nil {
 			return ctrl.Result{}, err
@@ -79,9 +84,12 @@ func (m *Manager) applyRestoreDecision(
 		}
 		return ctrl.Result{RequeueAfter: restoreRequeueJobPoll}, nil
 	case restoreDecisionContinueRecovery:
-		return m.continueRestoreRecovery(ctx, logger, restore, observation.cluster)
+		return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, restore, "Snapshot application requires administrator confirmation.")
 	case restoreDecisionFailRestore:
-		return m.failRestore(ctx, logger, restore, "Restore Job failed. The terminal execution receipt is preserved; inspect the retained Job logs before creating a new OpenBaoRestore.")
+		if decision.message != "" {
+			return m.failRestore(ctx, logger, restore, decision.message)
+		}
+		return m.finishFailedExecution(ctx, logger, restore)
 	case restoreDecisionCompleteRestore:
 		return ctrl.Result{}, m.completeRestore(ctx, logger, restore, "Restore completed successfully after post-restore recovery")
 	default:
@@ -121,24 +129,6 @@ func (m *Manager) adoptLegacyRestoreJob(
 		return ctrl.Result{}, err
 	}
 	return m.applyRestoreDecision(ctx, logger, restore, nextObservation, decideRestore(nextObservation.state))
-}
-
-func (m *Manager) continueRestoreRecovery(
-	ctx context.Context,
-	logger logr.Logger,
-	restore *openbaov1alpha1.OpenBaoRestore,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) (ctrl.Result, error) {
-	if err := m.handleSucceededRestoreJob(ctx, logger, restore, cluster); err != nil {
-		return ctrl.Result{}, err
-	}
-	if restore.Status.Execution.Stage == openbaov1alpha1.RestoreExecutionStageFollowThroughComplete {
-		if err := m.completeRestore(ctx, logger, restore, "Restore completed successfully after post-restore recovery"); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
-	return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
 }
 
 func (m *Manager) renewRunningRestoreLock(
@@ -186,78 +176,6 @@ func (m *Manager) renewRunningRestoreLock(
 	}
 
 	return false, nil
-}
-
-func (m *Manager) handleSucceededRestoreJob(
-	ctx context.Context,
-	logger logr.Logger,
-	restore *openbaov1alpha1.OpenBaoRestore,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) error {
-	if !clusterRestoreRestartCompleted(cluster, restore) {
-		done, err := m.renewRunningRestoreLock(ctx, logger, restore, cluster)
-		if err != nil {
-			return err
-		}
-		if done {
-			return nil
-		}
-
-		requested, err := m.requestPostRestoreRestart(ctx, cluster, restore)
-		if err != nil {
-			return err
-		}
-		if requested {
-			m.emitNormalEvent(restore, ReasonRestoreRestartRequested, "Requested voter Pod restart after snapshot application")
-		}
-
-		complete, message, err := m.postRestoreVoterRestartComplete(ctx, cluster, restore)
-		if err != nil {
-			return err
-		}
-		if !complete {
-			return m.patchRestoreProgressMessage(ctx, restore, message)
-		}
-
-		marked, err := m.markPostRestoreRestartCompleted(ctx, cluster, restore)
-		if err != nil {
-			return err
-		}
-		if marked {
-			m.emitNormalEvent(restore, ReasonRestoreRestartCompleted, "Voter Pods completed the post-restore restart")
-		}
-	}
-
-	if !shouldWaitForSteadyReadReplicaRestore(cluster) {
-		return m.markRestoreFollowThroughComplete(ctx, restore)
-	}
-
-	if steadyReadReplicaRestoreComplete(cluster) {
-		return m.markRestoreFollowThroughComplete(ctx, restore)
-	}
-
-	readyReplicas := int32(0)
-	registeredReplicas := int32(0)
-	if cluster.Status.ReadReplicas != nil {
-		readyReplicas = cluster.Status.ReadReplicas.ReadyReplicas
-		registeredReplicas = cluster.Status.ReadReplicas.RegisteredReplicas
-	}
-
-	original := restore.DeepCopy()
-	restore.Status.Message = fmt.Sprintf(
-		"Waiting for steady read replicas to restore before marking restore complete: desiredReadReplicas=%d readyReadReplicas=%d registeredReadReplicas=%d readReplicasReady=%t readServingAvailable=%t raftMembershipReady=%t",
-		cluster.Spec.ReadReplicas.Replicas,
-		readyReplicas,
-		registeredReplicas,
-		restoreConditionTrue(cluster, openbaov1alpha1.ConditionReadReplicasReady),
-		restoreConditionTrue(cluster, openbaov1alpha1.ConditionReadServingAvailable),
-		restoreConditionTrue(cluster, openbaov1alpha1.ConditionRaftMembershipReady),
-	)
-	if err := m.patchStatus(ctx, restore, original); err != nil {
-		return fmt.Errorf("failed to patch restore status while waiting for steady read replicas to restore: %w", err)
-	}
-
-	return nil
 }
 
 func (m *Manager) createRestoreJob(
@@ -324,6 +242,9 @@ func (m *Manager) createRestoreJob(
 	if err := opslifecycle.PrepareManagedJobOwner(job, restore, m.scheme); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to prepare restore Job ownership: %w", err)
 	}
+	if err := m.holdTarget(ctx, restore, cluster); err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := m.markRestoreExecutionCommitted(ctx, restore); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to persist restore Job creation commitment: %w", err)
 	}
@@ -389,4 +310,15 @@ func (m *Manager) createRestoreJob(
 	m.emitNormalEvent(restore, ReasonRestoreJobCreated, "Created restore Job %s", jobName)
 
 	return ctrl.Result{RequeueAfter: restoreRequeueJobCheck}, nil
+}
+
+// The terminal receipt closes admission for new claims. Its conditional write
+// conflicts with a concurrent claim, so only an observed empty claim permits release.
+func (m *Manager) finishFailedExecution(ctx context.Context, logger logr.Logger, request *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
+	if request.Status.SubmissionClaim == nil && request.Status.Execution.TargetUID != "" {
+		return m.failRestore(ctx, logger, request, "Restore executor failed before submission; no snapshot was submitted")
+	}
+
+	return ctrl.Result{}, m.markRestoreExecutionUnknown(ctx, request,
+		"Restore executor failed after its submission claim; inspect the target and acknowledge administrator recovery.")
 }

@@ -187,6 +187,8 @@ var policyFileMapping = map[string]string{
 	"openbao-restrict-provisioner-tenant-governance-binding.yaml":   "provisioner-tenant-governance.yaml", // merged
 	"openbao-validate-openbaocluster.yaml":                          "validate-openbaocluster.yaml",
 	"openbao-validate-openbaocluster-binding.yaml":                  "validate-openbaocluster.yaml", // merged
+	"openbao-protect-restore-execution.yaml":                        "protect-restore-execution.yaml",
+	"openbao-protect-restore-execution-binding.yaml":                "protect-restore-execution.yaml",
 	"openbao-validate-openbaorestore.yaml":                          "validate-openbaorestore.yaml",
 	"openbao-validate-openbaorestore-binding.yaml":                  "validate-openbaorestore.yaml", // merged
 	"openbao-validate-openbao-tenant.yaml":                          "validate-openbao-tenant.yaml",
@@ -305,7 +307,7 @@ func transformPolicyToHelm(content string) string {
 	// Also supports "openbao-"-prefixed policy names (e.g. openbao-restrict-provisioner-rbac).
 	policyNamePattern := regexp.MustCompile(
 		"(policyName:\\s*)(openbao-operator-)?" +
-			"((?:openbao-)?(?:lock-|restrict-|validate-|enforce-))" +
+			"((?:openbao-)?(?:lock-|restrict-|validate-|enforce-|protect-))" +
 			"([\\w-]+)",
 	)
 	content = policyNamePattern.ReplaceAllStringFunc(content, func(match string) string {
@@ -315,7 +317,7 @@ func transformPolicyToHelm(content string) string {
 		}
 		prefix := parts[1]
 		// parts[2] is the optional "openbao-operator-" which we strip
-		policyPrefix := parts[3] // (openbao-)?(lock-|restrict-|validate-)
+		policyPrefix := parts[3] // (openbao-)?(lock-|restrict-|validate-|protect-)
 		policySuffix := parts[4]
 		return fmt.Sprintf("%s{{ include \"openbao-operator.fullname\" . }}-%s%s", prefix, policyPrefix, policySuffix)
 	})

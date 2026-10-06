@@ -218,16 +218,18 @@ func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoClu
 		mergeAnnotations(cluster.Spec.ReadReplicas.Template.Metadata)
 	}
 
+	// Preserve the annotation owned by earlier operator releases. Omitting it
+	// from SSA would change the Pod template and trigger an uncoordinated rollout.
+	if cluster.Status.Restore != nil && strings.TrimSpace(cluster.Status.Restore.UID) != "" {
+		annotations[constants.AnnotationRestoreRevision] = strings.TrimSpace(cluster.Status.Restore.UID)
+	}
+
 	// Compute config hash and add to annotations to trigger rollout on config changes
 	annotations[configHashAnnotation] = computeConfigHash(configContent)
 
 	restartAt := effectiveRestartAt(cluster, spec)
 	if restartAt != "" {
 		annotations[constants.AnnotationRestartAt] = restartAt
-	}
-	restoreRevision := effectiveRestoreRevision(cluster, spec)
-	if restoreRevision != "" {
-		annotations[constants.AnnotationRestoreRevision] = restoreRevision
 	}
 
 	return podLabels, annotations
@@ -255,14 +257,4 @@ func effectiveRestartAt(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSe
 		return ""
 	}
 	return strings.TrimSpace(cluster.Spec.Runtime.RestartAt)
-}
-
-func effectiveRestoreRevision(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) string {
-	if restoreRevision := strings.TrimSpace(spec.RestoreRevision); restoreRevision != "" {
-		return restoreRevision
-	}
-	if cluster.Status.Restore == nil {
-		return ""
-	}
-	return strings.TrimSpace(cluster.Status.Restore.UID)
 }

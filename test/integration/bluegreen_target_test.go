@@ -49,7 +49,7 @@ func TestBlueGreenUpgradeWaitsForBootstrapReplicaCount(t *testing.T) {
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, blue))
-	manager := bluegreen.NewManager(k8sClient, k8sScheme, nil, nil, portopenbao.ClientConfig{}, nil, nil, "")
+	manager := bluegreen.NewManager(newControllerClient(t), k8sScheme, nil, nil, portopenbao.ClientConfig{}, nil, nil, "")
 	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster))
 	_, err := manager.Reconcile(ctx, logr.Discard(), cluster)
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestBlueGreenTargetSurvivesSpecDriftAndManagerRestart(t *testing.T) {
 
 	// A fresh manager must use persisted inputs, rather than its current spec or prior memory.
 	newManager := func() *bluegreen.Manager {
-		return bluegreen.NewManager(k8sClient, k8sScheme, nil, nil, portopenbao.ClientConfig{}, nil, nil, "")
+		return bluegreen.NewManager(newControllerClient(t), k8sScheme, nil, nil, portopenbao.ClientConfig{}, nil, nil, "")
 	}
 	require.NoError(t, k8sClient.Get(ctx, key, cluster))
 	_, err := newManager().Reconcile(ctx, logr.Discard(), cluster)

@@ -73,6 +73,14 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}()
 
 	logger := log.FromContext(ctx).WithName("openbaorestore")
+	defer func() {
+		var requests openbaov1alpha1.OpenBaoRestoreList
+		if listErr := r.List(ctx, &requests, client.InNamespace(req.Namespace)); listErr != nil {
+			logger.Error(listErr, "Failed to observe restore state metrics")
+			return
+		}
+		observability.ObserveRestoreStates(req.Namespace, requests.Items)
+	}()
 
 	if r.RestoreReconciler == nil {
 		return ctrl.Result{}, fmt.Errorf("restore reconciler is not configured")
@@ -86,15 +94,11 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoRestore before admission dependency check: %w", getErr)
 	}
-	if restoreResource.DeletionTimestamp == nil {
-		if result, blocked := r.pauseForAdmissionDependencyLoss(ctx, logger); blocked {
-			if !appopenbaorestore.CanContinueWithoutAdmission(restoreResource) {
-				return result, nil
-			}
-			logger.Info("Admission policy dependencies are unavailable; continuing observation of a committed restore execution",
-				"operationID", restoreResource.Status.Execution.OperationID,
-				"executionStage", restoreResource.Status.Execution.Stage)
+	if result, blocked := r.pauseForAdmissionDependencyLoss(ctx, logger); blocked {
+		if !appopenbaorestore.CanContinueWithoutAdmission(restoreResource) {
+			return result, nil
 		}
+		logger.Info("Admission policy dependencies are unavailable; continuing restore observation or cleanup")
 	}
 
 	appResult, appErr := appopenbaorestore.ReconcileOpenBaoRestore(

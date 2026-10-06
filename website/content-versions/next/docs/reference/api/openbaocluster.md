@@ -593,8 +593,8 @@ _Appears in:_
 
 
 
-ClusterRestoreStatus tracks the post-snapshot workload restart for the most
-recent restore applied to the cluster.
+ClusterRestoreStatus retains restart observations from earlier operator releases.
+New restores report status, including managed restarts, on OpenBaoRestore.
 
 
 
@@ -603,9 +603,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `name` _string_ | Name is the name of the OpenBaoRestore whose snapshot was applied. |  | Optional: \{\} <br /> |
-| `uid` _string_ | UID is the UID of the OpenBaoRestore whose snapshot was applied. The<br />workload controller uses this value as a durable Pod-template rollout<br />token. |  | Optional: \{\} <br /> |
-| `restartCompletedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | RestartCompletedAt is when all voter Pods completed the post-restore<br />restart and became ready. |  | Optional: \{\} <br /> |
+| `name` _string_ | Name identifies the OpenBaoRestore recorded by an earlier release. |  | Optional: \{\} <br /> |
+| `uid` _string_ | UID identifies the OpenBaoRestore recorded by an earlier release. |  | Optional: \{\} <br /> |
+| `restartCompletedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | RestartCompletedAt is the legacy timestamp for a controller-observed voter<br />restart. Administrator-led recovery does not update this field. |  | Optional: \{\} <br /> |
 
 
 
@@ -1235,7 +1235,7 @@ _Appears in:_
 | `upgrade` _[UpgradeProgress](#upgradeprogress)_ | Upgrade tracks the state of an in-progress upgrade (if any).<br />When non-nil, an upgrade is in progress and the UpgradeManager is orchestrating<br />the pod-by-pod rolling update with leader step-down. |  | Optional: \{\} <br /> |
 | `upgradeRequests` _[UpgradeRequestStatus](#upgraderequeststatus)_ | UpgradeRequests tracks which explicit upgrade request values have already<br />been handled so one-shot requests are edge-triggered instead of level-triggered. |  | Optional: \{\} <br /> |
 | `backup` _[BackupStatus](#backupstatus)_ | Backup tracks the state of backups for this cluster. |  | Optional: \{\} <br /> |
-| `restore` _[ClusterRestoreStatus](#clusterrestorestatus)_ | Restore tracks the post-snapshot workload restart for the most recent<br />OpenBaoRestore applied to this cluster. |  | Optional: \{\} <br /> |
+| `restore` _[ClusterRestoreStatus](#clusterrestorestatus)_ | Restore retains post-restore restart status written by earlier releases.<br />It is deprecated: new restores report status on OpenBaoRestore, and the<br />operator reads this field only to preserve legacy Pod templates. |  | Optional: \{\} <br /> |
 | `blueGreen` _[BlueGreenStatus](#bluegreenstatus)_ | BlueGreen tracks the state of blue/green upgrades (if enabled). |  | Optional: \{\} <br /> |
 | `operationLock` _[OperationLockStatus](#operationlockstatus)_ | OperationLock prevents concurrent long-running operations (upgrade/backup/restore)<br />from acting on the same cluster at the same time. |  | Optional: \{\} <br /> |
 | `breakGlass` _[BreakGlassStatus](#breakglassstatus)_ | BreakGlass records when the operator has halted quorum-risk automation and requires<br />explicit operator acknowledgment to continue. |  | Optional: \{\} <br /> |

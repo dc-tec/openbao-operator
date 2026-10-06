@@ -290,8 +290,9 @@ resources:
         classification: stable-automation
         rationale: This is the replacement for deprecated status.lastBackupTime.
       - path: status.restore
-        classification: informational
+        classification: deprecated
         owner: restore-status
+        rationale: Written only by earlier releases; read to preserve the legacy restore-revision annotation.
       - path: status.blueGreen
         classification: informational
         owner: upgrade-status
@@ -390,6 +391,10 @@ resources:
       - Restore resources are immutable job requests; changed inputs require a new resource.
       - The shared BackupTarget storage shape remains a pre-beta review unit.
     rules:
+      - path: spec.source.expectedDigest
+        classification: additive-unfrozen
+      - path: spec.source.expectedSize
+        classification: additive-unfrozen
       - path: spec.cluster
         classification: beta-stable
         owner: restore
@@ -418,6 +423,31 @@ resources:
       - path: spec.tokenSecretRef
         classification: beta-stable
         owner: restore-authentication
+      - path: status.submissionClaim
+        classification: stable-automation
+        owner: lifecycle-safety
+        rationale: One immutable claim reserves submission for one executor invocation.
+      - path: status.submissionClaim.podUID
+        classification: informational
+        rationale: Runtime identity evidence for administrator inspection.
+      - path: status.submissionClaim.targetPodName
+        classification: informational
+      - path: status.submissionClaim.targetPodUID
+        classification: informational
+      - path: status.submissionClaim.targetPodIP
+        classification: informational
+      - path: status.submissionClaim.targetContainerID
+        classification: informational
+      - path: status.restart
+        classification: stable-automation
+        owner: lifecycle-safety
+        rationale: Binds administrator-authorized restarts to original workload Pod identities.
+      - path: status.restart.pods
+        classification: informational
+        rationale: Runtime Pod identities; automation should use completedAt and the RecoveryReleased condition.
+      - path: status.administratorDisposition
+        classification: stable-automation
+        owner: lifecycle-safety
       - path: status.completionTime
         classification: informational
         owner: restore-status
@@ -428,6 +458,7 @@ resources:
           - OperationLockOverride
           - RestoreComplete
           - RestoreConfigurationReady
+          - RecoveryReleased
         rationale: Condition types are stable; reason sets may expand and messages are best-effort.
       - path: status.conditions[].message
         classification: informational
@@ -435,6 +466,8 @@ resources:
         classification: stable-automation
         owner: lifecycle-safety
         rationale: Durable execution and Job receipts prevent destructive restore replay and support fail-closed recovery.
+      - path: status.execution.targetUID
+        classification: informational
       - path: status.message
         classification: informational
         owner: restore-status

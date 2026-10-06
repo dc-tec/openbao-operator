@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,7 +18,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
-	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/restore"
@@ -61,10 +59,7 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 
 	controllerClient := newControllerClient(t)
 	verifier := security.NewImageVerifier(logr.Discard(), k8sClient, nil)
-	mgr := withIntegrationRestoreStatusPersistence(
-		restore.NewManager(controllerClient, k8sScheme, nil, verifier, ""),
-		controllerClient,
-	)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, verifier, "")
 
 	// Pending -> Validating
 	latest := &openbaov1alpha1.OpenBaoRestore{}
@@ -122,45 +117,24 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 		t.Fatalf("update job status: %v", err)
 	}
 
-	// Running -> request voter restart.
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
-		t.Fatalf("get restore: %v", err)
-	}
-	_, err = mgr.Reconcile(ctx, logr.Discard(), latest)
-	if err != nil {
-		t.Fatalf("reconcile after job success: %v", err)
-	}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
-		t.Fatalf("get restore after voter restart request: %v", err)
-	}
-	if latest.Status.Phase != openbaov1alpha1.RestorePhaseRunning {
-		t.Fatalf("phase=%s want=%s", latest.Status.Phase, openbaov1alpha1.RestorePhaseRunning)
-	}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, cluster); err != nil {
-		t.Fatalf("get cluster after voter restart request: %v", err)
-	}
-	if cluster.Status.Restore == nil || cluster.Status.Restore.UID != string(latest.UID) {
-		t.Fatalf("cluster restore status=%+v want UID=%q", cluster.Status.Restore, latest.UID)
-	}
-	if cluster.Status.OperationLock == nil {
-		t.Fatalf("operation lock released before voter restart completed")
-	}
-
-	createSettledRestoreVoterStatefulSet(controllerClient, cluster, latest, t.Fatalf)
-
-	// Running -> Completed after the voter rollout settles.
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
-		t.Fatalf("get restore before voter restart completion: %v", err)
+	// Acceptance preserves uncertainty and the management hold.
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(restoreObj), latest); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := mgr.Reconcile(ctx, logr.Discard(), latest); err != nil {
-		t.Fatalf("reconcile after voter restart: %v", err)
+		t.Fatal(err)
 	}
-
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
-		t.Fatalf("get restore: %v", err)
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(restoreObj), latest); err != nil {
+		t.Fatal(err)
 	}
-	if latest.Status.Phase != openbaov1alpha1.RestorePhaseCompleted {
-		t.Fatalf("phase=%s want=%s", latest.Status.Phase, openbaov1alpha1.RestorePhaseCompleted)
+	if latest.Status.Phase != openbaov1alpha1.RestorePhaseUnknown {
+		t.Fatalf("accepted restore phase=%s, want Unknown", latest.Status.Phase)
+	}
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster); err != nil {
+		t.Fatal(err)
+	}
+	if cluster.Status.Restore != nil || cluster.Status.OperationLock == nil || cluster.Annotations[constants.AnnotationRestoreHold] != string(latest.UID) {
+		t.Fatal("accepted restore must remain held without a voter restart")
 	}
 
 	// Restore service account should exist (created during validation).
@@ -172,66 +146,6 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 		}
 		t.Fatalf("get restore ServiceAccount: %v", err)
 	}
-}
-
-func createSettledRestoreVoterStatefulSet(
-	controllerClient client.Client,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	restoreObj *openbaov1alpha1.OpenBaoRestore,
-	failf func(string, ...any),
-) {
-	replicas := cluster.Spec.Replicas
-	labels := map[string]string{"app.kubernetes.io/name": cluster.Name}
-	statefulSet := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(cluster, openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster")),
-			},
-			Annotations: map[string]string{
-				constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
-			},
-		},
-		Spec: appsv1.StatefulSetSpec{
-			Replicas:    &replicas,
-			ServiceName: cluster.Name,
-			Selector:    &metav1.LabelSelector{MatchLabels: labels},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-					Annotations: map[string]string{
-						constants.AnnotationRestoreRevision: string(restoreObj.UID),
-					},
-				},
-				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "openbao", Image: "openbao/openbao:dev"}}},
-			},
-		},
-	}
-	if err := controllerClient.Create(ctx, statefulSet); err != nil {
-		failf("create voter StatefulSet: %v", err)
-		return
-	}
-	if err := controllerClient.Get(ctx, types.NamespacedName{Namespace: statefulSet.Namespace, Name: statefulSet.Name}, statefulSet); err != nil {
-		failf("get voter StatefulSet: %v", err)
-		return
-	}
-	statefulSet.Status = appsv1.StatefulSetStatus{
-		ObservedGeneration: statefulSet.Generation,
-		Replicas:           replicas,
-		ReadyReplicas:      replicas,
-		UpdatedReplicas:    replicas,
-		CurrentReplicas:    replicas,
-		CurrentRevision:    "restored-revision",
-		UpdateRevision:     "restored-revision",
-	}
-	if err := controllerClient.Status().Update(ctx, statefulSet); err != nil {
-		failf("update voter StatefulSet status: %v", err)
-	}
-}
-
-func withIntegrationRestoreStatusPersistence(manager *restore.Manager, controllerClient client.Client) *restore.Manager {
-	return manager.WithAdminOpsStatusMutator(adminopsstatus.NewMutator(controllerClient, controllerClient))
 }
 
 func TestRestoreManager_GCSProvider(t *testing.T) {
@@ -721,15 +635,15 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 	}
 	jobName := restore.RestoreJobNamePrefix + restoreObj.Name
 	expectedPrefix := "Restore Job " + jobName + " failed. Check kubectl logs job/" + jobName +
-		" -n " + namespace + " and create a new OpenBaoRestore to retry."
+		" -n " + namespace + "."
 	if !strings.Contains(latest.Status.Message, expectedPrefix) {
 		t.Fatalf("expected failed-job message to contain %q, got %q", expectedPrefix, latest.Status.Message)
 	}
-	if !strings.Contains(latest.Status.Message, "generated ServiceAccount") {
+	if !strings.Contains(latest.Status.Message, "no snapshot was submitted") {
 		t.Fatalf("expected failed-job message to include identity hint, got %q", latest.Status.Message)
 	}
 	if latest.Status.CompletionTime == nil {
-		t.Fatalf("expected completionTime to be set on terminal failure")
+		t.Fatalf("pre-submission failure must have a completion time")
 	}
 	terminalMessage := latest.Status.Message
 
@@ -804,8 +718,6 @@ func createRestoreJobWithStatus(
 	}
 
 	setRestoreJobTerminalStatus(latest, succeeded, failed)
-	now := metav1.Now()
-	latest.Status.StartTime = &now
 	if err := controllerClient.Status().Update(ctx, latest); err != nil {
 		t.Fatalf("update restore job status %q: %v", name, err)
 	}

@@ -9,7 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
@@ -25,7 +25,27 @@ type RestoreReconciler interface {
 // and drain an execution that crossed its durable creation boundary. The
 // restore manager does not create a Job from any of these states.
 func CanContinueWithoutAdmission(restoreResource *openbaov1alpha1.OpenBaoRestore) bool {
-	if restoreResource == nil || restoreResource.Status.Execution == nil {
+	if restoreResource == nil {
+		return false
+	}
+
+	// Managed Resume mutates workloads. It needs the current acknowledgement
+	// and controller-only restart-status policy; observation and Abandon can drain.
+	if restoreResource.Status.Phase == openbaov1alpha1.RestorePhaseUnknown && restoreResource.Status.AdministratorDisposition == "" {
+		acknowledgement := restoreResource.Annotations[constants.AnnotationRestoreAcknowledge]
+		operation := string(restoreResource.UID)
+		if acknowledgement != operation+"/Abandon" &&
+			(restoreResource.Status.Restart != nil || acknowledgement == operation+"/Resume") {
+			return false
+		}
+	}
+
+	// Deletion may drain unsubmitted work and release finalizers, but it must
+	// not bypass the managed Resume check above.
+	if !restoreResource.DeletionTimestamp.IsZero() {
+		return true
+	}
+	if restoreResource.Status.Execution == nil {
 		return false
 	}
 
@@ -53,6 +73,7 @@ type RestoreDependencies struct {
 	OperatorImageVerifier imageverify.Verifier
 	Platform              string
 	ClientConfig          portopenbao.ClientConfig
+	RecoveryClientFor     restore.RecoveryClientFactory
 }
 
 type restoreManagerAdapter struct {
@@ -66,7 +87,6 @@ func (a restoreManagerAdapter) Reconcile(ctx context.Context, logger logr.Logger
 
 // NewRestoreReconciler constructs the restore reconciler used by the controller.
 func NewRestoreReconciler(deps RestoreDependencies) RestoreReconciler {
-	adminOpsMutator := adminopsstatus.NewMutator(deps.APIReader, deps.Client)
 
 	return restoreManagerAdapter{
 		manager: restore.NewManager(
@@ -76,6 +96,6 @@ func NewRestoreReconciler(deps RestoreDependencies) RestoreReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.ClientConfig,
-		).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
+		).WithReader(deps.APIReader).WithRecoveryClientFactory(deps.RecoveryClientFor),
 	}
 }

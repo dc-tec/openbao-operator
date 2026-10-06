@@ -95,7 +95,7 @@ var (
 		prometheus.GaugeOpts{
 			Namespace: "openbao",
 			Name:      "restore_state",
-			Help:      "Current restore state per cluster (0=none, 1=running, 2=success, 3=failed)",
+			Help:      "Observed restore state per cluster (0=none, 1=running, 2=success, 3=failed, 4=unknown, 5=restarting, 6=resumed, 7=abandoned); unresolved recovery takes precedence over newer requests",
 		},
 		[]string{"namespace", "name"},
 	)
@@ -311,7 +311,6 @@ func NewRestoreMetrics(namespace, name string) *RestoreMetrics {
 
 // RecordStarted increments the restore total counter.
 func (m *RestoreMetrics) RecordStarted() {
-	m.setState(1)
 	restoreTotal.
 		WithLabelValues(m.namespace, m.name).
 		Inc()
@@ -319,7 +318,6 @@ func (m *RestoreMetrics) RecordStarted() {
 
 // RecordSuccess increments the restore success counter and records duration.
 func (m *RestoreMetrics) RecordSuccess(durationSeconds float64) {
-	m.setState(2)
 	restoreSuccessTotal.
 		WithLabelValues(m.namespace, m.name).
 		Inc()
@@ -330,7 +328,6 @@ func (m *RestoreMetrics) RecordSuccess(durationSeconds float64) {
 
 // RecordFailure increments the restore failure counter.
 func (m *RestoreMetrics) RecordFailure() {
-	m.setState(3)
 	restoreFailureTotal.
 		WithLabelValues(m.namespace, m.name).
 		Inc()
@@ -338,7 +335,6 @@ func (m *RestoreMetrics) RecordFailure() {
 
 // RecordFailureWithDuration increments the restore failure counter and records duration.
 func (m *RestoreMetrics) RecordFailureWithDuration(durationSeconds float64) {
-	m.setState(3)
 	restoreFailureTotal.
 		WithLabelValues(m.namespace, m.name).
 		Inc()

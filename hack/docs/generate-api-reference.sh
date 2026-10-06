@@ -178,7 +178,11 @@ if out_lines and out_lines[-1] != "":
 
 for section_name in order:
     if section_name in reachable:
-        out_lines.extend(sections[section_name])
+        # Anonymous structs have no section anchor in crd-ref-docs output.
+        out_lines.extend(
+            re.sub(r"\[([^\]]+)\]\(#struct\{[^)]*\}\)", r"`\1`", line)
+            for line in sections[section_name]
+        )
         if out_lines and out_lines[-1] != "":
             out_lines.append("")
 

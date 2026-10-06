@@ -82,6 +82,11 @@ It preserves which inputs are accepted and replaces a missing-key evaluation err
 message. The match includes the resource, schema path, rule text, and rule metadata. Other CEL changes still require
 semantic review. `TestCRD_OpenBaoCluster_TLSRotationPeriod` verifies the API-server behavior.
 
+The checker also recognizes the exact fresh-restore validation rules. These rules
+accept all requests that omit the new optional target and cleanup
+fields. `TestCRD_FreshRestoreOptions` checks this boundary against the API server.
+Changes to these rules still require semantic review.
+
 The `API Contract` job runs for API, CRD, checker, gate-test, dependency, build-rule,
 and gate-workflow changes, every push to `main`, and manual CI runs. `CI Required`
 includes its result. Edge candidate builds and release image builds also depend

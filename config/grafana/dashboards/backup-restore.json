@@ -484,6 +484,26 @@
                   "color": "red",
                   "index": 3,
                   "text": "Failed"
+                },
+                "4": {
+                  "color": "orange",
+                  "index": 4,
+                  "text": "Unknown"
+                },
+                "5": {
+                  "color": "blue",
+                  "index": 5,
+                  "text": "Restarting"
+                },
+                "6": {
+                  "color": "green",
+                  "index": 6,
+                  "text": "Management resumed"
+                },
+                "7": {
+                  "color": "orange",
+                  "index": 7,
+                  "text": "Administrator handoff"
                 }
               },
               "type": "value"

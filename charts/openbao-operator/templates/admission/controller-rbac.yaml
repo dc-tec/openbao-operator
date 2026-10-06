@@ -54,7 +54,11 @@ spec:
           (
             (
               variables.component_label in ["backup", "restore"] &&
-              object.rules.size() == 1 &&
+              (object.rules.size() == 1 || (variables.component_label == "restore" && object.rules.size() == 3 &&
+                object.rules[1].apiGroups == ["openbao.org"] && object.rules[1].resources == ["openbaorestores"] &&
+                object.rules[1].verbs == ["get"] && has(object.rules[1].resourceNames) && object.rules[1].resourceNames.size() == 1 &&
+                object.rules[2].apiGroups == ["openbao.org"] && object.rules[2].resources == ["openbaorestores/status"] &&
+                object.rules[2].verbs == ["patch"] && object.rules[2].resourceNames == object.rules[1].resourceNames)) &&
               object.rules[0].apiGroups == [""] &&
               object.rules[0].resources == ["pods"] &&
               has(object.rules[0].verbs) &&

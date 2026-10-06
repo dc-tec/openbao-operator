@@ -258,10 +258,9 @@ func TestBuildStatefulSet_PodMetadata(t *testing.T) {
 			"openbao-sealed":              "false",
 		},
 		Annotations: map[string]string{
-			"example.com/custom":                "enabled",
-			configHashAnnotation:                "should-not-override",
-			constants.AnnotationRestartAt:       "should-not-override",
-			constants.AnnotationRestoreRevision: "should-not-override",
+			"example.com/custom":          "enabled",
+			configHashAnnotation:          "should-not-override",
+			constants.AnnotationRestartAt: "should-not-override",
 		},
 	}
 	cluster.Spec.Runtime = &openbaov1alpha1.RuntimeConfig{
@@ -296,8 +295,8 @@ func TestBuildStatefulSet_PodMetadata(t *testing.T) {
 	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != "2026-01-19T00:00:00Z" {
 		t.Fatalf("expected operator-managed restart annotation to win, got %q", got)
 	}
-	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestoreRevision]; got != "restore-uid-a" {
-		t.Fatalf("expected operator-managed restore revision annotation to win, got %q", got)
+	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestoreRevision]; got != cluster.Status.Restore.UID {
+		t.Fatalf("expected legacy restore annotation to remain unchanged, got %q", got)
 	}
 	if got := statefulSet.Spec.Template.Annotations[configHashAnnotation]; got == "" || got == "should-not-override" {
 		t.Fatalf("expected operator-managed config hash annotation to win, got %q", got)

@@ -84,10 +84,12 @@ and service instead of hiding destructive recovery in `OpenBaoCluster` reconcili
 
 The restore service validates the target, snapshot source, credentials, initialization state, and lock state before it
 creates a restore Job. A force option may override specific safety checks, and operation-lock override requires explicit
-intent. Completed and failed requests keep reconciling lock cleanup until restore no longer owns the cluster lock.
+intent. The executor claims submission once and never retries it. When the operator cannot confirm that the
+snapshot applied, the request ends `Unknown` and keeps the restore hold and operation lock until an administrator
+acknowledges `Resume` or `Abandon`. `Resume` runs a managed restart before releasing management.
 
-Restore completion means the restore workflow reached a terminal result. It does not guarantee that the cluster is
-unsealed or ready for clients; follow-up recovery can still be required.
+An existing-cluster restore remains `Unknown` after recovery is released. The operator cannot prove that the
+snapshot finished applying; the administrator verifies the restored data.
 
 ## Upgrade with strategy-owned state machines
 

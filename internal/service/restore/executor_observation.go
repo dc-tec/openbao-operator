@@ -7,7 +7,10 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
 // restoreExecutorPending vetoes a terminal Job observation when its remaining
@@ -77,4 +80,46 @@ func restoreExecutorContainersTerminated(pod *corev1.Pod) bool {
 		}
 	}
 	return true
+}
+
+// Admission binds the token to a Pod UID; the controller checks the independent
+// Job ownership boundary before accepting that Pod as the recorded executor.
+// Labels and owner references assume trusted destination Pod writers. They
+// correlate the claimant with the Job; they do not authenticate a tenant's Pod.
+func (m *Manager) validateClaimExecutor(ctx context.Context, request *api.OpenBaoRestore) (string, error) {
+	if request.Status.SubmissionClaim == nil {
+		return "", nil
+	}
+
+	execution := request.Status.Execution
+	if execution == nil || execution.JobUID == "" {
+		return "submission claimant has no recorded restore Job", nil
+	}
+
+	options := &client.ListOptions{
+		Namespace: request.Namespace, Limit: 500,
+		LabelSelector: labels.SelectorFromSet(labels.Set{batchv1.ControllerUidLabel: string(execution.JobUID)}),
+	}
+	for {
+		pods := &corev1.PodList{}
+		if err := m.reader.List(ctx, pods, options); err != nil {
+			return "", fmt.Errorf("read submission claimant: %w", err)
+		}
+		for i := range pods.Items {
+			pod := &pods.Items[i]
+			if pod.UID != request.Status.SubmissionClaim.PodUID {
+				continue
+			}
+			owner := metav1.GetControllerOf(pod)
+			if owner == nil || owner.APIVersion != "batch/v1" || owner.Kind != "Job" ||
+				owner.UID != execution.JobUID || owner.Name != execution.JobName {
+				return "submission claimant does not belong to the recorded restore Job", nil
+			}
+			return "", nil
+		}
+		if pods.Continue == "" {
+			return "submission claimant Pod is absent; its Job ownership cannot be checked", nil
+		}
+		options.Continue = pods.Continue
+	}
 }

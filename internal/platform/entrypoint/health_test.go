@@ -84,13 +84,13 @@ func TestReadinessRefreshIsBoundedAndProbesDoNotReadAPI(t *testing.T) {
 	r := &managerReadiness{reader: reader}
 	r.running.Store(true)
 	r.refresh(t.Context())
-	require.Equal(t, 12, reader.calls, "each missing binding stops its dependency check")
+	require.Equal(t, len(admission.DefaultDependencies()), reader.calls, "each missing binding stops its dependency check")
 	require.Positive(t, time.Until(reader.deadline))
 	require.LessOrEqual(t, time.Until(reader.deadline), 10*time.Second)
 	for range 10 {
 		require.ErrorContains(t, r.Check(nil), "admission dependencies are not ready")
 	}
-	require.Equal(t, 12, reader.calls)
+	require.Equal(t, len(admission.DefaultDependencies()), reader.calls)
 	require.Equal(t, 15*time.Second, admissionReadinessRefreshInterval)
 	require.Equal(t, 30*time.Second, admissionReadinessMaxAge)
 }

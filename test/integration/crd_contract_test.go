@@ -2564,7 +2564,7 @@ func TestVAP_OpenBaoRestore_AllowsCustomImageWithHelperImageVerb(t *testing.T) {
 	}
 }
 
-func TestVAP_OpenBaoRestore_DeniesUnchangedCustomImageUpdateWithoutCustomExecutablesVerb(t *testing.T) {
+func TestVAP_OpenBaoRestore_AllowsMetadataUpdateWithoutRedelegatingCustomImage(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
 
@@ -2595,7 +2595,6 @@ func TestVAP_OpenBaoRestore_DeniesUnchangedCustomImageUpdateWithoutCustomExecuta
 
 	username := "restore-image-standard-editor"
 	grantTenantOpenBaoWriteAccess(t, namespace, username)
-	grantClusterRestoreAccess(t, namespace, clusterName, username)
 	tenantClient := newImpersonatedClient(t, username)
 
 	var latest openbaov1alpha1.OpenBaoRestore
@@ -2605,11 +2604,13 @@ func TestVAP_OpenBaoRestore_DeniesUnchangedCustomImageUpdateWithoutCustomExecuta
 	}
 	original := latest.DeepCopy()
 	latest.Annotations = map[string]string{"openbao.org/test": "metadata-update"}
+	// Metadata writes include recovery acknowledgements and still require
+	// target restore authority, even when immutable inputs were delegated earlier.
+	requireAdmissionDenied(t, tenantClient.Patch(ctx, &latest, client.MergeFrom(original), client.DryRunAll))
+	grantClusterRestoreAccess(t, namespace, clusterName, username)
 
-	err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original))
-	requireAdmissionDenied(t, err)
-	if !strings.Contains(err.Error(), "custom restore helper images") {
-		t.Fatalf("unexpected error message: %v", err)
+	if err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
+		t.Fatalf("metadata-only update must not redelegate the immutable spec: %v", err)
 	}
 }
 

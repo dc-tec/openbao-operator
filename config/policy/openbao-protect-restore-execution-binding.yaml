@@ -1,0 +1,7 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-protect-restore-execution-binding
+spec:
+  policyName: openbao-protect-restore-execution
+  validationActions: [Deny]

@@ -59,7 +59,7 @@ func TestBlueGreenRollbackCleanupWaitsForDataDeletion(t *testing.T) {
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
 			}}}
-		require.NoError(t, k8sClient.Create(ctx, claim))
+		require.NoError(t, newControllerClient(t).Create(ctx, claim))
 		return claim
 	}
 	green := newClaim("data-" + cluster.Name + "-green-0")
@@ -76,7 +76,7 @@ func TestBlueGreenRollbackCleanupWaitsForDataDeletion(t *testing.T) {
 	require.NoError(t, k8sClient.Delete(ctx, mount, client.GracePeriodSeconds(0)))
 	verifier := security.NewImageVerifier(logr.Discard(), k8sClient, nil)
 	manager := bluegreen.NewManager(
-		k8sClient, k8sScheme, nil, nil, portopenbao.ClientConfig{}, verifier, verifier, "",
+		newControllerClient(t), k8sScheme, nil, nil, portopenbao.ClientConfig{}, verifier, verifier, "",
 	).WithReader(k8sClient)
 	reconcile := func() {
 		t.Helper()
@@ -107,7 +107,7 @@ func TestBlueGreenRollbackCleanupWaitsForDataDeletion(t *testing.T) {
 		require.Equal(t, openbaov1alpha1.PhaseRollbackCleanup, cluster.Status.BlueGreen.Phase)
 	}
 	green.Finalizers = nil
-	require.NoError(t, k8sClient.Update(ctx, green))
+	require.NoError(t, newControllerClient(t).Update(ctx, green))
 	reconcile()
 	require.Equal(t, openbaov1alpha1.PhaseIdle, cluster.Status.BlueGreen.Phase)
 	err := k8sClient.Get(ctx, client.ObjectKeyFromObject(green), &corev1.PersistentVolumeClaim{})

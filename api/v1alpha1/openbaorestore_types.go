@@ -84,6 +84,10 @@ const (
 
 // RestoreExecutionStatus records the identity and durable receipts for one restore execution.
 type RestoreExecutionStatus struct {
+	// TargetUID prevents a replacement cluster from inheriting this execution.
+	// +optional
+	TargetUID types.UID `json:"targetUID,omitempty"`
+
 	// OperationID identifies this immutable restore execution.
 	OperationID string `json:"operationID"`
 
@@ -124,6 +128,15 @@ type RestoreExecutionStatus struct {
 
 // RestoreSource defines where the snapshot comes from.
 type RestoreSource struct {
+	// ExpectedDigest pins the staged bytes before submission.
+	// +kubebuilder:validation:Pattern=`^sha256:[a-f0-9]{64}$`
+	// +optional
+	ExpectedDigest string `json:"expectedDigest,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=8589934592
+	// +optional
+	ExpectedSize int64 `json:"expectedSize,omitempty"`
+
 	// Target reuses BackupTarget for storage connection details.
 	// This includes endpoint, bucket, region, credentials, etc.
 	Target BackupTarget `json:"target"`
@@ -204,8 +217,67 @@ type OpenBaoRestoreSpec struct {
 	OverrideOperationLock bool `json:"overrideOperationLock,omitempty"`
 }
 
+// RestoreSubmissionClaim is a one-way submission reservation. A persisted claim
+// never authorizes a restarted executor to submit again.
+type RestoreSubmissionClaim struct {
+	// PodUID identifies the executor Pod that won the claim.
+	PodUID types.UID `json:"podUID"`
+	// TargetPodName is the OpenBao Pod that received the snapshot.
+	TargetPodName string `json:"targetPodName"`
+	// TargetPodUID identifies the OpenBao Pod that received the snapshot.
+	TargetPodUID types.UID `json:"targetPodUID"`
+	// TargetPodIP is the address the executor connected to.
+	TargetPodIP string `json:"targetPodIP"`
+	// TargetContainerID identifies the OpenBao container that received the snapshot.
+	TargetContainerID string `json:"targetContainerID"`
+	// Digest is sha256: followed by the lowercase digest of the staged snapshot bytes.
+	// +kubebuilder:validation:Pattern=`^sha256:[a-f0-9]{64}$`
+	Digest string `json:"digest"`
+	// Size is the staged snapshot size in bytes.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=8589934592
+	Size int64 `json:"size"`
+	// ClaimedAt records when submission was reserved.
+	ClaimedAt metav1.Time `json:"claimedAt"`
+}
+
+// RestoreRestartPod binds a managed restart to an original Pod and its StatefulSet.
+type RestoreRestartPod struct {
+	// Name is the original Pod name.
+	Name string `json:"name"`
+	// UID identifies the original Pod; a different UID marks a replacement.
+	UID types.UID `json:"uid"`
+	// StatefulSetUID identifies the StatefulSet that owned the original Pod.
+	StatefulSetUID types.UID `json:"statefulSetUID"`
+}
+
+// RestoreRestartStatus records Resume before restarting workloads. Replacement
+// Pod UIDs provide retry evidence; this status does not prove snapshot application.
+type RestoreRestartStatus struct {
+	// Pods contains the original voters and read replicas.
+	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
+	Pods []RestoreRestartPod `json:"pods"`
+	// CompletedAt records that all bound Pods were replaced and became ready.
+	// +optional
+	CompletedAt *metav1.Time `json:"completedAt,omitempty"`
+}
+
 // OpenBaoRestoreStatus defines the observed state of OpenBaoRestore.
 type OpenBaoRestoreStatus struct {
+	// SubmissionClaim reserves the only permitted snapshot submission.
+	// +optional
+	SubmissionClaim *RestoreSubmissionClaim `json:"submissionClaim,omitempty"`
+
+	// Restart records managed workload recovery after administrator Resume.
+	// +optional
+	Restart *RestoreRestartStatus `json:"restart,omitempty"`
+
+	// AdministratorDisposition records an operation-bound recovery acknowledgement.
+	// +kubebuilder:validation:Enum=Resume;Abandon
+	// +optional
+	AdministratorDisposition RestoreAdministratorDisposition `json:"administratorDisposition,omitempty"`
+
 	// Phase represents the current phase of the restore operation.
 	// +kubebuilder:default=Pending
 	Phase RestorePhase `json:"phase,omitempty"`
@@ -246,6 +318,7 @@ type OpenBaoRestoreStatus struct {
 // +kubebuilder:resource:shortName=obrestore
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".spec.cluster"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Recovery",type="string",JSONPath=".status.conditions[?(@.type=='RecoveryReleased')].reason"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message",priority=1
 

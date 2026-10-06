@@ -580,3 +580,23 @@ func TestVerifyProvisionerRBACEnforcement(t *testing.T) {
 		}
 	})
 }
+
+func TestRestoreDependenciesRejectStalePolicies(t *testing.T) {
+	for _, dep := range DefaultDependencies() {
+		if dep.Name != dependencyOpenBaoValidateOpenBaoRestore && dep.Name != dependencyProtectRestoreExecution {
+			continue
+		}
+		t.Run(dep.Name, func(t *testing.T) {
+			policy := newPolicy(dep.PolicyName, ptrFailurePolicy(admissionregistrationv1.Fail))
+			policy.Annotations = map[string]string{PolicyFingerprintAnnotation: "sha256:old-release"}
+			reader := newAdmissionClient(t, policy, newBinding(dep.BindingName, dep.PolicyName, admissionregistrationv1.Deny))
+			status, err := CheckDependencies(context.Background(), reader, []Dependency{dep}, []string{""})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status.OverallReady {
+				t.Fatal("stale restore policy passed readiness")
+			}
+		})
+	}
+}

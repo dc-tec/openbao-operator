@@ -206,6 +206,48 @@ func TestOpenBaoRestoreReconciler_AdmissionDependencyLoss(t *testing.T) {
 	})
 }
 
+func TestOpenBaoRestoreReconciler_DeletingRecoveryAdmission(t *testing.T) {
+	for _, action := range []string{"Resume", "Abandon", ""} {
+		t.Run(action, func(t *testing.T) {
+			t.Setenv("OPENBAO_UNSAFE_ADMISSION_DISABLED", "")
+			admission.SetAdmissionDependenciesReady(false)
+			t.Cleanup(func() { admission.SetAdmissionDependenciesReady(false) })
+
+			scheme := runtime.NewScheme()
+			require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+			now := metav1.Now()
+			request := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default", Name: "deleting", UID: "operation",
+					DeletionTimestamp: &now,
+					Finalizers:        []string{openbaov1alpha1.OpenBaoRestoreFinalizer},
+					Annotations:       map[string]string{constants.AnnotationRestoreAcknowledge: "operation/" + action},
+				},
+				Status: openbaov1alpha1.OpenBaoRestoreStatus{
+					Phase: openbaov1alpha1.RestorePhaseUnknown,
+					Execution: &openbaov1alpha1.RestoreExecutionStatus{
+						OperationID: "operation", Stage: openbaov1alpha1.RestoreExecutionStageUnknown,
+					},
+				},
+			}
+			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(request).Build()
+			tracker := admission.NewTracker(c, admission.DefaultDependencies(), admission.DefaultNamePrefixes(), time.Hour)
+			tracker.Set(admission.Status{CheckedAt: time.Now(), OverallReady: false})
+			recorder := &recordingRestoreReconciler{}
+			r := &OpenBaoRestoreReconciler{Client: c, AdmissionTracker: tracker, RestoreReconciler: recorder}
+
+			result, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(request)})
+			require.NoError(t, err)
+			if action == "Resume" {
+				assert.Zero(t, recorder.calls)
+				assert.Equal(t, constants.RequeueShort, result.RequeueAfter)
+			} else {
+				assert.Equal(t, 1, recorder.calls)
+			}
+		})
+	}
+}
+
 func TestOpenBaoRestoreReconciler_SetupWithManager_RequiresRestoreReconciler(t *testing.T) {
 	err := (&OpenBaoRestoreReconciler{}).SetupWithManager(nil)
 

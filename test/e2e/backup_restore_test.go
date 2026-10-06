@@ -418,7 +418,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 					Profile:  openbaov1alpha1.ProfileDevelopment,
 					Version:  openBaoVersion,
 					Image:    openBaoImage,
-					Replicas: 1,
+					Replicas: 3,
 					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
 						Replicas: 1,
 					},
@@ -533,7 +533,11 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}
 			cleanupCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancel()
-			_ = tenantFW.Cleanup(cleanupCtx)
+			if err := tenantFW.Cleanup(cleanupCtx); err != nil {
+				// Keep the operator available to inspect and recover an unresolved hold.
+				skipCleanup = true
+				Expect(err).NotTo(HaveOccurred(), "retaining the operator and failed restore fixture")
+			}
 		})
 
 		It("creates a restorable S3 backup", Label(
@@ -639,93 +643,19 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(configuration.Reason).To(Equal("Ready"))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			By("waiting for restore to drain steady read replicas before execution continues")
-			Eventually(func(g Gomega) {
-				updatedRestore := &openbaov1alpha1.OpenBaoRestore{}
-				err := admin.Get(ctx, types.NamespacedName{Name: restore.Name, Namespace: tenantNamespace}, updatedRestore)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updatedRestore.Status.Phase).NotTo(Equal(openbaov1alpha1.RestorePhaseFailed))
+			waitForHeldRestore(ctx, admin, restore)
 
-				cluster := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, cluster)).To(Succeed())
-				g.Expect(cluster.Status.ReadReplicas).NotTo(BeNil())
-				g.Expect(cluster.Status.ReadReplicas.DesiredReplicas).To(Equal(int32(1)))
-				if updatedRestore.Status.Phase == openbaov1alpha1.RestorePhaseRunning {
-					g.Expect(cluster.Status.ReadReplicas.ReadyReplicas).To(Equal(int32(0)))
+			By("verifying the operator did not restart voters on HTTP acceptance")
+			for name, uid := range voterPodUIDsBeforeRestore {
+				pod := &corev1.Pod{}
+				Expect(admin.Get(ctx, client.ObjectKey{Namespace: tenantNamespace, Name: name}, pod)).To(Succeed())
+				Expect(pod.UID).To(Equal(uid))
+			}
 
-					readReady := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionReadReplicasReady))
-					g.Expect(readReady).NotTo(BeNil())
-					g.Expect(readReady.Status).To(Equal(metav1.ConditionFalse))
-
-					readServing := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionReadServingAvailable))
-					g.Expect(readServing).NotTo(BeNil())
-					g.Expect(readServing.Status).To(Equal(metav1.ConditionFalse))
-
-					raftMembership := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionRaftMembershipReady))
-					g.Expect(raftMembership).NotTo(BeNil())
-					g.Expect(raftMembership.Status).To(Equal(metav1.ConditionFalse))
-
-					readSts := &appsv1.StatefulSet{}
-					g.Expect(admin.Get(ctx, types.NamespacedName{
-						Name:      resourceidentity.ReadReplicaStatefulSetName(drCluster),
-						Namespace: tenantNamespace,
-					}, readSts)).To(Succeed())
-					g.Expect(readSts.Spec.Replicas).NotTo(BeNil())
-					g.Expect(*readSts.Spec.Replicas).To(Equal(int32(0)))
-					g.Expect(readSts.Status.ReadyReplicas).To(Equal(int32(0)))
-				}
-			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed())
-
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoRestore{}
-				err := admin.Get(ctx, types.NamespacedName{Name: restore.Name, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseCompleted))
-
-				cluster := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, cluster)).To(Succeed())
-				g.Expect(cluster.Status.Restore).NotTo(BeNil())
-				g.Expect(cluster.Status.Restore.Name).To(Equal(restore.Name))
-				g.Expect(cluster.Status.Restore.UID).To(Equal(string(restore.UID)))
-				g.Expect(cluster.Status.Restore.RestartCompletedAt).NotTo(BeNil())
-				g.Expect(cluster.Status.ReadReplicas).NotTo(BeNil())
-				g.Expect(cluster.Status.ReadReplicas.DesiredReplicas).To(Equal(int32(1)))
-				g.Expect(cluster.Status.ReadReplicas.ReadyReplicas).To(Equal(int32(1)))
-				g.Expect(cluster.Status.ReadReplicas.RegisteredReplicas).To(Equal(int32(1)))
-				for _, condType := range []openbaov1alpha1.ConditionType{
-					openbaov1alpha1.ConditionReadReplicasReady,
-					openbaov1alpha1.ConditionReadServingAvailable,
-					openbaov1alpha1.ConditionRaftMembershipReady,
-				} {
-					cond := meta.FindStatusCondition(cluster.Status.Conditions, string(condType))
-					g.Expect(cond).NotTo(BeNil(), "expected read-replica condition %s", condType)
-					g.Expect(cond.Status).To(Equal(metav1.ConditionTrue), "expected read-replica condition %s to be true", condType)
-				}
-
-				readSts := &appsv1.StatefulSet{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Name:      resourceidentity.ReadReplicaStatefulSetName(drCluster),
-					Namespace: tenantNamespace,
-				}, readSts)).To(Succeed())
-				g.Expect(readSts.Status.ReadyReplicas).To(Equal(int32(1)))
-
-				voterPods := &corev1.PodList{}
-				g.Expect(admin.List(ctx, voterPods,
-					client.InNamespace(tenantNamespace),
-					client.MatchingLabels{
-						constants.LabelOpenBaoCluster:      drCluster.Name,
-						constants.LabelOpenBaoWorkloadPool: constants.LabelValueOpenBaoWorkloadPoolVoter,
-					},
-				)).To(Succeed())
-				g.Expect(voterPods.Items).To(HaveLen(int(drCluster.Spec.Replicas)))
-				for i := range voterPods.Items {
-					pod := voterPods.Items[i]
-					previousUID, found := voterPodUIDsBeforeRestore[pod.Name]
-					g.Expect(found).To(BeTrue(), "expected pre-restore UID for voter Pod %s", pod.Name)
-					g.Expect(pod.UID).NotTo(Equal(previousUID), "expected voter Pod %s to restart after restore", pod.Name)
-					g.Expect(pod.Annotations[constants.AnnotationRestoreRevision]).To(Equal(string(restore.UID)))
-				}
-			}, 15*time.Minute, 30*time.Second).Should(Succeed())
+			By("acknowledging recovery and waiting for managed voter and read-replica restarts")
+			acknowledgeHealthyRestore(ctx, admin, restore)
+			Expect(restore.Status.Restart.Pods).To(HaveLen(4))
+			Expect(restore.Status.Restart.CompletedAt).NotTo(BeNil())
 
 			By("Verifying secret persists after restore")
 			secretPath := "secret/backup-test"
@@ -748,7 +678,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			metricsOutput, metricErr := framework.WaitForControllerMetricSubstrings(
 				operatorNamespace,
 				2*time.Minute,
-				"openbao_restore_success_total{",
+				"openbao_restore_total{",
 				fmt.Sprintf(`namespace="%s"`, tenantNamespace),
 				fmt.Sprintf(`name="%s"`, drCluster.Name),
 			)
@@ -866,12 +796,31 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
-		It("completes restore deterministically after controller restart while running", Label(
+		It("retains the restore hold after controller restart while running", Label(
 			"e2e-anchor",
 			"case:dr-s3-restore-controller-restart",
 			"failure-injection",
 		), func() {
 			Expect(backupKey).NotTo(BeEmpty(), "backup key should be available before restore restart test")
+
+			By("switching the idle cluster to BlueGreen so voters use OnDelete")
+			// Cluster status can still report the preceding restore's hold until
+			// normal reconciliation observes the resumed workload.
+			Eventually(func(g Gomega) {
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(drCluster), drCluster)).To(Succeed())
+				beforeStrategy := drCluster.DeepCopy()
+				drCluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+					Strategy: openbaov1alpha1.UpdateStrategyBlueGreen, Image: upgradeExecutorImage,
+				}
+				g.Expect(admin.Patch(ctx, drCluster, client.MergeFrom(beforeStrategy))).To(Succeed())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(drCluster), drCluster)).To(Succeed())
+				g.Expect(drCluster.Status.AcceptedUpgradeStrategy).To(Equal(openbaov1alpha1.UpdateStrategyBlueGreen))
+				sts := &appsv1.StatefulSet{}
+				g.Expect(admin.Get(ctx, client.ObjectKey{Namespace: tenantNamespace, Name: drCluster.Name}, sts)).To(Succeed())
+				g.Expect(sts.Spec.UpdateStrategy.Type).To(Equal(appsv1.OnDeleteStatefulSetStrategyType))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			restoreName := "s3-restore-restart"
 			restore := &openbaov1alpha1.OpenBaoRestore{
@@ -912,21 +861,18 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			By("restarting controller deployment during restore execution")
 			Expect(restartControllerDeployment(ctx, admin, operatorNamespace)).To(Succeed())
 
-			By("waiting for restore completion")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoRestore{}
-				err := admin.Get(ctx, types.NamespacedName{Name: restoreName, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseCompleted))
-			}, 15*time.Minute, 15*time.Second).Should(Succeed())
-
-			By("ensuring restore remains terminally completed")
+			waitForHeldRestore(ctx, admin, restore)
+			claim := restore.Status.SubmissionClaim.DeepCopy()
+			jobUID := restore.Status.Execution.JobUID
 			Consistently(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoRestore{}
-				err := admin.Get(ctx, types.NamespacedName{Name: restoreName, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseCompleted))
-			}, 1*time.Minute, 10*time.Second).Should(Succeed())
+				g.Expect(admin.Get(ctx, client.ObjectKeyFromObject(restore), updated)).To(Succeed())
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseUnknown))
+				g.Expect(updated.Status.SubmissionClaim).To(Equal(claim))
+				g.Expect(updated.Status.Execution.JobUID).To(Equal(jobUID))
+			}, time.Minute, 10*time.Second).Should(Succeed())
+			By("authorizing managed voter and read-replica restarts")
+			acknowledgeHealthyRestore(ctx, admin, restore)
 		})
 	})
 
@@ -1265,13 +1211,63 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			_, _ = fmt.Fprintf(GinkgoWriter, "Creating OpenBaoRestore CR: %s\n", restore.Name)
 			Expect(admin.Create(ctx, restore)).To(Succeed())
 
-			By("waiting for the Azure restore to complete")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoRestore{}
-				err := admin.Get(ctx, types.NamespacedName{Name: restore.Name, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseCompleted))
-			}, 15*time.Minute, 30*time.Second).Should(Succeed())
+			waitForHeldRestore(ctx, admin, restore)
+			acknowledgeHealthyRestore(ctx, admin, restore)
 		})
 	})
 })
+
+// These helpers exercise administrator release on healthy local nodes. They do
+// not qualify process fencing when a Kubernetes node is unreachable.
+func waitForHeldRestore(ctx context.Context, c client.Client, request *openbaov1alpha1.OpenBaoRestore) {
+	Eventually(func(g Gomega) {
+		g.Expect(c.Get(ctx, client.ObjectKeyFromObject(request), request)).To(Succeed())
+		g.Expect(request.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseUnknown))
+		g.Expect(request.Status.SubmissionClaim).NotTo(BeNil())
+		g.Expect(request.Status.Execution).NotTo(BeNil())
+		g.Expect(request.Status.Execution.TerminalResult).To(Equal(openbaov1alpha1.RestoreExecutionResultSucceeded))
+		cluster := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(c.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: request.Spec.Cluster}, cluster)).To(Succeed())
+		g.Expect(cluster.Annotations[constants.AnnotationRestoreHold]).To(Equal(string(request.UID)))
+	}, 15*time.Minute, 10*time.Second).Should(Succeed())
+}
+
+func acknowledgeHealthyRestore(ctx context.Context, c client.Client, request *openbaov1alpha1.OpenBaoRestore) {
+	// The executor has terminated. Resume also requires direct health checks of
+	// every voter and managed Pod replacements; the status keeps the unconfirmed application outcome.
+	before := request.DeepCopy()
+	if request.Annotations == nil {
+		request.Annotations = map[string]string{}
+	}
+	request.Annotations[constants.AnnotationRestoreAcknowledge] = string(request.UID) + "/Resume"
+	Expect(c.Patch(ctx, request, client.MergeFrom(before))).To(Succeed())
+	Eventually(func(g Gomega) {
+		g.Expect(c.Get(ctx, client.ObjectKeyFromObject(request), request)).To(Succeed())
+		g.Expect(request.Status.AdministratorDisposition).To(Equal(openbaov1alpha1.RestoreAdministratorResume))
+		g.Expect(request.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseUnknown))
+		g.Expect(request.Status.Restart).NotTo(BeNil())
+		g.Expect(request.Status.Restart.CompletedAt).NotTo(BeNil())
+		for _, original := range request.Status.Restart.Pods {
+			pod := &corev1.Pod{}
+			g.Expect(c.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: original.Name}, pod)).To(Succeed())
+			g.Expect(pod.UID).NotTo(Equal(original.UID))
+		}
+		cluster := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(c.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: request.Spec.Cluster}, cluster)).To(Succeed())
+		g.Expect(cluster.Annotations[constants.AnnotationRestoreHold]).To(BeEmpty())
+		g.Expect(cluster.Status.OperationLock).To(BeNil())
+	}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+	metricsOutput, metricErr := framework.WaitForControllerMetricSubstrings(operatorNamespace, time.Minute,
+		fmt.Sprintf(`openbao_restore_state{name="%s",namespace="%s"} 6`, request.Spec.Cluster, request.Namespace))
+	Expect(metricErr).NotTo(HaveOccurred(), "Last metrics output:\n%s", metricsOutput)
+
+	// A new decision cannot silently overwrite an already released recovery.
+	conflicting := request.DeepCopy()
+	conflicting.Annotations[constants.AnnotationRestoreAcknowledge] = string(request.UID) + "/Abandon"
+	Expect(c.Patch(ctx, conflicting, client.MergeFrom(request), client.DryRunAll)).To(MatchError(ContainSubstring("Recovery has already been released")))
+
+	// Finish the request while the controller still has namespace permissions.
+	// Removing the tenant first can strand its finalizer during operator teardown.
+	Expect(deleteMinimalFixtureObject(ctx, c, request)).To(Succeed())
+}
