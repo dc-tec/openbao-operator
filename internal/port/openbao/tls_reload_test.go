@@ -3,7 +3,7 @@ package openbao
 import (
 	"testing"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 func TestUsesNativeTLSAutoReload(t *testing.T) {

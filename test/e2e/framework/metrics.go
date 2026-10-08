@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/test/utils"
+	"github.com/kubebao/openbao-operator/test/utils"
 )
 
 const (

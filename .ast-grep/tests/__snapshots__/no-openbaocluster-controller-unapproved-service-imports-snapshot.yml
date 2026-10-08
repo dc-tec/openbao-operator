@@ -11,6 +11,15 @@ snapshots:
       end: 82
   ? |
     package p
+    import certs "github.com/kubebao/openbao-operator/internal/service/certs"
+    var _ = certs.Manager
+  : labels:
+    - source: certs "github.com/kubebao/openbao-operator/internal/service/certs"
+      style: primary
+      start: 17
+      end: 83
+  ? |
+    package p
     import upgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade"
     var _ = upgrade.Service
   : labels:
@@ -18,3 +27,12 @@ snapshots:
       style: primary
       start: 17
       end: 86
+  ? |
+    package p
+    import upgrade "github.com/kubebao/openbao-operator/internal/service/upgrade"
+    var _ = upgrade.Service
+  : labels:
+    - source: upgrade "github.com/kubebao/openbao-operator/internal/service/upgrade"
+      style: primary
+      start: 17
+      end: 87

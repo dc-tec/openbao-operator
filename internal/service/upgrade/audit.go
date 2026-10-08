@@ -1,6 +1,6 @@
 package upgrade
 
-import openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+import openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 
 // UpgradeStartedAuditFields builds the common audit-event fields for the start
 // of an upgrade attempt.

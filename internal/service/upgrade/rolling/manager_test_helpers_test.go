@@ -4,10 +4,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/dc-tec/openbao-operator/internal/port/backup"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
+	"github.com/kubebao/openbao-operator/internal/port/backup"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/raftops"
 )
 
 func newManagerWithClientFactory(

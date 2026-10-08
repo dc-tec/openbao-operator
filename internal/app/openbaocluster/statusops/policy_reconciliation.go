@@ -4,9 +4,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	"github.com/dc-tec/openbao-operator/internal/service/configuration"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	"github.com/kubebao/openbao-operator/internal/service/configuration"
 )
 
 const (

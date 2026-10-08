@@ -8,11 +8,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	configurationservice "github.com/dc-tec/openbao-operator/internal/service/configuration"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceapply"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	configurationservice "github.com/kubebao/openbao-operator/internal/service/configuration"
 )
 
 const (

@@ -13,12 +13,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/port/adminops"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/backup"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/app/openbaocluster/adminopsstatus"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/port/adminops"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/backup"
 )
 
 func TestRestoreTestReleaseAdmissionAndDeletion(t *testing.T) {

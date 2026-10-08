@@ -8,10 +8,10 @@ import (
 
 	"github.com/go-logr/logr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // initializeCluster explicitly initializes OpenBao using the HTTP API (PUT /v1/sys/init).

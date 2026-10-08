@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	"github.com/dc-tec/openbao-operator/internal/platform/openbaotls"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	"github.com/kubebao/openbao-operator/internal/platform/openbaotls"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func readTargetHealth(ctx context.Context, config portopenbao.ClientConfig) (*portopenbao.HealthStatus, error) {

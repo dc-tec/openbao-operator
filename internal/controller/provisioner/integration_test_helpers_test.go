@@ -26,10 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
-	provisionercontroller "github.com/dc-tec/openbao-operator/internal/controller/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	appprovisioner "github.com/kubebao/openbao-operator/internal/app/provisioner"
+	provisionercontroller "github.com/kubebao/openbao-operator/internal/controller/provisioner"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
 )
 
 const operatorNamespace = "openbao-operator-system"

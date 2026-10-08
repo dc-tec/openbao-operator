@@ -16,13 +16,13 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	security "github.com/dc-tec/openbao-operator/internal/adapter/security"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	security "github.com/kubebao/openbao-operator/internal/adapter/security"
+	appopenbaocluster "github.com/kubebao/openbao-operator/internal/app/openbaocluster"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	portsecurity "github.com/kubebao/openbao-operator/internal/port/security"
 )
 
 type testApplicationsOptions struct {

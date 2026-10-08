@@ -74,7 +74,7 @@ func prepare(dir string, cfg config) error {
 	}
 	annotations["artifacthub.io/prerelease"] = "true"
 	annotations["org.opencontainers.image.revision"] = cfg.sha
-	annotations["org.opencontainers.image.source"] = "https://github.com/dc-tec/openbao-operator"
+	annotations["org.opencontainers.image.source"] = "https://github.com/kubebao/openbao-operator"
 
 	manager := cfg.images[0]
 	imageValues := mapping(values, "image")
@@ -96,11 +96,11 @@ func prepare(dir string, cfg config) error {
 
 Evaluation build from commit %s. Chart version: %s.
 
-Install this chart from oci://ghcr.io/dc-tec/charts-edge/openbao-operator using the exact version.
+Install this chart from oci://ghcr.io/kubebao/charts-edge/openbao-operator using the exact version.
 The controller, Provisioner, and default helper images are pinned to the verified candidate digests.
 This repository is not registered in Artifact Hub.
 
-See https://dc-tec.github.io/openbao-operator/next/docs/get-started/install/ for installation and CRD upgrade steps.
+See https://docs.kubebao.org/next/docs/get-started/install/ for installation and CRD upgrade steps.
 `, cfg.sha, cfg.chartVersion)
 	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte(readme), 0o644); err != nil {
 		return fmt.Errorf("write edge chart readme: %w", err)

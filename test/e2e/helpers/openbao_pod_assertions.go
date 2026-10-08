@@ -8,8 +8,8 @@ import (
 	gomegatypes "github.com/onsi/gomega/types"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // ExpectOpenBaoPodVersion verifies that a pod contains the OpenBao container and

@@ -3,8 +3,8 @@ package snapshot
 import (
 	batchv1 "k8s.io/api/batch/v1"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/kubebao/openbao-operator/internal/adapter/kube"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
 )
 
 // JobState classifies the state of a pre-upgrade snapshot Job.

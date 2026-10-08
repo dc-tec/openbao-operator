@@ -4,7 +4,7 @@ import (
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 func buildPluginBlocks(plugins []openbaov1alpha1.Plugin) []*hclwrite.Block {

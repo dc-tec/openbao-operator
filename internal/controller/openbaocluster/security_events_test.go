@@ -12,7 +12,7 @@ import (
 
 	"k8s.io/client-go/tools/events"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 func TestShouldEmitSecurityWarning(t *testing.T) {

@@ -11,9 +11,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 type admissionRuntimeTestReconciler interface {

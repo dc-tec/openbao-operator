@@ -5,11 +5,11 @@ import (
 
 	"github.com/go-logr/logr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceidentity"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	workloadsvc "github.com/kubebao/openbao-operator/internal/service/workload"
 )
 
 // computeStatefulSetSpec computes the StatefulSetSpec from the cluster and verified image digests.

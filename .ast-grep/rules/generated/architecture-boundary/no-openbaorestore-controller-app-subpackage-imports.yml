@@ -12,5 +12,5 @@ ignores:
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/internal/app/openbaorestore/.+"'
+        - regex: '"github\.com/kubebao/openbao-operator/internal/app/openbaorestore/.+"'
 note: Import only the app root facade (internal/app/openbaorestore) from controller layer to preserve a stable dependency surface.

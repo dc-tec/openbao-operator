@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
 )
 
 type restoreFlowStore struct {

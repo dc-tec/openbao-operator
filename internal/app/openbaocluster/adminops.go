@@ -5,9 +5,9 @@ import (
 
 	"github.com/go-logr/logr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	adminopsapp "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminops"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	adminopsapp "github.com/kubebao/openbao-operator/internal/app/openbaocluster/adminops"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
 )
 
 // AdminOpsDependencies holds dependencies required to build admin operations reconcilers.

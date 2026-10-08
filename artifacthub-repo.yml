@@ -1,5 +1,5 @@
 # Artifact Hub repository metadata for the OCI chart repository:
-# oci://ghcr.io/dc-tec/charts/openbao-operator
+# oci://ghcr.io/kubebao/charts/openbao-operator
 repositoryID: "d57830b0-ddf7-4dcc-8b50-70f2612dad78"
 owners:
   - name: dc-tec

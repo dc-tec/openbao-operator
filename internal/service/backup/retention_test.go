@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
 )
 
 func TestParseRetentionMaxAge(t *testing.T) {

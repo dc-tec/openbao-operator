@@ -3,9 +3,9 @@ package core_test
 import (
 	"testing"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/core"
 )
 
 func TestSetUpgradeStarted(t *testing.T) {

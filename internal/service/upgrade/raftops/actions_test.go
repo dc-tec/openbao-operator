@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 const testRollingLeaderURL0 = "https://vault-0"

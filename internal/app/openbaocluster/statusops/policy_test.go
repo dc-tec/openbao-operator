@@ -10,9 +10,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func TestApplyPolicyProjectsObservedState(t *testing.T) {

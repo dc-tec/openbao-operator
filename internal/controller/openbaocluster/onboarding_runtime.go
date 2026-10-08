@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 func (r *OpenBaoClusterReconciler) pauseForTenantOnboarding(ctx context.Context, logger logr.Logger, controllerName, namespace string) (ctrl.Result, error, bool) {

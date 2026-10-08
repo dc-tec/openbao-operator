@@ -16,10 +16,10 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
-	restoremanager "github.com/dc-tec/openbao-operator/internal/service/restore"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	backupconfig "github.com/kubebao/openbao-operator/internal/service/backup"
+	restoremanager "github.com/kubebao/openbao-operator/internal/service/restore"
 )
 
 type restoreConnection struct {

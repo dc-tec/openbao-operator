@@ -11,6 +11,15 @@ snapshots:
       end: 90
   ? |
     package p
+    import bootstrap "github.com/kubebao/openbao-operator/internal/service/bootstrap"
+    var _ = bootstrap.Manager
+  : labels:
+    - source: bootstrap "github.com/kubebao/openbao-operator/internal/service/bootstrap"
+      style: primary
+      start: 17
+      end: 91
+  ? |
+    package p
     import restore "github.com/dc-tec/openbao-operator/internal/service/restore"
     var _ = restore.Manager
   : labels:
@@ -18,3 +27,12 @@ snapshots:
       style: primary
       start: 17
       end: 86
+  ? |
+    package p
+    import restore "github.com/kubebao/openbao-operator/internal/service/restore"
+    var _ = restore.Manager
+  : labels:
+    - source: restore "github.com/kubebao/openbao-operator/internal/service/restore"
+      style: primary
+      start: 17
+      end: 87

@@ -2,10 +2,10 @@ id: no-openbaorestore-controller-direct-domain-imports
 valid:
   - |
     package p
-    import app "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
+    import app "github.com/kubebao/openbao-operator/internal/app/openbaorestore"
     var _ = app.ReconcileOpenBaoRestore
 invalid:
   - |
     package p
-    import logging "github.com/dc-tec/openbao-operator/internal/platform/logging"
+    import logging "github.com/kubebao/openbao-operator/internal/platform/logging"
     var _ = logging.NewNopLogger

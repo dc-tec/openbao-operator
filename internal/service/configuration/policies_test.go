@@ -10,10 +10,10 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	configbuilder "github.com/kubebao/openbao-operator/internal/adapter/config"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 type policyStore struct {

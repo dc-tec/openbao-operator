@@ -84,7 +84,7 @@ that namespace.
 2. Obtain the operator source for the commit you intend to evaluate.
 
    {{< command label="configure" title="Clone the operator source" >}}
-   git clone https://github.com/dc-tec/openbao-operator.git
+   git clone https://github.com/kubebao/openbao-operator.git
    cd openbao-operator
    git checkout <commit>
    {{< /command >}}

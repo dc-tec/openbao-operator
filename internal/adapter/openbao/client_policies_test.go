@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 	"github.com/stretchr/testify/require"
 )
 

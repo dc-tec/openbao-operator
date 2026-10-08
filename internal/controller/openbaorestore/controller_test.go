@@ -19,11 +19,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	appopenbaorestore "github.com/kubebao/openbao-operator/internal/app/openbaorestore"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
 )
 
 type recordingRestoreReconciler struct {

@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/configuration"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/app/openbaocluster"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/configuration"
 )
 
 type policyClient struct {

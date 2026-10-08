@@ -8,10 +8,10 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	networkingmanager "github.com/kubebao/openbao-operator/internal/service/networking"
 )
 
 // ACMEIntegrationResult is the controller-facing evaluation result for the

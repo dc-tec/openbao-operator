@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 func TestCRD_OpenBaoCluster_TLSRotationPeriod(t *testing.T) {

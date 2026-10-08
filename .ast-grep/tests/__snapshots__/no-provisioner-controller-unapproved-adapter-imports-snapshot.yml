@@ -9,3 +9,12 @@ snapshots:
       style: primary
       start: 17
       end: 86
+  ? |
+    package p
+    import openbao "github.com/kubebao/openbao-operator/internal/adapter/openbao"
+    var _ = openbao.Client
+  : labels:
+    - source: openbao "github.com/kubebao/openbao-operator/internal/adapter/openbao"
+      style: primary
+      start: 17
+      end: 87

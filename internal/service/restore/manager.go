@@ -10,9 +10,9 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 const (

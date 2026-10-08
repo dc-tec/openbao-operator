@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // LeaderStatusResponse represents the response from GET /v1/sys/leader.

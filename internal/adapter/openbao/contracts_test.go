@@ -1,6 +1,6 @@
 package openbao
 
-import portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+import portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 
 const (
 	DefaultConnectionTimeout = portopenbao.DefaultConnectionTimeout

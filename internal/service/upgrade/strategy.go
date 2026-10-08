@@ -1,8 +1,8 @@
 package upgrade
 
 import (
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	portworkload "github.com/kubebao/openbao-operator/internal/port/workload"
 )
 
 // DesiredStrategy returns the strategy requested by the cluster spec.

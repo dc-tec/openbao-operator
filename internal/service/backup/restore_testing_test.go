@@ -21,8 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	controllermetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/observability"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/observability"
 )
 
 const restoreTestSnapshotKey = "snapshot"

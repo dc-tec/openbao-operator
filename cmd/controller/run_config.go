@@ -12,9 +12,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/entrypoint"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 type runConfig struct {

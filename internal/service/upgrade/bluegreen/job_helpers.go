@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-logr/logr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
 )
 
 type autoRollbackConfig struct {

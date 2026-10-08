@@ -3,10 +3,10 @@ package workload
 import (
 	"fmt"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceidentity"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func statefulSetNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) string {

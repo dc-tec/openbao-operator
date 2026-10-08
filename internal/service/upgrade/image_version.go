@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
 )
 
 // ValidateImageRefMatchesVersion rejects image selections that can be proven

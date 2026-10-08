@@ -19,7 +19,7 @@ import (
 
 	"k8s.io/client-go/rest"
 
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
 )
 
 func TestPemPublicKeysFromJWKS_UsesX5C(t *testing.T) {

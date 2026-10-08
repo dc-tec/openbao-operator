@@ -21,11 +21,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	clusterpkg "github.com/dc-tec/openbao-operator/internal/adapter/cluster"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	clusterpkg "github.com/kubebao/openbao-operator/internal/adapter/cluster"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 const (

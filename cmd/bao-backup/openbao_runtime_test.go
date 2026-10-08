@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	backupconfig "github.com/kubebao/openbao-operator/internal/service/backup"
 )
 
 const (

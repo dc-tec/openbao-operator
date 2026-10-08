@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	configbuilder "github.com/kubebao/openbao-operator/internal/adapter/config"
 )
 
 func TestApprovalManifest(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 var executorConfigEnvKeys = []string{

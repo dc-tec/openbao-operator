@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-: "${REPO:?REPO is required (for example dc-tec/openbao-operator)}"
+: "${REPO:?REPO is required (for example kubebao/openbao-operator)}"
 
 BASE_BRANCH="${BASE_BRANCH:-main}"
 MANIFEST_FILE="${MANIFEST_FILE:-.release-please-manifest.json}"

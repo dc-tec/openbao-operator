@@ -6,7 +6,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
 )
 
 func TestJobStateFromBatchJob(t *testing.T) {

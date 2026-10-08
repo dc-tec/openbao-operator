@@ -9,14 +9,14 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
-	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	snapshothelpers "github.com/dc-tec/openbao-operator/internal/service/upgrade/snapshot"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	"github.com/kubebao/openbao-operator/internal/platform/logging"
+	portbackup "github.com/kubebao/openbao-operator/internal/port/backup"
+	"github.com/kubebao/openbao-operator/internal/service/opslifecycle"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	snapshothelpers "github.com/kubebao/openbao-operator/internal/service/upgrade/snapshot"
 )
 
 func (m *Manager) createPreUpgradeBackupJob(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {

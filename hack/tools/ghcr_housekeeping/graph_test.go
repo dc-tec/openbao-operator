@@ -40,7 +40,7 @@ func TestResolveOCIGraphFollowsRootsIndexesAndReferrers(t *testing.T) {
 
 	result, err := resolveOCIGraph(
 		context.Background(),
-		"dc-tec",
+		"kubebao",
 		"openbao-operator",
 		versions,
 		client,
@@ -73,7 +73,7 @@ func TestResolveOCIGraphFailsClosedOnManifestError(t *testing.T) {
 	client := &fakeManifestGraphClient{errors: map[string]error{root: errors.New("registry unavailable")}}
 	_, err := resolveOCIGraph(
 		context.Background(),
-		"dc-tec",
+		"kubebao",
 		"openbao-operator",
 		[]packageVersion{{ID: 1, Name: root, Tags: []string{"edge"}}},
 		client,
@@ -202,7 +202,7 @@ func TestRunHousekeepingPlansGraphOrphansWithinGlobalBudget(t *testing.T) {
 		},
 	}
 	opts := options{
-		Owner:               "dc-tec",
+		Owner:               "kubebao",
 		OwnerKind:           ownerKindUser,
 		Packages:            []string{"openbao-operator"},
 		Mode:                modeDryRun,

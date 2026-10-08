@@ -13,5 +13,5 @@ ignores:
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/(internal/adapter/config(/[^"]*)?)"'
+        - regex: '"github\.com/kubebao/openbao-operator/(internal/adapter/config(/[^"]*)?)"'
 note: Keep config.hcl semantics owned by the shared configuration service.

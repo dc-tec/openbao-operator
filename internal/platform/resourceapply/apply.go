@@ -9,10 +9,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
+	"github.com/kubebao/openbao-operator/internal/adapter/kube"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceownership"
 )
 
 func ApplyOwned(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, obj client.Object) error {

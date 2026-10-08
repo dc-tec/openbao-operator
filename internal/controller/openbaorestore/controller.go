@@ -28,12 +28,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	appopenbaorestore "github.com/kubebao/openbao-operator/internal/app/openbaorestore"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	observability "github.com/kubebao/openbao-operator/internal/platform/observability"
 )
 
 // OpenBaoRestoreReconciler reconciles a OpenBaoRestore object.

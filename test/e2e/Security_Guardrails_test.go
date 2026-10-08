@@ -31,13 +31,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
-	restoresvc "github.com/dc-tec/openbao-operator/internal/service/restore"
-	"github.com/dc-tec/openbao-operator/test/e2e/framework"
-	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/service/provisioner"
+	restoresvc "github.com/kubebao/openbao-operator/internal/service/restore"
+	"github.com/kubebao/openbao-operator/test/e2e/framework"
+	e2ehelpers "github.com/kubebao/openbao-operator/test/e2e/helpers"
 )
 
 const (
@@ -1180,14 +1180,14 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				)
 			}
 
-			tagJob := newManagedJob(fmt.Sprintf("digest-deny-%d", time.Now().UnixNano()), "ghcr.io/dc-tec/openbao-backup:dev")
+			tagJob := newManagedJob(fmt.Sprintf("digest-deny-%d", time.Now().UnixNano()), "ghcr.io/kubebao/openbao-backup:dev")
 			err := createManagedDryRunAsController(tagJob)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must use digest-pinned images"))
 
 			digestJob := newManagedJob(
 				fmt.Sprintf("digest-allow-%d", time.Now().UnixNano()),
-				"ghcr.io/dc-tec/openbao-backup@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				"ghcr.io/kubebao/openbao-backup@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			)
 			Expect(createManagedDryRunAsController(digestJob)).To(Succeed())
 		})

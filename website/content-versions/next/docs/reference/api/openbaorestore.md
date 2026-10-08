@@ -235,7 +235,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled controls whether the init container is used to render the configuration.<br />The operator requires the init container; disabling it is not supported. | true | Optional: \{\} <br /> |
-| `image` _string_ | Image is the container image to use for the init container.<br />If not specified, OPERATOR_INIT_IMAGE can supply a complete image reference, including a digest.<br />Otherwise, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_INIT_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-init") and the tag matches OPERATOR_VERSION. |  | Optional: \{\} <br /> |
+| `image` _string_ | Image is the container image to use for the init container.<br />If not specified, OPERATOR_INIT_IMAGE can supply a complete image reference, including a digest.<br />Otherwise, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_INIT_IMAGE_REPOSITORY<br />(default: "ghcr.io/kubebao/openbao-init") and the tag matches OPERATOR_VERSION. |  | Optional: \{\} <br /> |
 
 
 #### KMIPSealConfig

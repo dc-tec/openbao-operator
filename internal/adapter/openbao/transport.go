@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 	"golang.org/x/time/rate"
 )
 

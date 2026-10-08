@@ -12,12 +12,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/security"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/backup"
-	upgradecore "github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/security"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/backup"
+	upgradecore "github.com/kubebao/openbao-operator/internal/service/upgrade/core"
+	workloadsvc "github.com/kubebao/openbao-operator/internal/service/workload"
 )
 
 func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {

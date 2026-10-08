@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 // ControllerTokenProvider supplies the credential selected for one target.

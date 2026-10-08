@@ -13,7 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
+	"github.com/kubebao/openbao-operator/internal/platform/entrypoint"
 )
 
 func TestDetectPlatform(t *testing.T) {

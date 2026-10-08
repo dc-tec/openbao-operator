@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/go-logr/logr"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
 	"github.com/stretchr/testify/require"
 )
 

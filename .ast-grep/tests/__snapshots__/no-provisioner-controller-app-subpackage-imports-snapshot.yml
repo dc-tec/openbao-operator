@@ -9,3 +9,12 @@ snapshots:
       style: primary
       start: 17
       end: 95
+  ? |
+    package p
+    import subpkg "github.com/kubebao/openbao-operator/internal/app/provisioner/tenantops"
+    var _ = subpkg.Run
+  : labels:
+    - source: subpkg "github.com/kubebao/openbao-operator/internal/app/provisioner/tenantops"
+      style: primary
+      start: 17
+      end: 96

@@ -3,13 +3,13 @@ package openbaocluster
 import (
 	"errors"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
-	identitymanager "github.com/dc-tec/openbao-operator/internal/service/identity"
-	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	bootstrapmanager "github.com/kubebao/openbao-operator/internal/service/bootstrap"
+	identitymanager "github.com/kubebao/openbao-operator/internal/service/identity"
+	networkingmanager "github.com/kubebao/openbao-operator/internal/service/networking"
+	workloadsvc "github.com/kubebao/openbao-operator/internal/service/workload"
 )
 
 func oidcConfigForInfraManager(oidc *OIDCConfig) *portauth.OIDCConfig {

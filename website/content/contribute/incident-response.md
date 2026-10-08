@@ -49,7 +49,7 @@ List every workflow that can change release source, tags, packages, trust roots,
 high-trust set is broader than the stable release workflow alone.
 
 {{< command label="inspect" title="List recent high-trust runs" >}}
-REPO=dc-tec/openbao-operator
+REPO=kubebao/openbao-operator
 
 for workflow in \
   ci.yml \
@@ -76,14 +76,14 @@ artifacts before logs or artifacts expire.
 RUN_ID=1234567890
 
 gh run view "${RUN_ID}" \
-  --repo dc-tec/openbao-operator \
+  --repo kubebao/openbao-operator \
   --json databaseId,event,headBranch,headSha,displayTitle,conclusion,createdAt,updatedAt,url
 
-gh api "repos/dc-tec/openbao-operator/actions/runs/${RUN_ID}" \
+gh api "repos/kubebao/openbao-operator/actions/runs/${RUN_ID}" \
   --jq '{id,event,actor:.actor.login,head_branch,head_sha,status,conclusion,run_attempt,created_at,updated_at,html_url}'
 
-gh run view "${RUN_ID}" --repo dc-tec/openbao-operator --log > "run-${RUN_ID}.log"
-gh run download "${RUN_ID}" --repo dc-tec/openbao-operator --dir "run-${RUN_ID}-artifacts"
+gh run view "${RUN_ID}" --repo kubebao/openbao-operator --log > "run-${RUN_ID}.log"
+gh run download "${RUN_ID}" --repo kubebao/openbao-operator --dir "run-${RUN_ID}-artifacts"
 {{< /command >}}
 
 Store collected evidence outside the potentially compromised repository and record a checksum for every exported file.
@@ -93,7 +93,7 @@ Store collected evidence outside the potentially compromised repository and reco
 Inspect tags, draft and published releases, images, executors, and the chart repository.
 
 {{< command label="inspect" title="Inventory release and registry state" >}}
-gh release list --repo dc-tec/openbao-operator --limit 30
+gh release list --repo kubebao/openbao-operator --limit 30
 git ls-remote --tags origin
 
 for repository in \
@@ -103,7 +103,7 @@ for repository in \
   openbao-upgrade \
   charts/openbao-operator
 do
-  crane ls "ghcr.io/dc-tec/${repository}" | sort -V | tail -n 30
+  crane ls "ghcr.io/kubebao/${repository}" | sort -V | tail -n 30
 done
 {{< /command >}}
 
@@ -118,7 +118,7 @@ git fetch origin "refs/tags/${VERSION}:refs/tags/${VERSION}"
 git verify-tag "${VERSION}"
 git rev-list -n1 "${VERSION}"
 gh release view "${VERSION}" \
-  --repo dc-tec/openbao-operator \
+  --repo kubebao/openbao-operator \
   --json tagName,isDraft,isPrerelease,assets,url
 {{< /command >}}
 
@@ -126,7 +126,7 @@ Run the repository verifier for a release that should be valid:
 
 {{< command label="verify" title="Verify published subjects and produce evidence" >}}
 VERSION=X.Y.Z \
-REPO=dc-tec/openbao-operator \
+REPO=kubebao/openbao-operator \
 EVIDENCE_OUT="incident-${VERSION}-verification.json" \
 hack/ci/verify-post-release.sh
 {{< /command >}}
@@ -162,7 +162,7 @@ then downstream provider credentials.
 9. Restore stable-release permissions and unsuspend the tag App only after the controlled release succeeds.
 
 Record every recovery action and its reviewer in the incident notes. Report externally according to
-[`SECURITY.md`](https://github.com/dc-tec/openbao-operator/blob/main/SECURITY.md) when users or published artifacts may be
+[`SECURITY.md`](https://github.com/kubebao/openbao-operator/blob/main/SECURITY.md) when users or published artifacts may be
 affected.
 
 {{< callout type="warning" title="Single-maintainer constraint" >}}

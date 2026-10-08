@@ -3,8 +3,8 @@ package upgrade
 import (
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/raftops"
 )
 
 // Default timeouts and intervals for upgrade operations.

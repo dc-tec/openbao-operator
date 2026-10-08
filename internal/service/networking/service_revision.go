@@ -5,10 +5,10 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/revision"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portworkload "github.com/kubebao/openbao-operator/internal/port/workload"
 )
 
 func applyActiveServiceSelector(cluster *openbaov1alpha1.OpenBaoCluster, selector map[string]string) {

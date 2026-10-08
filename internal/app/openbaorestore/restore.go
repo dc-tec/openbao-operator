@@ -10,14 +10,14 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/configuration"
-	"github.com/dc-tec/openbao-operator/internal/service/restore"
-	"github.com/dc-tec/openbao-operator/internal/service/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/configuration"
+	"github.com/kubebao/openbao-operator/internal/service/restore"
+	"github.com/kubebao/openbao-operator/internal/service/workload"
 )
 
 // RestoreReconciler coordinates restore lifecycle transitions for OpenBaoRestore resources.

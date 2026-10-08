@@ -13,13 +13,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/security"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/backup"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/security"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/backup"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	workloadsvc "github.com/kubebao/openbao-operator/internal/service/workload"
 )
 
 func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {

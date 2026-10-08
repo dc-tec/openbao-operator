@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-logr/logr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
 )
 
 type captureVerifier struct {
@@ -20,7 +20,7 @@ type captureVerifier struct {
 func (v *captureVerifier) Verify(_ context.Context, _ string, config imageverify.VerifyConfig) (string, error) {
 	v.called = true
 	v.config = config
-	return "ghcr.io/dc-tec/openbao-operator@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
+	return "ghcr.io/kubebao/openbao-operator@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
 }
 
 func compileRegExp(t *testing.T, expr string) *regexp.Regexp {
@@ -79,11 +79,11 @@ func assertOperatorSubjectRegExp(t *testing.T, expr string) {
 
 	re := compileRegExp(t, expr)
 	trusted := []string{
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.3",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-edge.yml@refs/heads/main",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-nightly.yml@refs/heads/main",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/main",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/tags/0.2.1",
+		"https://github.com/kubebao/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.3",
+		"https://github.com/kubebao/openbao-operator/.github/workflows/publish-edge.yml@refs/heads/main",
+		"https://github.com/kubebao/openbao-operator/.github/workflows/publish-nightly.yml@refs/heads/main",
+		"https://github.com/kubebao/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/main",
+		"https://github.com/kubebao/openbao-operator/.github/workflows/reusable-build.yml@refs/tags/0.2.1",
 	}
 	for _, subject := range trusted {
 		if !re.MatchString(subject) {
@@ -92,9 +92,9 @@ func assertOperatorSubjectRegExp(t *testing.T, expr string) {
 	}
 
 	untrusted := []string{
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/feature",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/ci.yml@refs/heads/main",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/heads/main",
+		"https://github.com/kubebao/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/feature",
+		"https://github.com/kubebao/openbao-operator/.github/workflows/ci.yml@refs/heads/main",
+		"https://github.com/kubebao/openbao-operator/.github/workflows/release.yml@refs/heads/main",
 	}
 	for _, subject := range untrusted {
 		if re.MatchString(subject) {
@@ -161,7 +161,7 @@ func TestVerifyOperatorImageForCluster_AppliesOfficialOperatorKeylessDefaults(t 
 	}
 	verifier := &captureVerifier{}
 
-	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/dc-tec/openbao-init:1.2.4")
+	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/kubebao/openbao-init:1.2.4")
 	if err != nil {
 		t.Fatalf("VerifyOperatorImageForCluster() unexpected error: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestVerifyOperatorImageForCluster_AppliesDefaultsForEdgeTag(t *testing.T) {
 	}
 	verifier := &captureVerifier{}
 
-	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/dc-tec/openbao-init:edge")
+	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/kubebao/openbao-init:edge")
 	if err != nil {
 		t.Fatalf("VerifyOperatorImageForCluster() unexpected error: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestVerifyOperatorImageForCluster_HardenedWithOmittedConfigAppliesDefaults(
 	}
 	verifier := &captureVerifier{}
 
-	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/dc-tec/openbao-backup:1.2.4")
+	_, err := VerifyOperatorImageForCluster(context.Background(), logr.Discard(), verifier, cluster, "ghcr.io/kubebao/openbao-backup:1.2.4")
 	if err != nil {
 		t.Fatalf("VerifyOperatorImageForCluster() unexpected error: %v", err)
 	}

@@ -20,14 +20,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
-	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/deletionops"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/backup"
-	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/service/restore"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/app/openbaocluster/adminopsstatus"
+	"github.com/kubebao/openbao-operator/internal/app/openbaocluster/deletionops"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/backup"
+	"github.com/kubebao/openbao-operator/internal/service/provisioner"
+	"github.com/kubebao/openbao-operator/internal/service/restore"
 )
 
 func TestSourceDeletionDuringRejectedRestoreTestReleasesReservation(t *testing.T) {

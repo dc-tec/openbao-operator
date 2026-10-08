@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
 )
 
 // ProviderType identifies the storage provider.

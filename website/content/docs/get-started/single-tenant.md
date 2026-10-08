@@ -84,7 +84,7 @@ that namespace.
 
    {{< command label="configure" title="Clone a pinned operator release" >}}
    git clone --branch 0.5.1 --depth 1 \
-     https://github.com/dc-tec/openbao-operator.git
+     https://github.com/kubebao/openbao-operator.git
    cd openbao-operator
    {{< /command >}}
 

@@ -11,8 +11,8 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
 )
 
 type caMaterial struct {

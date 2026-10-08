@@ -155,7 +155,7 @@ func parseCoverageProfile(r io.Reader) (coverageReport, error) {
 
 func internalLayer(fileName string) (string, bool) {
 	normalized := strings.ReplaceAll(fileName, "\\", "/")
-	const modulePrefix = "github.com/dc-tec/openbao-operator/internal/"
+	const modulePrefix = "github.com/kubebao/openbao-operator/internal/"
 
 	var relative string
 	if strings.HasPrefix(normalized, modulePrefix) {

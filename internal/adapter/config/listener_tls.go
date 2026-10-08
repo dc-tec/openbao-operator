@@ -3,8 +3,8 @@ package config
 import (
 	"fmt"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	platformsemver "github.com/kubebao/openbao-operator/internal/platform/semver"
 )
 
 func validateListenerTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) error {

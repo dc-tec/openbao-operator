@@ -10,13 +10,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/security"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
-	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/security"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	"github.com/kubebao/openbao-operator/internal/platform/logging"
+	"github.com/kubebao/openbao-operator/internal/service/opslifecycle"
+	"github.com/kubebao/openbao-operator/internal/service/workloadidentity"
 )
 
 // handleRunning manages the restore Job and checks for completion.

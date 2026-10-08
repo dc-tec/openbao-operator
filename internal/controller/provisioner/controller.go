@@ -28,13 +28,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
-	operatorpredicates "github.com/dc-tec/openbao-operator/internal/platform/predicates"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	appprovisioner "github.com/kubebao/openbao-operator/internal/app/provisioner"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	observability "github.com/kubebao/openbao-operator/internal/platform/observability"
+	operatorpredicates "github.com/kubebao/openbao-operator/internal/platform/predicates"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
 )
 
 // NamespaceProvisionerReconciler reconciles OpenBaoTenant objects to provision

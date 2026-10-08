@@ -3,7 +3,7 @@ package observability
 import (
 	"github.com/prometheus/client_golang/prometheus"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 // ObserveRestoreStates rebuilds the namespace's gauges from cached requests. An

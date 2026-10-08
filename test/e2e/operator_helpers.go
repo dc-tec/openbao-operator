@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/dc-tec/openbao-operator/test/e2e/framework"
+	"github.com/kubebao/openbao-operator/test/e2e/framework"
 )
 
 const (

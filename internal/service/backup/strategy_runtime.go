@@ -7,8 +7,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	portbackup "github.com/kubebao/openbao-operator/internal/port/backup"
 )
 
 // UpgradeStrategyRuntime implements pre-upgrade backup operations for upgrade strategies.

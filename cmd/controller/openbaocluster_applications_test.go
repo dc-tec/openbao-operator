@@ -9,11 +9,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	"github.com/dc-tec/openbao-operator/internal/adapter/raft"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	"github.com/kubebao/openbao-operator/internal/adapter/raft"
+	appopenbaocluster "github.com/kubebao/openbao-operator/internal/app/openbaocluster"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func TestSetupControllersRequiresRaftRuntime(t *testing.T) {

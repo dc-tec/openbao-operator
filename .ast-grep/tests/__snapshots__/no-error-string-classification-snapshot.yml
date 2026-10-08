@@ -7,7 +7,7 @@ snapshots:
       return strings.Contains(err.Error(), "forbidden")
     }
   : labels:
-    - source: 'strings.Contains(err.Error(), "forbidden")'
+    - source: strings.Contains(err.Error(), "forbidden")
       style: primary
       start: 61
       end: 103
@@ -18,7 +18,7 @@ snapshots:
       return strings.Contains(strings.ToLower(err.Error()), "forbidden")
     }
   : labels:
-    - source: 'strings.Contains(strings.ToLower(err.Error()), "forbidden")'
+    - source: strings.Contains(strings.ToLower(err.Error()), "forbidden")
       style: primary
       start: 61
       end: 120
@@ -29,7 +29,7 @@ snapshots:
       return strings.EqualFold(err.Error(), "already initialized")
     }
   : labels:
-    - source: 'strings.EqualFold(err.Error(), "already initialized")'
+    - source: strings.EqualFold(err.Error(), "already initialized")
       style: primary
       start: 61
       end: 114

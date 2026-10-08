@@ -12,11 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
-	snapshothelpers "github.com/dc-tec/openbao-operator/internal/service/upgrade/snapshot"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/kube"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/service/opslifecycle"
+	snapshothelpers "github.com/kubebao/openbao-operator/internal/service/upgrade/snapshot"
 )
 
 // findExistingPreUpgradeBackupJob finds an existing pre-upgrade backup job for this cluster.

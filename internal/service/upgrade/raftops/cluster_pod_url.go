@@ -3,8 +3,8 @@ package raftops
 import (
 	"fmt"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 // ClusterPodURLForService returns the OpenBao API base URL for the given pod

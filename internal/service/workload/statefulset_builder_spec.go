@@ -10,12 +10,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceidentity"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceownership"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	portworkload "github.com/kubebao/openbao-operator/internal/port/workload"
 )
 
 func desiredStatefulSetReplicas(cluster *openbaov1alpha1.OpenBaoCluster, initialized bool, spec StatefulSetSpec) int32 {

@@ -22,9 +22,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	networkingmanager "github.com/kubebao/openbao-operator/internal/service/networking"
 )
 
 func TestInfraNetwork_GatewayAPICRDsMissing_HTTPRouteMode_IsDegraded(t *testing.T) {

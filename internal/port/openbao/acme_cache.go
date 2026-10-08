@@ -5,9 +5,9 @@ import (
 	"path"
 	"strings"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portworkload "github.com/kubebao/openbao-operator/internal/port/workload"
 )
 
 const (

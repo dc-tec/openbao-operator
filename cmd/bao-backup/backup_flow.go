@@ -11,10 +11,10 @@ import (
 	"os"
 	"time"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	backupconfig "github.com/kubebao/openbao-operator/internal/service/backup"
 )
 
 const backupCleanupTimeout = 30 * time.Second

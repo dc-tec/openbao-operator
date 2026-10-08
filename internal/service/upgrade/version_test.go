@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
 )
 
 func TestParseVersion(t *testing.T) {

@@ -4,9 +4,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/hardenedcontract"
 )
 
 // applyAllConditions computes and sets all status conditions from cluster state.

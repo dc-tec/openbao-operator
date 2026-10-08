@@ -15,10 +15,10 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	upgradecore "github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
+	upgradecore "github.com/kubebao/openbao-operator/internal/service/upgrade/core"
 )
 
 func newBlueGreenTestScheme(t *testing.T) *runtime.Scheme {

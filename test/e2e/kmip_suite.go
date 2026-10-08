@@ -11,7 +11,7 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 
-	"github.com/dc-tec/openbao-operator/test/utils"
+	"github.com/kubebao/openbao-operator/test/utils"
 )
 
 const (

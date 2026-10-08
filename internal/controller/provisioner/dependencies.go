@@ -1,8 +1,8 @@
 package provisioner
 
 import (
-	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	appprovisioner "github.com/kubebao/openbao-operator/internal/app/provisioner"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 func (r *NamespaceProvisionerReconciler) tenantRuntime() appprovisioner.TenantRuntime {

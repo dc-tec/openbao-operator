@@ -1,6 +1,6 @@
 package upgrade
 
-import openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+import openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 
 // BlueGreenTargetReplicas returns the population selected for the active upgrade.
 func BlueGreenTargetReplicas(cluster *openbaov1alpha1.OpenBaoCluster) int32 {

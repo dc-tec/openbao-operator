@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
 )
 
 func TestNewManagerWithReaderAndOIDCConfig(t *testing.T) {

@@ -15,12 +15,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	"github.com/dc-tec/openbao-operator/internal/adapter/raft"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/platform/testutil/managerprobe"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	initmanager "github.com/dc-tec/openbao-operator/internal/service/init"
+	"github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	"github.com/kubebao/openbao-operator/internal/adapter/raft"
+	appopenbaocluster "github.com/kubebao/openbao-operator/internal/app/openbaocluster"
+	"github.com/kubebao/openbao-operator/internal/platform/testutil/managerprobe"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	initmanager "github.com/kubebao/openbao-operator/internal/service/init"
 )
 
 func TestControllerReadinessCacheAndWatchContract(t *testing.T) {

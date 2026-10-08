@@ -19,7 +19,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"gocloud.dev/blob/azureblob"
 
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
 )
 
 // AzureClientConfig holds configuration for Azure Blob Storage.

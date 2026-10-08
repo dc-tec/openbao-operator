@@ -9,3 +9,12 @@ snapshots:
       style: primary
       start: 17
       end: 90
+  ? |
+    package p
+    import c "github.com/kubebao/openbao-operator/internal/controller/openbaocluster"
+    var _ = c.NewOpenBaoClusterReconciler
+  : labels:
+    - source: c "github.com/kubebao/openbao-operator/internal/controller/openbaocluster"
+      style: primary
+      start: 17
+      end: 91

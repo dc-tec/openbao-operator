@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	backupconfig "github.com/kubebao/openbao-operator/internal/service/backup"
 )
 
 type restoreSettings struct {

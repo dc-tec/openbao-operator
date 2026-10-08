@@ -29,9 +29,9 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/dc-tec/openbao-operator/cmd/controller"
-	"github.com/dc-tec/openbao-operator/cmd/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
+	"github.com/kubebao/openbao-operator/cmd/controller"
+	"github.com/kubebao/openbao-operator/cmd/provisioner"
+	"github.com/kubebao/openbao-operator/internal/platform/entrypoint"
 )
 
 func run(ctx context.Context, args []string) error {

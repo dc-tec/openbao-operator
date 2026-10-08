@@ -3,8 +3,8 @@ package cluster
 import (
 	"fmt"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceidentity"
 )
 
 // ComputeRequiredDNSSANs calculates DNS names that should be included in server certificate SANs

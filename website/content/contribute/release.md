@@ -97,7 +97,7 @@ prerelease, patch, or other exact version must be requested explicitly.
 
 {{< command label="request" title="Create an auditable Release-As marker PR" >}}
 gh workflow run prepare-release-as-pr.yml \
-  --repo dc-tec/openbao-operator \
+  --repo kubebao/openbao-operator \
   -f target_branch=main \
   -f version=X.Y.Z-rc.1
 {{< /command >}}
@@ -149,9 +149,11 @@ The stable public distribution surface is:
 | Surface | Published result |
 | --- | --- |
 | GHCR images | Version-tagged, digest-addressable, signed manager, init, backup, and upgrade images |
-| GHCR Helm OCI | Canonical signed chart at `ghcr.io/dc-tec/charts/openbao-operator` |
+| GHCR Helm OCI | Canonical signed chart at `ghcr.io/kubebao/charts/openbao-operator` |
 | GitHub Release | Installer manifest, CRDs, policy approval files, checksums and signature bundles, SBOMs, and provenance index |
 | Artifact Hub | Discovery and metadata for the GHCR chart |
+
+These coordinates apply to releases published under KubeBao. Historical releases, including 0.5.1 and earlier, retain their `ghcr.io/dc-tec` images and charts, `dc-tec/openbao-operator` signing identities, and original provenance. Use the repository and signer recorded in each release's provenance index when verifying historical artifacts. Do not republish a historical version under the new coordinates.
 
 OLM bundles remain repository and CI validation assets; public OperatorHub publication is not part of the supported
 release procedure.
@@ -173,18 +175,22 @@ release PR.
 
 {{< command label="verify" title="Run post-release verification" >}}
 VERSION=X.Y.Z \
-REPO=dc-tec/openbao-operator \
+REPO=kubebao/openbao-operator \
 EVIDENCE_OUT=dist/post-release-verification.json \
 hack/ci/verify-post-release.sh
 {{< /command >}}
 
-Local verification requires `gh`, `jq`, `git`, Docker Buildx, and `cosign`.
+Local verification requires `gh`, `jq`, `git`, Docker Buildx, Helm, and `cosign`.
+
+For manual workflow runs, select `current` as the publisher for releases published from the current repository. Select `dc-tec/openbao-operator` for pre-transfer releases, including `0.5.1`. Automatic runs use the current repository as the publisher.
+
+For local verification of a historical release, keep `REPO=kubebao/openbao-operator` and set `PUBLISHER_REPO=dc-tec/openbao-operator`. Set `EXPECTED_CHART_FILE` to the `charts/openbao-operator/Chart.yaml` extracted from that release's tag. The verifier reads tags, release assets, and PRs from `REPO`, but checks signatures, attestations, image paths, and chart paths against `PUBLISHER_REPO`. It records both repositories in the verification evidence and rejects provenance from a different publisher.
 
 Use the provenance index to select digest-pinned subjects for additional checks:
 
 {{< command label="verify" title="Verify release identity and subjects" >}}
 gh release download X.Y.Z \
-  --repo dc-tec/openbao-operator \
+  --repo kubebao/openbao-operator \
   --pattern provenance-index.json \
   --pattern checksums.txt \
   --pattern checksums.txt.bundle
@@ -194,14 +200,14 @@ jq '.release, .identity_constraints, .images, .chart' provenance-index.json
 cosign verify \
   --new-bundle-format=true \
   --certificate-identity \
-    "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/X.Y.Z" \
+    "https://github.com/kubebao/openbao-operator/.github/workflows/release.yml@refs/tags/X.Y.Z" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  "ghcr.io/dc-tec/openbao-operator@sha256:<digest>"
+  "ghcr.io/kubebao/openbao-operator@sha256:<digest>"
 
 gh attestation verify \
-  "oci://ghcr.io/dc-tec/charts/openbao-operator@sha256:<digest>" \
-  --repo dc-tec/openbao-operator \
-  --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
+  "oci://ghcr.io/kubebao/charts/openbao-operator@sha256:<digest>" \
+  --repo kubebao/openbao-operator \
+  --signer-workflow kubebao/openbao-operator/.github/workflows/release.yml \
   --source-ref refs/tags/X.Y.Z \
   --cert-oidc-issuer https://token.actions.githubusercontent.com \
   --deny-self-hosted-runners
@@ -211,7 +217,7 @@ If `artifacthub-repo.yml` changes, refresh the repository metadata separately:
 
 {{< command label="publish" title="Publish Artifact Hub repository metadata" >}}
 oras push \
-  ghcr.io/dc-tec/charts/openbao-operator:artifacthub.io \
+  ghcr.io/kubebao/charts/openbao-operator:artifacthub.io \
   --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
   artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
 {{< /command >}}
@@ -230,7 +236,7 @@ If verification fails or publication state is unexpected, stop and use the
 Successful `main` CI builds and verifies an edge chart with version
 `X.Y.Z-edge.<run-id>.<attempt>.g<commit>`. The shared channel workflow compares independent package builds and installs
 the packaged chart in Kind without image overrides. The edge publisher then pushes those package bytes to
-`ghcr.io/dc-tec/charts-edge/openbao-operator`, signs the OCI digest, and verifies its GitHub attestation. A publisher
+`ghcr.io/kubebao/charts-edge/openbao-operator`, signs the OCI digest, and verifies its GitHub attestation. A publisher
 rerun accepts an existing chart version only when its bytes match.
 
 The source chart remains shared with releases. Edge packaging sets the operator version and manager digest, and sets
@@ -240,7 +246,7 @@ image references take precedence over the repository/version defaults. A cluster
 precedence over the operator default.
 
 The edge repository must remain unregistered in Artifact Hub. Do not publish `artifacthub-repo.yml` or an Artifact Hub
-repository registration for it. Stable and release-candidate charts continue to use `ghcr.io/dc-tec/charts/openbao-operator`.
+repository registration for it. Stable and release-candidate charts continue to use `ghcr.io/kubebao/charts/openbao-operator`.
 Nightly chart publication remains a separate future change and must use a separate unregistered repository too.
 
 On the first publication, check that the new GHCR package permits anonymous pulls and inherits the repository's Actions

@@ -6,20 +6,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/go-logr/logr"
+	"github.com/kubebao/openbao-operator/internal/adapter/security"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
-	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/kube"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/logging"
+	"github.com/kubebao/openbao-operator/internal/service/opslifecycle"
+	"github.com/kubebao/openbao-operator/internal/service/workloadidentity"
 )
 
 const (

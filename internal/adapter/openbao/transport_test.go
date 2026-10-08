@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 

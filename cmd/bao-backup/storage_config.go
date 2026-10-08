@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
-	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
+	"github.com/kubebao/openbao-operator/internal/adapter/storage"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
+	backupconfig "github.com/kubebao/openbao-operator/internal/service/backup"
 )
 
 func buildStorageConfig(cfg *backupconfig.ExecutorConfig) (storage.Config, error) {

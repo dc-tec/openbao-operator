@@ -12,9 +12,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	appopenbaocluster "github.com/kubebao/openbao-operator/internal/app/openbaocluster"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
 )
 
 func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {

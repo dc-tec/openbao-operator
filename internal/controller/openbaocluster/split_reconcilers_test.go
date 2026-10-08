@@ -17,12 +17,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	appopenbaocluster "github.com/kubebao/openbao-operator/internal/app/openbaocluster"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
 )
 
 type workloadSubReconcilerStub struct {

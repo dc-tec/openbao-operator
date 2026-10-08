@@ -9,7 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 func TestObserveBackup_DoesNotMutateCluster(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
 )
 
 const gcsRWScope = "https://www.googleapis.com/auth/devstorage.read_write"

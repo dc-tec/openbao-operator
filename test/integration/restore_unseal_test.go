@@ -9,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 func TestCRD_RestoreTargetUnsealProviders(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 // loadClusterConfig loads cluster namespace, name, and replicas from environment variables.

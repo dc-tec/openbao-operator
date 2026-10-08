@@ -9,3 +9,12 @@ snapshots:
       style: primary
       start: 17
       end: 84
+  ? |
+    package p
+    import backup "github.com/kubebao/openbao-operator/internal/service/backup"
+    var _ = backup.NewManager
+  : labels:
+    - source: backup "github.com/kubebao/openbao-operator/internal/service/backup"
+      style: primary
+      start: 17
+      end: 85

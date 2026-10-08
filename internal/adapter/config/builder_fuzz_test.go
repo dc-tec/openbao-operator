@@ -7,8 +7,8 @@ import (
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	platformsemver "github.com/kubebao/openbao-operator/internal/platform/semver"
 )
 
 func FuzzOpenBaoVersionAtLeast(f *testing.F) {

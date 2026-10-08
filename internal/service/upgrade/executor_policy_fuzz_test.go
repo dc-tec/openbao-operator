@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/raftops"
 )
 
 func FuzzExecutorPolicyHelpers(f *testing.F) {

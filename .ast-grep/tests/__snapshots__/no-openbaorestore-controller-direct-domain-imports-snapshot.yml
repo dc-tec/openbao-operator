@@ -9,3 +9,12 @@ snapshots:
       style: primary
       start: 17
       end: 87
+  ? |
+    package p
+    import logging "github.com/kubebao/openbao-operator/internal/platform/logging"
+    var _ = logging.NewNopLogger
+  : labels:
+    - source: logging "github.com/kubebao/openbao-operator/internal/platform/logging"
+      style: primary
+      start: 17
+      end: 88

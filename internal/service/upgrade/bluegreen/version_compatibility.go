@@ -3,8 +3,8 @@ package bluegreen
 import (
 	"fmt"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
 )
 
 func validateVersionCompatibility(currentVersion, targetVersion string) error {

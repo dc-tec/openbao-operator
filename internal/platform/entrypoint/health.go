@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
 )
 
 const (

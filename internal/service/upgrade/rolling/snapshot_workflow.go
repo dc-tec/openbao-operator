@@ -6,8 +6,8 @@ import (
 
 	"github.com/go-logr/logr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/snapshot"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/snapshot"
 )
 
 // handlePreUpgradeSnapshot checks if preUpgradeSnapshot is enabled and triggers a backup if needed.

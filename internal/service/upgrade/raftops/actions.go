@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/go-logr/logr"
+	openbao "github.com/kubebao/openbao-operator/internal/adapter/openbao"
 )
 
 // RunRollingStepDownLeader steps down the current cluster leader.

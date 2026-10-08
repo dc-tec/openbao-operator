@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func TestResolveLeaderWithPolicyUsing(t *testing.T) {

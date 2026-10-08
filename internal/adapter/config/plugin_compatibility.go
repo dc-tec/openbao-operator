@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	platformsemver "github.com/kubebao/openbao-operator/internal/platform/semver"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func validatePluginVersionCompatibility(cluster *openbaov1alpha1.OpenBaoCluster) error {

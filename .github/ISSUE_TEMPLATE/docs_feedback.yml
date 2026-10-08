@@ -46,7 +46,7 @@ body:
     attributes:
       label: Docs page URL
       description: Full URL for the page that needs work.
-      placeholder: https://dc-tec.github.io/openbao-operator/docs/...
+      placeholder: https://docs.kubebao.org/docs/...
     validations:
       required: true
 
@@ -55,7 +55,7 @@ body:
     attributes:
       label: Docs page path
       description: Optional route path for the page that needs work.
-      placeholder: /openbao-operator/docs/...
+      placeholder: /docs/...
 
   - type: textarea
     id: issue

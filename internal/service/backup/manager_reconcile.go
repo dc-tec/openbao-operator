@@ -7,11 +7,11 @@ import (
 
 	"github.com/go-logr/logr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/logging"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
+	"github.com/kubebao/openbao-operator/internal/service/opslifecycle"
 )
 
 // Reconcile ensures backup configuration and status are aligned with the desired state for the given OpenBaoCluster.

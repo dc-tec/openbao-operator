@@ -18,14 +18,14 @@ const (
 	envHardenedUpgradeImage      = "E2E_HARDENED_UPGRADE_EXECUTOR_IMAGE"
 	envUpgradeExecutorImage      = "E2E_UPGRADE_EXECUTOR_IMAGE"
 
-	defaultSignedUpgradeExecutorImage = "ghcr.io/dc-tec/openbao-upgrade:edge"
+	defaultSignedUpgradeExecutorImage = "ghcr.io/kubebao/openbao-upgrade:edge"
 )
 
 func requireHardenedSignedSuite() {
 	if !strings.EqualFold(strings.TrimSpace(os.Getenv(envEnableHardenedSignedSuite)), "true") {
 		ginkgo.Skip(fmt.Sprintf(
 			"requires signed hardened suite; set %s=true and provide %s and %s "+
-				"(for example ghcr.io/openbao/openbao:2.6.2 and ghcr.io/dc-tec/openbao-init:edge)",
+				"(for example ghcr.io/openbao/openbao:2.6.2 and ghcr.io/kubebao/openbao-init:edge)",
 			envEnableHardenedSignedSuite,
 			envOpenBaoImage,
 			envHardenedConfigInitImage,

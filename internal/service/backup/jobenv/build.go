@@ -5,12 +5,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	adapterauth "github.com/dc-tec/openbao-operator/internal/adapter/auth"
-	"github.com/dc-tec/openbao-operator/internal/adapter/storageenv"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	adapterauth "github.com/kubebao/openbao-operator/internal/adapter/auth"
+	"github.com/kubebao/openbao-operator/internal/adapter/storageenv"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // Options configures backup job environment variable construction.

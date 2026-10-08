@@ -67,7 +67,7 @@ func TestApplyDeletionPlanStopsAfterFirstError(t *testing.T) {
 		},
 	}}
 	client := &fakePackageClient{deleteErrors: map[int64]error{1: errors.New("forbidden")}}
-	opts := options{Owner: "dc-tec", OwnerKind: ownerKindUser}
+	opts := options{Owner: "kubebao", OwnerKind: ownerKindUser}
 
 	err := applyDeletionPlan(context.Background(), opts, client, &report)
 	if err == nil {
@@ -125,7 +125,7 @@ func TestApplyDeletionPlanUsesPlannerPriority(t *testing.T) {
 		},
 	}}
 	client := &fakePackageClient{}
-	opts := options{Owner: "dc-tec", OwnerKind: ownerKindUser}
+	opts := options{Owner: "kubebao", OwnerKind: ownerKindUser}
 
 	if err := applyDeletionPlan(context.Background(), opts, client, &report); err != nil {
 		t.Fatalf("applyDeletionPlan() error = %v", err)

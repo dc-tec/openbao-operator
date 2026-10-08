@@ -27,11 +27,11 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
-	provisionerpkg "github.com/dc-tec/openbao-operator/internal/service/provisioner"
-	hardenedfixtures "github.com/dc-tec/openbao-operator/test/fixtures/hardenedcontract"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/statusapply"
+	provisionerpkg "github.com/kubebao/openbao-operator/internal/service/provisioner"
+	hardenedfixtures "github.com/kubebao/openbao-operator/test/fixtures/hardenedcontract"
 )
 
 func requireInvalidRequest(t *testing.T, err error) {
@@ -2275,7 +2275,7 @@ func TestVAP_OpenBaoCluster_RejectsNumericBackupEndpoint(t *testing.T) {
 	cluster := newMinimalClusterObj(namespace, "cluster-backup-numeric-endpoint")
 	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
 		Schedule:    "0 0 * * *",
-		Image:       "ghcr.io/dc-tec/openbao-backup:1.0.0",
+		Image:       "ghcr.io/kubebao/openbao-backup:1.0.0",
 		JWTAuthRole: "backup-role",
 		Target: openbaov1alpha1.BackupTarget{
 			Endpoint: "http://2130706433:9000",
@@ -2334,7 +2334,7 @@ func TestVAP_OpenBaoCluster_RejectsBackupEndpointSSRFBypasses(t *testing.T) {
 			cluster := newMinimalClusterObj(namespace, "cluster-backup-ssrf-"+tt.name)
 			cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
 				Schedule:    "0 0 * * *",
-				Image:       "ghcr.io/dc-tec/openbao-backup:1.0.0",
+				Image:       "ghcr.io/kubebao/openbao-backup:1.0.0",
 				JWTAuthRole: "backup-role",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: tt.endpoint,
@@ -2687,7 +2687,7 @@ func TestVAP_OpenBaoRestore_RejectsUnsafeEndpoints(t *testing.T) {
 							Key: "clusters/prod/snapshot.snap",
 						},
 						JWTAuthRole: "restore",
-						Image:       "ghcr.io/dc-tec/openbao-backup:1.0.0",
+						Image:       "ghcr.io/kubebao/openbao-backup:1.0.0",
 						Force:       true,
 					},
 				}

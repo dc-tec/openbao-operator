@@ -15,13 +15,13 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	backupmanager "github.com/dc-tec/openbao-operator/internal/service/backup"
-	upgrademanager "github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
-	rollingupgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade/rolling"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
+	backupmanager "github.com/kubebao/openbao-operator/internal/service/backup"
+	upgrademanager "github.com/kubebao/openbao-operator/internal/service/upgrade"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/bluegreen"
+	rollingupgrade "github.com/kubebao/openbao-operator/internal/service/upgrade/rolling"
 )
 
 type fakeSubReconciler struct {

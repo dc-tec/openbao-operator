@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 type captureImageVerifier struct {

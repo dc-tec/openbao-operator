@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 // restoreExecutorPending vetoes a terminal Job observation when its remaining

@@ -9,7 +9,7 @@ import (
 
 	"gocloud.dev/blob/memblob"
 
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
 )
 
 type blobStoreFactory func(t *testing.T) blobstore.BlobStore

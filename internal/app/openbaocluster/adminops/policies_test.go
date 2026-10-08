@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	configbuilder "github.com/kubebao/openbao-operator/internal/adapter/config"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/go-logr/logr"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 	"github.com/stretchr/testify/require"
 )
 

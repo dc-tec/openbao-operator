@@ -15,9 +15,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	controllermetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/platform/observability"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	appprovisioner "github.com/kubebao/openbao-operator/internal/app/provisioner"
+	"github.com/kubebao/openbao-operator/internal/platform/observability"
 )
 
 func TestProvisionerReconcileMetrics_Lifecycle(t *testing.T) {

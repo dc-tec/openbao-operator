@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"strings"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // InitRequest represents the payload sent to PUT /v1/sys/init.

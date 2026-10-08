@@ -1,6 +1,6 @@
 package openbao
 
-import openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+import openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 
 const (
 	EnvBaoSealType           = "BAO_SEAL_TYPE"

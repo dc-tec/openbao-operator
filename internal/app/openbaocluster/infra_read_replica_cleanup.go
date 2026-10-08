@@ -6,8 +6,8 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	workloadsvc "github.com/kubebao/openbao-operator/internal/service/workload"
 )
 
 func (r *infraReconciler) reconcileDisabledReadReplicas(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, readSpec workloadsvc.StatefulSetSpec, readCurrentSTS *appsv1.StatefulSet, readCurrentSTSFound bool) (bool, error) {

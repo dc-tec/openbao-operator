@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // Client provides access to OpenBao's system API endpoints.

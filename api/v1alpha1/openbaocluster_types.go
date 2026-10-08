@@ -348,7 +348,7 @@ type OpenBaoClusterSpec struct {
 	ImageVerification *ImageVerificationConfig `json:"imageVerification,omitempty"`
 	// OperatorImageVerification configures supply chain security checks for operator-managed helper images
 	// (init container and backup/upgrade/restore executors) and custom BlueGreen validation-hook images.
-	// Helper images are typically signed by the operator project (e.g., dc-tec/openbao-operator)
+	// Helper images are typically signed by the operator project (e.g., kubebao/openbao-operator)
 	// rather than the OpenBao upstream project.
 	// If omitted, helper image verification does not fall back to ImageVerification.
 	// In Development, omitted means disabled. In Hardened, omitted means enabled.

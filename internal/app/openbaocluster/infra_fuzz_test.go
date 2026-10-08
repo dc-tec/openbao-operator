@@ -10,7 +10,7 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 func FuzzInfraPolicyHelpers(f *testing.F) {
@@ -63,8 +63,8 @@ func FuzzInfraPolicyHelpers(f *testing.F) {
 }
 
 func FuzzVerifyImageDigestWithPolicy(f *testing.F) {
-	f.Add(true, "ghcr.io/dc-tec/openbao@sha256:abc", "Block", true, "sha256:def", "verify failed")
-	f.Add(true, "ghcr.io/dc-tec/openbao:2.4.4", "Warn", false, "", "network error")
+	f.Add(true, "ghcr.io/kubebao/openbao@sha256:abc", "Block", true, "sha256:def", "verify failed")
+	f.Add(true, "ghcr.io/kubebao/openbao:2.4.4", "Warn", false, "", "network error")
 	f.Add(false, "", "Block", false, "", "")
 
 	f.Fuzz(func(t *testing.T, enabled bool, imageRef, failurePolicy string, verifySucceeds bool, digest, verifyErr string) {

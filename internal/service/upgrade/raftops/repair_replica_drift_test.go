@@ -3,8 +3,8 @@ package raftops
 import (
 	"testing"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func TestRepairConsensusUsesCapturedBlueReplicaCount(t *testing.T) {

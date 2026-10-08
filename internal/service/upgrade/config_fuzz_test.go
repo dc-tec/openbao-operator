@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 func FuzzLoadUpgradeExecutorConfig(f *testing.F) {

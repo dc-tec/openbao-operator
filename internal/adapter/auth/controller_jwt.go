@@ -15,9 +15,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
 )
 
 const controllerJWTRefreshMargin = 60 * time.Second

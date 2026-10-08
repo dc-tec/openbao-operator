@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 	"github.com/go-logr/logr"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/raftops"
 )
 
 // RunExecutor runs the upgrade executor action.
