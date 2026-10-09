@@ -230,6 +230,7 @@ _Appears in:_
 | `clientSecret` _string_ | ClientSecret is the Azure client secret.<br />Note: It is strongly recommended to use CredentialsSecretRef or Managed Service Identity instead. |  | Optional: \{\} <br /> |
 | `resource` _string_ | Resource is the Azure AD resource endpoint.<br />For Managed HSM, this should usually be "managedhsm.azure.net". |  | Optional: \{\} <br /> |
 | `environment` _string_ | Environment is the Azure environment (e.g., "AzurePublicCloud", "AzureUSGovernmentCloud"). |  | Optional: \{\} <br /> |
+| `authMethod` _string_ | AuthMethod selects how the seal authenticates to Azure, rendered as the<br />seal's auth_method. When empty, OpenBao chooses: a client ID without a<br />client secret selects managed_identity, which uses the instance metadata<br />service. Set workload_identity for Azure Workload Identity, where the<br />workload identity webhook also injects AZURE_CLIENT_ID. |  | Enum: [workload_identity managed_identity client_secret environment default] <br />Optional: \{\} <br /> |
 
 
 #### AzureTargetConfig
