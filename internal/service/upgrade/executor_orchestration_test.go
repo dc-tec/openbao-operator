@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 	"github.com/go-logr/logr"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/raftops"
 )
 
 func TestRunExecutor(t *testing.T) {

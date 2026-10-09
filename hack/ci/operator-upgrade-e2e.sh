@@ -43,6 +43,7 @@ CLUSTER_RESOURCE="openbaocluster/operator-upgrade"
 PVC_RESOURCE="persistentvolumeclaim/data-operator-upgrade-0"
 TRANSIT_CLUSTER_RESOURCE="openbaocluster/operator-upgrade-transit"
 HARDENED_CLUSTER_RESOURCE="openbaocluster/operator-upgrade-hardened"
+# The source release and its signed helper stay at their historical coordinates.
 HARDENED_INIT_IMAGE_REPOSITORY="ghcr.io/dc-tec/openbao-init"
 DEFAULT_HARDENED_INIT_IMAGE="${OPERATOR_UPGRADE_BASELINE_INIT_IMAGE}"
 HARDENED_INIT_IMAGE="${OPERATOR_UPGRADE_E2E_HARDENED_INIT_IMAGE:-${DEFAULT_HARDENED_INIT_IMAGE}}"

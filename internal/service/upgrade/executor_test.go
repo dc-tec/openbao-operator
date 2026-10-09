@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 	"github.com/go-logr/logr"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/raftops"
 )
 
 type fakeRaftPeerDemoter struct {

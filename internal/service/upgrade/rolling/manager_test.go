@@ -18,14 +18,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/platform/testutil/openbao"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	upgradecore "github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	openbaoapi "github.com/kubebao/openbao-operator/internal/platform/testutil/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	upgradecore "github.com/kubebao/openbao-operator/internal/service/upgrade/core"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/raftops"
 )
 
 // testLogger returns a no-op logger for testing.

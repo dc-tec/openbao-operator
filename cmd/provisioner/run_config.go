@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
+	"github.com/kubebao/openbao-operator/internal/platform/entrypoint"
 )
 
 type runConfig struct {

@@ -1,6 +1,6 @@
 package backup
 
-import "github.com/dc-tec/openbao-operator/internal/platform/constants"
+import "github.com/kubebao/openbao-operator/internal/platform/constants"
 
 // Reason constants for OpenBaoBackup conditions.
 const (

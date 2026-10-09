@@ -8,12 +8,12 @@ import (
 
 func TestParseCoverageProfileScopesToInternalPackages(t *testing.T) {
 	profile := `mode: set
-github.com/dc-tec/openbao-operator/internal/app/app.go:1.1,2.1 4 1
-github.com/dc-tec/openbao-operator/internal/service/service.go:3.1,4.1 6 0
-github.com/dc-tec/openbao-operator/hack/tools/tool.go:1.1,2.1 100 1
-github.com/dc-tec/openbao-operator/cmd/controller/main.go:1.1,2.1 100 1
-github.com/dc-tec/openbao-operator/test/e2e/suite.go:1.1,2.1 100 1
-github.com/dc-tec/openbao-operator/api/v1alpha1/types.go:1.1,2.1 100 1
+github.com/kubebao/openbao-operator/internal/app/app.go:1.1,2.1 4 1
+github.com/kubebao/openbao-operator/internal/service/service.go:3.1,4.1 6 0
+github.com/kubebao/openbao-operator/hack/tools/tool.go:1.1,2.1 100 1
+github.com/kubebao/openbao-operator/cmd/controller/main.go:1.1,2.1 100 1
+github.com/kubebao/openbao-operator/test/e2e/suite.go:1.1,2.1 100 1
+github.com/kubebao/openbao-operator/api/v1alpha1/types.go:1.1,2.1 100 1
 `
 
 	report, err := parseCoverageProfile(strings.NewReader(profile))
@@ -36,8 +36,8 @@ github.com/dc-tec/openbao-operator/api/v1alpha1/types.go:1.1,2.1 100 1
 
 func TestParseCoverageProfileMergesDuplicateBlocks(t *testing.T) {
 	profile := `mode: count
-github.com/dc-tec/openbao-operator/internal/app/app.go:1.1,2.1 4 0
-github.com/dc-tec/openbao-operator/internal/app/app.go:1.1,2.1 4 3
+github.com/kubebao/openbao-operator/internal/app/app.go:1.1,2.1 4 0
+github.com/kubebao/openbao-operator/internal/app/app.go:1.1,2.1 4 3
 `
 
 	report, err := parseCoverageProfile(strings.NewReader(profile))
@@ -60,7 +60,7 @@ func TestParseCoverageProfileRejectsInvalidInput(t *testing.T) {
 		{name: "line", profile: "mode: set\nnot-a-profile-line\n", want: "invalid coverage syntax"},
 		{
 			name:    "no internal statements",
-			profile: "mode: set\ngithub.com/dc-tec/openbao-operator/hack/tool.go:1.1,2.1 1 1\n",
+			profile: "mode: set\ngithub.com/kubebao/openbao-operator/hack/tool.go:1.1,2.1 1 1\n",
 			want:    "no internal package statements",
 		},
 	}
@@ -81,10 +81,10 @@ func TestInternalLayer(t *testing.T) {
 		want     string
 		ok       bool
 	}{
-		{fileName: "github.com/dc-tec/openbao-operator/internal/service/manager.go", want: "service", ok: true},
+		{fileName: "github.com/kubebao/openbao-operator/internal/service/manager.go", want: "service", ok: true},
 		{fileName: "internal/platform/status.go", want: "platform", ok: true},
 		{fileName: "internal/version.go", want: "root", ok: true},
-		{fileName: "github.com/dc-tec/openbao-operator/hack/internal/tool.go", want: "", ok: false},
+		{fileName: "github.com/kubebao/openbao-operator/hack/internal/tool.go", want: "", ok: false},
 		{fileName: "github.com/example/project/cmd/main.go", want: "", ok: false},
 	}
 

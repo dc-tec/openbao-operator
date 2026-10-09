@@ -23,12 +23,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	"github.com/kubebao/openbao-operator/internal/adapter/auth"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/entrypoint"
+	"github.com/kubebao/openbao-operator/internal/platform/logging"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 

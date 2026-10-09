@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // ExecutorAction selects which upgrade operation the upgrade executor performs.

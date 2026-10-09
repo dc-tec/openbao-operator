@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // GreenAutopilotServerObservation captures a Green server seen during sync evaluation.

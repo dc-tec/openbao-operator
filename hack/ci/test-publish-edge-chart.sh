@@ -6,7 +6,7 @@ work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
 mkdir -p "${work_dir}/bin" "${work_dir}/dist"
 cp "$1" "${work_dir}/dist/"
-export OWNER=dc-tec
+export OWNER=kubebao
 export GITHUB_OUTPUT="${work_dir}/output"
 export TEST_PACKAGE="${work_dir}/dist/openbao-operator-${CHART_VERSION}.tgz"
 export TEST_LOG="${work_dir}/commands"
@@ -47,7 +47,7 @@ case "$1" in
     cp "${TEST_REGISTRY}" "$2/${filename}"
     ;;
   push)
-    [[ "$3" == oci://ghcr.io/dc-tec/charts-edge ]]
+    [[ "$3" == oci://ghcr.io/kubebao/charts-edge ]]
     cp "$2" "${TEST_REGISTRY}"
     ;;
   *) exit 1 ;;

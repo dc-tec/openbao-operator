@@ -3,7 +3,7 @@ package bluegreen
 import (
 	"fmt"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 type podSnapshot struct {

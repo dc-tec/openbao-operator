@@ -2,10 +2,10 @@ id: no-provisioner-controller-direct-domain-imports
 valid:
   - |
     package p
-    import app "github.com/dc-tec/openbao-operator/internal/app/provisioner"
+    import app "github.com/kubebao/openbao-operator/internal/app/provisioner"
     var _ = app.ReconcileOpenBaoTenant
 invalid:
   - |
     package p
-    import revision "github.com/dc-tec/openbao-operator/internal/adapter/revision"
+    import revision "github.com/kubebao/openbao-operator/internal/adapter/revision"
     var _ = revision.Reader

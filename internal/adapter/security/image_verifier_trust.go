@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
 )
 
 const trustedRootConfigMapKey = "trusted_root.json"

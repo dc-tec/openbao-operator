@@ -42,7 +42,7 @@ If the cluster is already initialized, use the enrollment procedure below, inclu
 ## Get an approval file
 
 1. Download the matching asset from the intended operator version's
-   [GitHub release](https://github.com/dc-tec/openbao-operator/releases). These assets are introduced with this feature
+   [GitHub release](https://github.com/kubebao/openbao-operator/releases). These assets are introduced with this feature
    and are not available in earlier releases.
 
    | Intended configuration | Release asset |

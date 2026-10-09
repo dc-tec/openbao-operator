@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	clusterpkg "github.com/dc-tec/openbao-operator/internal/adapter/cluster"
 	"github.com/go-logr/logr"
+	clusterpkg "github.com/kubebao/openbao-operator/internal/adapter/cluster"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,8 +21,8 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 func TestSecretNames(t *testing.T) {

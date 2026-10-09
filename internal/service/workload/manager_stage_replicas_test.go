@@ -3,7 +3,7 @@ package workload
 import (
 	"testing"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 func TestDesiredStatefulSetReplicas_UsesStagedReplicasForVoters(t *testing.T) {

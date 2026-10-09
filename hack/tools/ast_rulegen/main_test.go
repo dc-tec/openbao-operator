@@ -11,7 +11,7 @@ func TestImportRegex(t *testing.T) {
 	t.Parallel()
 
 	regex, err := importRegex(
-		"github.com/dc-tec/openbao-operator",
+		"github.com/kubebao/openbao-operator",
 		[]string{"internal/service/upgrade", "internal/adapter/revision", "internal/service/upgrade"},
 		nil,
 		nil,
@@ -21,7 +21,7 @@ func TestImportRegex(t *testing.T) {
 	}
 
 	expected := strings.Join([]string{
-		`"github\.com/dc-tec/openbao-operator/(internal/adapter/revision(/[^"]*)?|`,
+		`"github\.com/kubebao/openbao-operator/(internal/adapter/revision(/[^"]*)?|`,
 		`internal/service/upgrade(/[^"]*)?)"`,
 	}, "")
 	if regex != expected {
@@ -33,7 +33,7 @@ func TestImportRegexWithExternalImports(t *testing.T) {
 	t.Parallel()
 
 	regex, err := importRegex(
-		"github.com/dc-tec/openbao-operator",
+		"github.com/kubebao/openbao-operator",
 		nil,
 		[]string{"sigs.k8s.io/controller-runtime/pkg/reconcile"},
 		[]string{"sigs.k8s.io/controller-runtime"},
@@ -52,7 +52,7 @@ func TestImportRegexWithMixedImports(t *testing.T) {
 	t.Parallel()
 
 	regex, err := importRegex(
-		"github.com/dc-tec/openbao-operator",
+		"github.com/kubebao/openbao-operator",
 		[]string{"internal/service/upgrade"},
 		[]string{"sigs.k8s.io/controller-runtime/pkg/reconcile"},
 		[]string{"sigs.k8s.io/controller-runtime"},
@@ -62,7 +62,7 @@ func TestImportRegexWithMixedImports(t *testing.T) {
 	}
 
 	expected := strings.Join([]string{
-		`"(github\.com/dc-tec/openbao-operator/internal/service/upgrade(/[^"]*)?|`,
+		`"(github\.com/kubebao/openbao-operator/internal/service/upgrade(/[^"]*)?|`,
 		`sigs\.k8s\.io/controller-runtime/pkg/reconcile(/[^"]*)?|`,
 		`sigs\.k8s\.io/controller-runtime)"`,
 	}, "")
@@ -75,14 +75,14 @@ func TestAppSubpackageRegex(t *testing.T) {
 	t.Parallel()
 
 	regex, err := appSubpackageRegex(
-		"github.com/dc-tec/openbao-operator",
+		"github.com/kubebao/openbao-operator",
 		"internal/app/openbaocluster",
 	)
 	if err != nil {
 		t.Fatalf("appSubpackageRegex returned error: %v", err)
 	}
 
-	expected := `"github\.com/dc-tec/openbao-operator/internal/app/openbaocluster/.+"`
+	expected := `"github\.com/kubebao/openbao-operator/internal/app/openbaocluster/.+"`
 	if regex != expected {
 		t.Fatalf("unexpected regex:\nwant: %s\ngot:  %s", expected, regex)
 	}
@@ -263,7 +263,7 @@ func TestValidatePolicyGlobalBoundaryExternalOnly(t *testing.T) {
 	t.Parallel()
 
 	policy := architecturePolicy{
-		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ModulePath:         "github.com/kubebao/openbao-operator",
 		ServiceImportRoots: []string{"internal/service/networking"},
 		AdapterImportRoots: []string{"internal/adapter/kube"},
 		GlobalImportBoundaries: []globalImportBoundary{
@@ -285,7 +285,7 @@ func TestValidatePolicyGlobalBoundaryMissingDisallowLists(t *testing.T) {
 	t.Parallel()
 
 	policy := architecturePolicy{
-		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ModulePath:         "github.com/kubebao/openbao-operator",
 		ServiceImportRoots: []string{"internal/service/networking"},
 		AdapterImportRoots: []string{"internal/adapter/kube"},
 		GlobalImportBoundaries: []globalImportBoundary{
@@ -310,7 +310,7 @@ func TestValidatePolicyServiceAndAppBoundaries(t *testing.T) {
 	t.Parallel()
 
 	policy := architecturePolicy{
-		ModulePath: "github.com/dc-tec/openbao-operator",
+		ModulePath: "github.com/kubebao/openbao-operator",
 		ServiceImportRoots: []string{
 			"internal/service/backup",
 			"internal/service/networking",
@@ -343,7 +343,7 @@ func TestValidatePolicyRejectsUnknownServiceBoundaryRoot(t *testing.T) {
 	t.Parallel()
 
 	policy := architecturePolicy{
-		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ModulePath:         "github.com/kubebao/openbao-operator",
 		ServiceImportRoots: []string{"internal/service/backup"},
 		AdapterImportRoots: []string{"internal/adapter/kube"},
 		ServiceBoundaries: []serviceBoundary{
@@ -368,7 +368,7 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 	t.Parallel()
 
 	policy := architecturePolicy{
-		ModulePath: "github.com/dc-tec/openbao-operator",
+		ModulePath: "github.com/kubebao/openbao-operator",
 		ServiceImportRoots: []string{
 			"internal/service/backup",
 			"internal/service/networking",
@@ -416,17 +416,17 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 
 	want := map[string]string{
 		"no-backup-service-unapproved-service-imports": strings.Join([]string{
-			`"github\.com/dc-tec/openbao-operator/(internal/service/networking(/[^"]*)?|`,
+			`"github\.com/kubebao/openbao-operator/(internal/service/networking(/[^"]*)?|`,
 			`internal/service/upgrade(/[^"]*)?|`,
 			`internal/service/upgrade/bluegreen(/[^"]*)?|`,
 			`internal/service/upgrade/rolling(/[^"]*)?)"`,
 		}, ""),
 		"no-backup-service-unapproved-adapter-imports": strings.Join([]string{
-			`"github\.com/dc-tec/openbao-operator/(internal/adapter/auth(/[^"]*)?|`,
+			`"github\.com/kubebao/openbao-operator/(internal/adapter/auth(/[^"]*)?|`,
 			`internal/adapter/security(/[^"]*)?)"`,
 		}, ""),
 		"no-openbaocluster-app-unapproved-service-imports": strings.Join([]string{
-			`"github\.com/dc-tec/openbao-operator/(internal/service/opslifecycle(/[^"]*)?|`,
+			`"github\.com/kubebao/openbao-operator/(internal/service/opslifecycle(/[^"]*)?|`,
 			`internal/service/upgrade(/[^"]*)?)"`,
 		}, ""),
 	}

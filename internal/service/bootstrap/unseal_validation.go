@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 const reasonPrerequisitesMissing = "PrerequisitesMissing"

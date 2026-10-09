@@ -5,8 +5,8 @@ import (
 
 	"github.com/go-logr/logr"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	platformsemver "github.com/kubebao/openbao-operator/internal/platform/semver"
 )
 
 // VersionChange represents the type of version change detected.

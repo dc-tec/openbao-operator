@@ -19,9 +19,9 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func TestAutopilotBaseURL(t *testing.T) {

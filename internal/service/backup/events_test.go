@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/go-logr/logr"
+	"github.com/kubebao/openbao-operator/internal/adapter/security"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/events"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {

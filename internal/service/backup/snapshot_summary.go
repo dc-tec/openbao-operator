@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 var snapshotDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)

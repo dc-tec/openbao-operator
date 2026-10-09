@@ -27,8 +27,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/dc-tec/openbao-operator/test/e2e/framework"
-	"github.com/dc-tec/openbao-operator/test/utils"
+	"github.com/kubebao/openbao-operator/test/e2e/framework"
+	"github.com/kubebao/openbao-operator/test/utils"
 )
 
 var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func() {

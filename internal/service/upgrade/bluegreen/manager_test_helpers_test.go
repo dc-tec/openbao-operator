@@ -7,13 +7,13 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/port/backup"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	"github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/port/workload"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/port/backup"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
+	"github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/port/workload"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/raftops"
 )
 
 const deploymentNameSuffix = "green"

@@ -4,9 +4,9 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
 )
 
 // PolicyInput contains the observed and persisted state used to compute the

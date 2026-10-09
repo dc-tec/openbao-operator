@@ -13,5 +13,5 @@ ignores:
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/(internal/controller(/[^"]*)?)"'
+        - regex: '"github\.com/kubebao/openbao-operator/(internal/controller(/[^"]*)?)"'
 note: Controller packages are entrypoint wiring concerns and should only be imported from cmd/*.

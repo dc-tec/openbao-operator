@@ -1,6 +1,6 @@
 # OpenBao Operator Helm Chart
 
-![OpenBao Operator logo](https://raw.githubusercontent.com/dc-tec/openbao-operator/main/website/static/img/brand/logo.svg)
+![OpenBao Operator logo](https://raw.githubusercontent.com/kubebao/openbao-operator/main/website/static/img/brand/logo.svg)
 
 This chart installs the OpenBao Operator and its cluster-scoped dependencies.
 
@@ -11,10 +11,12 @@ This chart installs the OpenBao Operator and its cluster-scoped dependencies.
 
 ## Install
 
-Follow the [Getting started guide](https://dc-tec.github.io/openbao-operator/docs/get-started/) to choose a deployment
+Follow the [Getting started guide](https://docs.kubebao.org/docs/get-started/) to choose a deployment
 model, install the operator, onboard a namespace, and create your first OpenBao cluster.
-The [installation procedure](https://dc-tec.github.io/openbao-operator/docs/get-started/install/) covers Helm values,
+The [installation procedure](https://docs.kubebao.org/docs/get-started/install/) covers Helm values,
 namespace label ownership, CRDs, and verification.
+
+The source chart uses KubeBao image repositories. Its version fields remain at the last release until release preparation updates them. To evaluate unreleased changes, use a verified edge chart or set the manager and helper image references to matching candidate builds. For 0.5.1 and earlier, follow the stable installation guide, which uses the published `dc-tec` artifacts.
 
 ## Common Configuration
 
@@ -66,16 +68,16 @@ installation must pin default helpers by digest. Empty values use the configured
 Image fields on an `OpenBaoCluster` or `OpenBaoRestore` still take precedence over these defaults.
 
 Edge packages populate these values and the manager digest from the verified candidate. See the
-[edge installation instructions](https://dc-tec.github.io/openbao-operator/next/docs/get-started/install/).
+[edge installation instructions](https://docs.kubebao.org/next/docs/get-started/install/).
 
 ## Upgrade
 
-Follow [Upgrade the operator](https://dc-tec.github.io/openbao-operator/docs/get-started/install/#upgrade-the-operator)
+Follow [Upgrade the operator](https://docs.kubebao.org/docs/get-started/install/#upgrade-the-operator)
 to update CRDs and review OpenBao policy changes before upgrading the controller.
 
 ## Uninstall
 
-Follow [Uninstall the operator](https://dc-tec.github.io/openbao-operator/docs/get-started/install/#uninstall-the-operator)
+Follow [Uninstall the operator](https://docs.kubebao.org/docs/get-started/install/#uninstall-the-operator)
 for removal instructions and CRD-retention requirements.
 
 ## Values Reference
@@ -87,6 +89,6 @@ See:
 
 ## More Information
 
-- [Documentation](https://dc-tec.github.io/openbao-operator/)
-- [Compatibility matrix](https://dc-tec.github.io/openbao-operator/docs/reference/compatibility/)
-- [Source](https://github.com/dc-tec/openbao-operator)
+- [Documentation](https://docs.kubebao.org/)
+- [Compatibility matrix](https://docs.kubebao.org/docs/reference/compatibility/)
+- [Source](https://github.com/kubebao/openbao-operator)

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	testperf "github.com/dc-tec/openbao-operator/test/perf"
+	testperf "github.com/kubebao/openbao-operator/test/perf"
 )
 
 func runNativeScenario(

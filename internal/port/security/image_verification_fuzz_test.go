@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	"github.com/go-logr/logr"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
 )
 
 type fuzzCaptureVerifier struct{}
@@ -21,7 +21,7 @@ func FuzzImageRepository(f *testing.F) {
 		"",
 		"openbao/openbao:2.4.4",
 		"openbao/openbao@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		"ghcr.io/dc-tec/openbao-init:edge",
+		"ghcr.io/kubebao/openbao-init:edge",
 		"docker.io/openbao/openbao:latest",
 		"not a ref",
 	}
@@ -58,7 +58,7 @@ func FuzzVerifyImageForCluster(f *testing.F) {
 		useOperatorFn bool
 	}{
 		{"openbao/openbao:2.4.4", "default", string(openbaov1alpha1.ProfileHardened), true, true, false},
-		{"ghcr.io/dc-tec/openbao-init:edge", "operators", string(openbaov1alpha1.ProfileHardened), true, true, true},
+		{"ghcr.io/kubebao/openbao-init:edge", "operators", string(openbaov1alpha1.ProfileHardened), true, true, true},
 		{"example.com/custom/image:1.0.0", "default", string(openbaov1alpha1.ProfileDevelopment), true, true, false},
 		{"not a ref", "default", string(openbaov1alpha1.ProfileDevelopment), true, true, false},
 	}

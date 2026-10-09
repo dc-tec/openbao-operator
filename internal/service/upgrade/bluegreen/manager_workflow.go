@@ -3,11 +3,11 @@ package bluegreen
 import (
 	"context"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 	"github.com/go-logr/logr"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/core"
 )
 
 // reconcileBlueGreen is the internal reconcile method that handles blue/green upgrades.

@@ -8,8 +8,8 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/stretchr/testify/require"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
 )
 
 func TestOperatorPolicyApproval(t *testing.T) {

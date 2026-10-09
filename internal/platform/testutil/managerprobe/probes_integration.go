@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
 )
 
 // Environment starts an isolated API server using the repository's CRDs.

@@ -6,9 +6,9 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
-	hardenedfixtures "github.com/dc-tec/openbao-operator/test/fixtures/hardenedcontract"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/hardenedcontract"
+	hardenedfixtures "github.com/kubebao/openbao-operator/test/fixtures/hardenedcontract"
 )
 
 func TestEvaluateOpenBaoCluster_HardenedContractViolations(t *testing.T) {

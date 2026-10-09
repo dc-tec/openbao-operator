@@ -1,9 +1,9 @@
 package openbaocluster
 
 import (
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	upgradesvc "github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	upgradesvc "github.com/kubebao/openbao-operator/internal/service/upgrade"
+	workloadsvc "github.com/kubebao/openbao-operator/internal/service/workload"
 )
 
 func applyOperationalReadReplicaStageDown(cluster *openbaov1alpha1.OpenBaoCluster, readSpec *workloadsvc.StatefulSetSpec) bool {

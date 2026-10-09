@@ -8,9 +8,9 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/testutil/proptest"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/testutil/proptest"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
 	"pgregory.net/rapid"
 )
 

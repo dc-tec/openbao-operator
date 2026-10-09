@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func TestRunPreflightChecks_PKCS11Library(t *testing.T) {

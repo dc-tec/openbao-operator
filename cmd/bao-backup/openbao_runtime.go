@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
+	"github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	backupconfig "github.com/kubebao/openbao-operator/internal/service/backup"
 )
 
 func newOpenBaoClientConfig(cfg *backupconfig.ExecutorConfig) portopenbao.ClientConfig {

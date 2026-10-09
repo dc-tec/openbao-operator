@@ -3,7 +3,7 @@ package openbaocluster
 import (
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 )
 
 // Reason constants for OpenBaoCluster conditions.

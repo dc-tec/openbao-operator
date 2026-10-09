@@ -1,6 +1,6 @@
 package bluegreen
 
-import "github.com/dc-tec/openbao-operator/internal/platform/constants"
+import "github.com/kubebao/openbao-operator/internal/platform/constants"
 
 // Condition reason strings for Blue/Green upgrades.
 const (

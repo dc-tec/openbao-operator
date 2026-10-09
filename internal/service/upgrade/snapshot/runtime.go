@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	portbackup "github.com/kubebao/openbao-operator/internal/port/backup"
 )
 
 // EnsureRuntime bootstraps the shared backup runtime needed for pre-upgrade

@@ -22,7 +22,7 @@ The site uses a task-oriented product structure:
 devenv shell make docs-serve
 ```
 
-Open <http://127.0.0.1:1313/openbao-operator/>.
+Open <http://127.0.0.1:1313/>.
 
 ## Build strictly
 

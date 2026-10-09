@@ -47,6 +47,8 @@ Use either a public key or a complete keyless issuer-and-subject pair. The opera
 only for recognized official repositories. A mirror, fork, or internal image needs explicit trust configuration even
 when it was copied from an official registry.
 
+Helper images in `ghcr.io/kubebao/openbao-{init,backup,upgrade}` use KubeBao workflow identities. Historical helpers in `ghcr.io/dc-tec/openbao-{init,backup,upgrade}` use the original `dc-tec/openbao-operator` workflow identities. Each repository trusts only its corresponding publisher. The OpenBao server image trust policy is unchanged.
+
 Hardened clusters enable both verification surfaces when the blocks are omitted and require `Block`. Custom public
 keys, issuer or subject matchers, regular-expression matchers, or `ignoreTlog` require `useimagetrustroots` on the
 cluster. Development permits `Warn` for staged adoption.
@@ -81,14 +83,16 @@ their byte reproducibility and includes both files in its signed `checksums.txt`
 Use the GitHub CLI, Cosign, and `sha256sum` to download and verify the selected file. Set `OPERATOR_VERSION` to the
 intended release tag, such as `X.Y.Z`, and select the file for your backup configuration. Run in an empty directory.
 
+The example uses the signer for releases published under KubeBao. For releases published before the transfer, including 0.5.1 and earlier, use `https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/$OPERATOR_VERSION` as the certificate identity. Repository redirects do not change historical signing identities.
+
 ```sh
 OPERATOR_VERSION='<operator-release-tag>'
 APPROVAL_FILE='operator-policy-approval-with-backup.hcl'
-gh release download "$OPERATOR_VERSION" --repo dc-tec/openbao-operator \
+gh release download "$OPERATOR_VERSION" --repo kubebao/openbao-operator \
   --pattern "$APPROVAL_FILE" --pattern checksums.txt --pattern checksums.txt.bundle
 cosign verify-blob --new-bundle-format=true \
   --bundle checksums.txt.bundle \
-  --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/$OPERATOR_VERSION" \
+  --certificate-identity "https://github.com/kubebao/openbao-operator/.github/workflows/release.yml@refs/tags/$OPERATOR_VERSION" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' checksums.txt
 awk -v name="$APPROVAL_FILE" '$2 == name' checksums.txt | sha256sum --check -
 ```

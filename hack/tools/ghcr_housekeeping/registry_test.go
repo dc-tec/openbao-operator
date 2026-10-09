@@ -26,13 +26,13 @@ func TestContainerRegistryClientListsManifestReferencesAndCachesToken(t *testing
 				http.Error(w, "invalid credentials", http.StatusUnauthorized)
 				return
 			}
-			if got := r.URL.Query().Get("scope"); got != "repository:dc-tec/openbao-operator:pull" {
+			if got := r.URL.Query().Get("scope"); got != "repository:kubebao/openbao-operator:pull" {
 				handlerErrors.Errorf("scope = %q", got)
 				http.Error(w, "invalid scope", http.StatusBadRequest)
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]string{"token": "registry-token"})
-		case strings.HasPrefix(r.URL.Path, "/v2/dc-tec/openbao-operator/manifests/"):
+		case strings.HasPrefix(r.URL.Path, "/v2/kubebao/openbao-operator/manifests/"):
 			manifestRequests++
 			if got := r.Header.Get("Authorization"); got != "Bearer registry-token" {
 				handlerErrors.Errorf("authorization = %q", got)
@@ -63,7 +63,7 @@ func TestContainerRegistryClientListsManifestReferencesAndCachesToken(t *testing
 	for range 2 {
 		references, err := client.ManifestReferences(
 			context.Background(),
-			"dc-tec",
+			"kubebao",
 			"openbao-operator",
 			testDigest("a"),
 		)
@@ -101,7 +101,7 @@ func TestContainerRegistryClientFailsOnMissingManifest(t *testing.T) {
 	}
 	_, err := client.ManifestReferences(
 		context.Background(),
-		"dc-tec",
+		"kubebao",
 		"openbao-operator",
 		testDigest("a"),
 	)

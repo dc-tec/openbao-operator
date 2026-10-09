@@ -6,11 +6,11 @@ import (
 
 	"github.com/go-logr/logr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	snapshothelpers "github.com/dc-tec/openbao-operator/internal/service/upgrade/snapshot"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	"github.com/kubebao/openbao-operator/internal/platform/logging"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	snapshothelpers "github.com/kubebao/openbao-operator/internal/service/upgrade/snapshot"
 )
 
 func (m *Manager) reconcileExistingPreUpgradeBackupJob(

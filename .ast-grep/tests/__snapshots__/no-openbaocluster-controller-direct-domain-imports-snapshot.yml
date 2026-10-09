@@ -9,3 +9,12 @@ snapshots:
       style: primary
       start: 17
       end: 88
+  ? |
+    package p
+    import revision "github.com/kubebao/openbao-operator/internal/adapter/revision"
+    var _ = revision.GetOpenBaoImageVersionFromLabel
+  : labels:
+    - source: revision "github.com/kubebao/openbao-operator/internal/adapter/revision"
+      style: primary
+      start: 17
+      end: 89

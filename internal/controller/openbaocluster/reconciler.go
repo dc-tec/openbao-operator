@@ -4,8 +4,8 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	appopenbaocluster "github.com/kubebao/openbao-operator/internal/app/openbaocluster"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
 )
 
 // ControllerRuntime groups the controller-runtime and operator process

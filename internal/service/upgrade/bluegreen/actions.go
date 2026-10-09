@@ -1,6 +1,6 @@
 package bluegreen
 
-import "github.com/dc-tec/openbao-operator/internal/service/upgrade"
+import "github.com/kubebao/openbao-operator/internal/service/upgrade"
 
 // ExecutorAction selects which Blue/Green upgrade operation the upgrade executor performs.
 type ExecutorAction = upgrade.ExecutorAction

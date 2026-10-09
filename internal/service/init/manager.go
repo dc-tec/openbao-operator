@@ -10,9 +10,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	initmanagerport "github.com/kubebao/openbao-operator/internal/port/initmanager"
 )
 
 const (

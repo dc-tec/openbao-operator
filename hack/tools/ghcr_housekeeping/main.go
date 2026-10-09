@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defaultOwner                   = "dc-tec"
+	defaultOwner                   = "kubebao"
 	defaultOwnerKind               = "org"
 	defaultPolicyPath              = "hack/tools/ghcr_housekeeping/policy.json"
 	defaultReportPath              = "dist/housekeeping-report.json"

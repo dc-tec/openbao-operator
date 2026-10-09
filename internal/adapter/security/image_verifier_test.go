@@ -18,7 +18,7 @@ import (
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 	// Use a valid digest format: SHA256 requires 64 hex characters
 	testImageDigest = "ghcr.io/test/image@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	testOIDCIssuer  = "https://token.actions.githubusercontent.com"
-	testOIDCSubject = "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/2.0.0"
+	testOIDCSubject = "https://github.com/kubebao/openbao-operator/.github/workflows/release.yml@refs/tags/2.0.0"
 )
 
 func TestNewImageVerifier(t *testing.T) {
@@ -239,7 +239,7 @@ func TestImageVerifier_Verify_KeylessRegExpCacheHit(t *testing.T) {
 
 	config := imageverify.VerifyConfig{
 		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
-		SubjectRegExp: "^https://github\\.com/dc-tec/openbao-operator/.+@refs/tags/.+$",
+		SubjectRegExp: "^https://github\\.com/kubebao/openbao-operator/.+@refs/tags/.+$",
 	}
 	cacheKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, config)
 	verifier.cache.markVerifiedByKey(cacheKey)

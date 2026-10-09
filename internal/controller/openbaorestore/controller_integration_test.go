@@ -24,10 +24,10 @@ import (
 	controllermetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
-	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	appopenbaorestore "github.com/kubebao/openbao-operator/internal/app/openbaorestore"
+	openbaorestorecontroller "github.com/kubebao/openbao-operator/internal/controller/openbaorestore"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
 )
 
 func TestOpenBaoRestore_SetupWithManager_InitializesRestoreStatusFromPending(t *testing.T) {

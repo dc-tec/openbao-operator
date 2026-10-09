@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // ClientFactory centralizes OpenBao client construction for a shared configuration template

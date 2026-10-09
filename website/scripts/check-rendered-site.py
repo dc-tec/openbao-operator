@@ -11,8 +11,8 @@ from pathlib import Path
 from urllib.parse import unquote, urljoin, urlparse
 
 
-BASE_PATH = "/openbao-operator"
-PUBLIC_HOST = "dc-tec.github.io"
+BASE_PATH = ""
+PUBLIC_HOST = "docs.kubebao.org"
 MOJIBAKE_MARKERS = ("Ã", "â€", "â€™", "â€œ", "â€˜", "ï¿½", "�")
 
 

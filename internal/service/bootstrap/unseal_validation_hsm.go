@@ -7,8 +7,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/validate/content"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func (m *Manager) validateKMIPUnsealPrerequisites(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {

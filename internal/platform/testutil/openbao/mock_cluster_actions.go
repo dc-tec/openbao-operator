@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // MockClusterActions is a test implementation of the OpenBao ClusterActions port.

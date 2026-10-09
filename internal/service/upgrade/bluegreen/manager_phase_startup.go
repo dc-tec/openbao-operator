@@ -9,12 +9,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
-	configurationservice "github.com/dc-tec/openbao-operator/internal/service/configuration"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceidentity"
+	configurationservice "github.com/kubebao/openbao-operator/internal/service/configuration"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/core"
 )
 
 // handlePhaseIdle transitions from Idle to DeployingGreen when an upgrade is detected.

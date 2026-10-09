@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
 )
 
 func TestApplyResponseFallbackErrors(t *testing.T) {

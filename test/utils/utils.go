@@ -301,6 +301,27 @@ func loadImageToKindCluster(kindBinary, cluster, imageName string) error {
 	return err
 }
 
+func pullImageToKindNodes(kindBinary, cluster, imageName string) error {
+	// #nosec G204 -- Test utility, command and arguments are controlled
+	output, err := Run(exec.Command(kindBinary, "get", "nodes", "--name", cluster))
+	if err != nil {
+		return fmt.Errorf("list Kind nodes for image %q: %w", imageName, err)
+	}
+	nodes := strings.Fields(output)
+	if len(nodes) == 0 {
+		return fmt.Errorf("no nodes found in Kind cluster %q", cluster)
+	}
+	for _, node := range nodes {
+		// Pull through CRI so containerd records the original digest reference.
+		// Docker archive imports can leave synthetic import-* names that fail at container creation.
+		// #nosec G204 -- Test utility, node names come from Kind and image references are controlled
+		if _, err := Run(exec.Command("docker", "exec", node, "crictl", "pull", imageName)); err != nil {
+			return fmt.Errorf("pull image %q into Kind node %q: %w", imageName, node, err)
+		}
+	}
+	return nil
+}
+
 func shouldRetryKindLoadWithPlatformDigest(err error) bool {
 	if err == nil {
 		return false
@@ -352,7 +373,8 @@ func resolveManifestDigestRefForPlatform(imageName, osName, arch string) (string
 	return fmt.Sprintf("%s@%s", ref.Context().Name(), digest), nil
 }
 
-// LoadImageToKindClusterWithName loads a local docker image to the kind cluster.
+// LoadImageToKindClusterWithName loads a local Docker image into the Kind cluster.
+// Digest-pinned images are pulled directly by each node and require registry access from the nodes.
 // If kind fails due missing platform digests on multi-arch image indexes, retry by
 // resolving and pulling the linux/<host-arch> manifest digest, retagging, and loading again.
 func LoadImageToKindClusterWithName(imageName string) error {
@@ -363,6 +385,14 @@ func LoadImageToKindClusterWithName(imageName string) error {
 	kindBinary := defaultKindBinary
 	if v, ok := os.LookupEnv("KIND"); ok {
 		kindBinary = v
+	}
+
+	ref, err := gcrname.ParseReference(imageName, gcrname.WeakValidation)
+	if err != nil {
+		return fmt.Errorf("parse image reference %q: %w", imageName, err)
+	}
+	if _, pinned := ref.(gcrname.Digest); pinned {
+		return pullImageToKindNodes(kindBinary, cluster, imageName)
 	}
 
 	if err := loadImageToKindCluster(kindBinary, cluster, imageName); err == nil {

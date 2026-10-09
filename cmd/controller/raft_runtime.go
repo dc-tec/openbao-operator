@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	"github.com/dc-tec/openbao-operator/internal/adapter/raft"
+	"github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	"github.com/kubebao/openbao-operator/internal/adapter/raft"
 )
 
 type raftClientFactoryProvider struct {

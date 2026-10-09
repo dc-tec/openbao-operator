@@ -1,4 +1,4 @@
-modulePath: github.com/dc-tec/openbao-operator
+modulePath: github.com/kubebao/openbao-operator
 
 layerCoverage:
   root: internal

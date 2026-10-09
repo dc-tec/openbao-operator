@@ -7,11 +7,11 @@ import (
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/observability"
-	"github.com/dc-tec/openbao-operator/internal/service/backup"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/app/openbaocluster/adminopsstatus"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/observability"
+	"github.com/kubebao/openbao-operator/internal/service/backup"
 )
 
 // Dependencies contains external collaborators required for deletion orchestration.

@@ -3,7 +3,7 @@ package openbao
 import (
 	"sync"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // ClientManager centralizes OpenBao client lifecycle

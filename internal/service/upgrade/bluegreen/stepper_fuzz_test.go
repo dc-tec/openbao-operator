@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
 )
 
 func FuzzBlueGreenStepperHelpers(f *testing.F) {

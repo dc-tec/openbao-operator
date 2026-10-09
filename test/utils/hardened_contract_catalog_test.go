@@ -7,8 +7,8 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
-	hardenedfixtures "github.com/dc-tec/openbao-operator/test/fixtures/hardenedcontract"
+	"github.com/kubebao/openbao-operator/internal/platform/hardenedcontract"
+	hardenedfixtures "github.com/kubebao/openbao-operator/test/fixtures/hardenedcontract"
 )
 
 const hardenedPolicyPath = "../../config/policy/openbao-validate-openbaocluster.yaml"

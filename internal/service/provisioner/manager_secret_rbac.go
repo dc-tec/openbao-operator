@@ -10,9 +10,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	clusterpkg "github.com/dc-tec/openbao-operator/internal/adapter/cluster"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	clusterpkg "github.com/kubebao/openbao-operator/internal/adapter/cluster"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
 )
 
 // EnsureTenantSecretRBAC ensures tenant Secret access is reduced to explicit allowlists.

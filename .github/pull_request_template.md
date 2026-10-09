@@ -32,7 +32,7 @@
 
 ## Checklist
 
-- [ ] My code follows the [project style guide](https://dc-tec.github.io/openbao-operator/contribute/standards/).
+- [ ] My code follows the [project style guide](https://docs.kubebao.org/contribute/standards/).
 - [ ] I have performed a self-review of my own code.
 - [ ] I have added or updated tests, or explained why tests are not needed.
 - [ ] I have updated documentation, or explained why docs are not needed.

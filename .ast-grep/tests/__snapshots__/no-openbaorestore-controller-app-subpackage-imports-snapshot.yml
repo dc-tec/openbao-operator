@@ -9,3 +9,12 @@ snapshots:
       style: primary
       start: 17
       end: 101
+  ? |
+    package p
+    import subpkg "github.com/kubebao/openbao-operator/internal/app/openbaorestore/reconcileops"
+    var _ = subpkg.Run
+  : labels:
+    - source: subpkg "github.com/kubebao/openbao-operator/internal/app/openbaorestore/reconcileops"
+      style: primary
+      start: 17
+      end: 102

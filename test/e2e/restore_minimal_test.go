@@ -21,10 +21,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/test/e2e/framework"
-	helpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/test/e2e/framework"
+	helpers "github.com/kubebao/openbao-operator/test/e2e/helpers"
 )
 
 var _ = Describe("Minimal fresh restore and scheduled restore tests", Ordered, Label("restore-minimal", "dr", "backup", "restore", "e2e-anchor"), func() {

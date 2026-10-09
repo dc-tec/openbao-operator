@@ -15,11 +15,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	openbaotest "github.com/dc-tec/openbao-operator/internal/platform/testutil/openbao"
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	openbaotest "github.com/kubebao/openbao-operator/internal/platform/testutil/openbao"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	backupconfig "github.com/kubebao/openbao-operator/internal/service/backup"
 )
 
 func TestExecuteRestoreStagesBeforeSingleHTTPRequest(t *testing.T) {

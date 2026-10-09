@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
 )
 
 func TestValidateImageRefMatchesVersion(t *testing.T) {

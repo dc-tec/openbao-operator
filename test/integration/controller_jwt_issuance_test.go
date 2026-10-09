@@ -26,11 +26,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	adapterauth "github.com/dc-tec/openbao-operator/internal/adapter/auth"
-	adapteropenbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	adapterauth "github.com/kubebao/openbao-operator/internal/adapter/auth"
+	adapteropenbao "github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func controllerJWTIssuer(t *testing.T) (*adapterauth.ControllerTokenSource, kubernetes.Interface, *corev1.Pod) {

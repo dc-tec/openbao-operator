@@ -12,12 +12,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/port/adminops"
-	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	"github.com/kubebao/openbao-operator/internal/port/adminops"
+	"github.com/kubebao/openbao-operator/internal/service/opslifecycle"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
 )
 
 // prepareFailedUpgradeRetry executes a retry selected by decideUpgrade.

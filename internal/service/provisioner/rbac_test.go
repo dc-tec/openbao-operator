@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 

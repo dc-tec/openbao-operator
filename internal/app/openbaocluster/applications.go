@@ -7,10 +7,10 @@ import (
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	adminopsapp "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminops"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	adminopsapp "github.com/kubebao/openbao-operator/internal/app/openbaocluster/adminops"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	recon "github.com/kubebao/openbao-operator/internal/platform/reconcile"
 )
 
 // ApplicationsConfig contains the already-wired collaborators used by the

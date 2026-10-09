@@ -3,9 +3,9 @@ package backup
 import (
 	"fmt"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // ExecutorConfig holds the backup executor configuration.

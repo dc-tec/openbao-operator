@@ -1,6 +1,6 @@
 package upgrade
 
-import "github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
+import "github.com/kubebao/openbao-operator/internal/service/upgrade/raftops"
 
 // ExecutorConfig holds the configuration for the upgrade executor Job.
 type ExecutorConfig = raftops.ExecutorConfig

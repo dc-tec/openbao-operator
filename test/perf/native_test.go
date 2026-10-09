@@ -168,8 +168,8 @@ func TestRollingUpgradeClusterEnablesPublicService(t *testing.T) {
 		opts: Config{
 			UpgradeFromVersion:   "2.6.1",
 			UpgradeFromImage:     "ghcr.io/openbao/openbao:2.6.1",
-			UpgradeExecutorImage: "ghcr.io/dc-tec/openbao-operator-upgrade:dev",
-			ConfigInitImage:      "ghcr.io/dc-tec/openbao-operator-config-init:dev",
+			UpgradeExecutorImage: "ghcr.io/kubebao/openbao-operator-upgrade:dev",
+			ConfigInitImage:      "ghcr.io/kubebao/openbao-operator-config-init:dev",
 		},
 	}
 

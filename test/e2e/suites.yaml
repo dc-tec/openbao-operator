@@ -191,8 +191,10 @@ ciLanes:
     e2eTimeout: 40m
     excludePentestOnDefaultPR: false
     hardenedSigned: true
-    hardenedInitImage: "ghcr.io/dc-tec/openbao-init:edge"
-    hardenedUpgradeExecutorImage: "ghcr.io/dc-tec/openbao-upgrade:edge"
+    # Bootstrap the first KubeBao CI run with signed helpers from 80875025186c.
+    # Replace these references after the first verified KubeBao edge publication.
+    hardenedInitImage: "ghcr.io/dc-tec/openbao-init@sha256:6f1bff6b06f9224ee2fc937380453a32b50b6f43b1f7426702261a971e4bbf16"
+    hardenedUpgradeExecutorImage: "ghcr.io/dc-tec/openbao-upgrade@sha256:6d64c79a38993003e54f217dea4bbf068830bfc4dffb23a5edd2dce679c1ddff"
     loadBackupExecutorImage: true
     loadUpgradeExecutorImage: true
     preloadUpgradeImages: true

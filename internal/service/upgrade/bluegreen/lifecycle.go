@@ -7,12 +7,12 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/uuid"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
-	snapshothelpers "github.com/dc-tec/openbao-operator/internal/service/upgrade/snapshot"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/logging"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade/core"
+	snapshothelpers "github.com/kubebao/openbao-operator/internal/service/upgrade/snapshot"
 )
 
 func (m *Manager) recordBlueGreenUpgradeStart(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {

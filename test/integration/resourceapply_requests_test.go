@@ -15,9 +15,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/observability"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
+	"github.com/kubebao/openbao-operator/internal/platform/observability"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceapply"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceownership"
 )
 
 func TestResourceApplyRequestCounts(t *testing.T) {

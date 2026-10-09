@@ -33,12 +33,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	adapterauth "github.com/dc-tec/openbao-operator/internal/adapter/auth"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	"github.com/dc-tec/openbao-operator/test/e2e/framework"
-	"github.com/dc-tec/openbao-operator/test/e2e/helpers"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
+	adapterauth "github.com/kubebao/openbao-operator/internal/adapter/auth"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	"github.com/kubebao/openbao-operator/test/e2e/framework"
+	"github.com/kubebao/openbao-operator/test/e2e/helpers"
 )
 
 // This qualification needs a disposable, single-node source Kind cluster with

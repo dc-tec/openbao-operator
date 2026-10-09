@@ -19,12 +19,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/configuration"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
+	configbuilder "github.com/kubebao/openbao-operator/internal/adapter/config"
+	"github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
+	"github.com/kubebao/openbao-operator/internal/service/configuration"
 )
 
 // TestApprovedPolicyRepair exercises the production client and policy manager against

@@ -14,13 +14,13 @@ func testConfig() config {
 	return config{
 		sha: sha, version: "edge-" + sha[:12], chartVersion: "0.5.0-edge.123.1.g" + sha[:12],
 		images: []image{
-			{name: "openbao-operator", ref: "ghcr.io/dc-tec/openbao-operator",
+			{name: "openbao-operator", ref: "ghcr.io/kubebao/openbao-operator",
 				digest: "sha256:" + strings.Repeat("1", 64)},
-			{name: "openbao-init", ref: "ghcr.io/dc-tec/openbao-init",
+			{name: "openbao-init", ref: "ghcr.io/kubebao/openbao-init",
 				digest: "sha256:" + strings.Repeat("2", 64), key: "init"},
-			{name: "openbao-backup", ref: "ghcr.io/dc-tec/openbao-backup",
+			{name: "openbao-backup", ref: "ghcr.io/kubebao/openbao-backup",
 				digest: "sha256:" + strings.Repeat("3", 64), key: "backup"},
-			{name: "openbao-upgrade", ref: "ghcr.io/dc-tec/openbao-upgrade",
+			{name: "openbao-upgrade", ref: "ghcr.io/kubebao/openbao-upgrade",
 				digest: "sha256:" + strings.Repeat("4", 64), key: "upgrade"},
 		},
 	}
@@ -72,7 +72,7 @@ func TestRejectInvalidCandidateBeforeWriting(t *testing.T) {
 		{"abbreviated commit", func(c *config) { c.sha = c.sha[:12] }},
 		{"missing helper", func(c *config) { c.images = c.images[:3] }},
 		{"tag instead of digest", func(c *config) { c.images[0].digest = "edge" }},
-		{"wrong image", func(c *config) { c.images[1].ref = "ghcr.io/dc-tec/openbao-operator" }},
+		{"wrong image", func(c *config) { c.images[1].ref = "ghcr.io/kubebao/openbao-operator" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := testConfig()

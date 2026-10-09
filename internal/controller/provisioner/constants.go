@@ -1,6 +1,6 @@
 package provisioner
 
-import "github.com/dc-tec/openbao-operator/internal/platform/constants"
+import "github.com/kubebao/openbao-operator/internal/platform/constants"
 
 // Reason constants for Provisioner conditions.
 const (

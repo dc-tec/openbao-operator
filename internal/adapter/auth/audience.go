@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
 )
 
 const (

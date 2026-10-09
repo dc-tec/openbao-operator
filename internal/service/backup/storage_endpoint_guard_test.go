@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
+	"github.com/kubebao/openbao-operator/internal/adapter/storage"
 )
 
 func TestMain(m *testing.M) {

@@ -14,9 +14,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	"github.com/kubebao/openbao-operator/internal/platform/admission"
+	"github.com/kubebao/openbao-operator/internal/platform/entrypoint"
+	"github.com/kubebao/openbao-operator/internal/platform/logging"
 )
 
 func newManagerOptions(

@@ -21,6 +21,8 @@ verifiedBy:
 Install a pinned 0.5.1 release and verify the rendered namespace, identities, controllers, CRDs, and admission policies.
 The core procedure uses Helm in the chart's default multi-tenant mode.
 
+The 0.5.1 chart and images remain under `ghcr.io/dc-tec`. The repository transfer to KubeBao does not move these published artifacts. Keep the coordinates below when installing or maintaining this release.
+
 ## Before you begin
 
 - Confirm that the cluster meets the [compatibility requirements](../../reference/compatibility/). Kubernetes 1.33
@@ -88,7 +90,7 @@ Helm values do not configure that manifest.
 
    Pin the chart and normally let its `appVersion` select the matching operator image. Set `image.tag` only for a
    controlled prerelease or test. The complete pinned reference is
-   [`values.yaml`](https://github.com/dc-tec/openbao-operator/blob/0.5.1/charts/openbao-operator/values.yaml).
+   [`values.yaml`](https://github.com/kubebao/openbao-operator/blob/0.5.1/charts/openbao-operator/values.yaml).
 
 3. Save your overrides in `operator-values.yaml`, including external label ownership when required.
 
@@ -167,7 +169,7 @@ Use the release asset when the platform wants the published default resources wi
 
 {{< command label="apply" title="Apply the 0.5.1 installer manifest" >}}
 kubectl apply -f \
-  https://github.com/dc-tec/openbao-operator/releases/download/0.5.1/install.yaml
+  https://github.com/kubebao/openbao-operator/releases/download/0.5.1/install.yaml
 {{< /command >}}
 
 The manifest uses the repository's default operator namespace and identity. Do not rewrite the rendered YAML by hand
@@ -217,13 +219,13 @@ Use this path only for local development and contribution:
 
 {{< command label="apply" title="Deploy a development image" >}}
 make install
-make deploy IMG=ghcr.io/dc-tec/openbao-operator:dev
+make deploy IMG=ghcr.io/kubebao/openbao-operator:dev
 {{< /command >}}
 
 ## Upgrade the operator
 
 The following procedure starts from 0.5.0. For an older installation, complete the
-[0.5.0 migration](https://github.com/dc-tec/openbao-operator/blob/0.5.0/release-notes/0.5.0.md) before upgrading to 0.5.1.
+[0.5.0 migration](https://github.com/kubebao/openbao-operator/blob/0.5.0/release-notes/0.5.0.md) before upgrading to 0.5.1.
 
 Helm does not upgrade installed CRDs. For every release with CRD changes, apply the release CRDs before the controller:
 
@@ -236,7 +238,7 @@ you upgrade the controller. Self-init does not update an existing policy.
 
 {{< command label="upgrade" title="Upgrade to 0.5.1" >}}
 kubectl apply -f \
-  https://github.com/dc-tec/openbao-operator/releases/download/0.5.1/crds.yaml
+  https://github.com/kubebao/openbao-operator/releases/download/0.5.1/crds.yaml
 helm upgrade openbao-operator \
   oci://ghcr.io/dc-tec/charts/openbao-operator \
   --version 0.5.1 \

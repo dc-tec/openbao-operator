@@ -436,9 +436,9 @@ docs-build: ## Build and validate the canonical Hugo documentation site. Writes 
 	@python3 "$(DOCS_DIR)/scripts/check-rendered-site.py" "$(DOCS_DESTINATION)"
 
 .PHONY: docs-serve
-docs-serve: ## Serve the Hugo documentation locally. http://localhost:1313/openbao-operator/
+docs-serve: ## Serve the Hugo documentation locally. http://localhost:1313/
 	@"$(DOCS_DIR)/scripts/sync-api-reference.sh" --all --check
-	@$(HUGO) server --source "$(DOCS_DIR)" --baseURL http://127.0.0.1:1313/openbao-operator/
+	@$(HUGO) server --source "$(DOCS_DIR)" --baseURL http://127.0.0.1:1313/
 
 .PHONY: docs-preview
 docs-preview: docs-serve ## Alias for the local Hugo server.
@@ -903,7 +903,7 @@ BENCH_PKG ?= ./...
 BENCH_FILTER ?= .
 BENCH_COUNT ?= 10
 GO_LICENSES_ALLOWED ?= Apache-2.0 BSD-2-Clause BSD-3-Clause ISC MIT MPL-2.0 Unicode-DFS-2016
-GO_LICENSES_IGNORE ?= github.com/dc-tec/openbao-operator
+GO_LICENSES_IGNORE ?= github.com/kubebao/openbao-operator
 GO_LICENSES_PACKAGE_TARGETS ?= ./cmd/controller ./cmd/bao-backup ./cmd/bao-upgrade ./cmd/provisioner
 LICENSE_REPORT_DIR ?= dist/licenses
 go_licenses_empty :=

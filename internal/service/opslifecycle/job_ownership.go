@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceownership"
 )
 
 // PrepareManagedJobOwner stamps the controller reference and reserved owner

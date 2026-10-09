@@ -149,7 +149,7 @@ spec:
   # operatorImageVerification:
   #   enabled: true
   #   issuer: "https://token.actions.githubusercontent.com"
-  #   subject: "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/1.2.4"
+  #   subject: "https://github.com/kubebao/openbao-operator/.github/workflows/release.yml@refs/tags/1.2.4"
   #   failurePolicy: Block
   initContainer:
     enabled: true

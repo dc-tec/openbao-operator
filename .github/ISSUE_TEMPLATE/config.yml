@@ -1,10 +1,10 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability report
-    url: https://github.com/dc-tec/openbao-operator/security/advisories/new
+    url: https://github.com/kubebao/openbao-operator/security/advisories/new
     about: Report security issues privately via GitHub Security Advisories
 
   - name: Ask a question
-    url: https://github.com/dc-tec/openbao-operator/discussions
+    url: https://github.com/kubebao/openbao-operator/discussions
     about: Please ask questions and get help here instead of opening an issue.
 

@@ -33,7 +33,7 @@ Take and verify a current backup for every managed production cluster. An operat
 
    ```bash
    kubectl apply -f \
-     https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/crds.yaml
+     https://github.com/kubebao/openbao-operator/releases/download/X.Y.Z/crds.yaml
    ```
 
 3. Upgrade the chart.

@@ -26,10 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	platformconstants "github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/test/e2e/framework"
-	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	platformconstants "github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/test/e2e/framework"
+	e2ehelpers "github.com/kubebao/openbao-operator/test/e2e/helpers"
 )
 
 var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, func() {

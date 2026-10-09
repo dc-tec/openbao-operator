@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
+	"github.com/kubebao/openbao-operator/internal/adapter/storage"
 )
 
 type endpointResolver interface {

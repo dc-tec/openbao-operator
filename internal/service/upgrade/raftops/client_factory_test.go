@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 func TestDefaultOpenBaoClientFactory(t *testing.T) {

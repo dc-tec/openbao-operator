@@ -6,9 +6,9 @@ config.define_string("upgrade-image-repository")
 cfg = config.parse()
 
 operator_version = cfg.get("operator-version", "edge")
-init_image_repository = cfg.get("init-image-repository", "ghcr.io/dc-tec/openbao-init")
-backup_image_repository = cfg.get("backup-image-repository", "ghcr.io/dc-tec/openbao-backup")
-upgrade_image_repository = cfg.get("upgrade-image-repository", "ghcr.io/dc-tec/openbao-upgrade")
+init_image_repository = cfg.get("init-image-repository", "ghcr.io/kubebao/openbao-init")
+backup_image_repository = cfg.get("backup-image-repository", "ghcr.io/kubebao/openbao-backup")
+upgrade_image_repository = cfg.get("upgrade-image-repository", "ghcr.io/kubebao/openbao-upgrade")
 
 context = k8s_context()
 local_prefixes = [

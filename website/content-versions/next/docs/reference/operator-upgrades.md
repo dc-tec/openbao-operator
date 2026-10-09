@@ -46,14 +46,14 @@ Take and verify a current backup for every managed production cluster. An operat
 
    ```bash
    kubectl apply -f \
-     https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/crds.yaml
+     https://github.com/kubebao/openbao-operator/releases/download/X.Y.Z/crds.yaml
    ```
 
 3. Upgrade the chart.
 
    ```bash
    helm upgrade openbao-operator \
-     oci://ghcr.io/dc-tec/charts/openbao-operator \
+     oci://ghcr.io/kubebao/charts/openbao-operator \
      --version X.Y.Z \
      --namespace openbao-operator-system
    ```

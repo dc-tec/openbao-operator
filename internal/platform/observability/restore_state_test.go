@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	api "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	api "github.com/kubebao/openbao-operator/api/v1alpha1"
 )
 
 func TestObserveRestoreStates(t *testing.T) {

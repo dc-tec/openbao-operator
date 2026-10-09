@@ -34,13 +34,13 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	security "github.com/dc-tec/openbao-operator/internal/adapter/security"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/observability"
-	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	security "github.com/kubebao/openbao-operator/internal/adapter/security"
+	appopenbaocluster "github.com/kubebao/openbao-operator/internal/app/openbaocluster"
+	"github.com/kubebao/openbao-operator/internal/controller/openbaocluster"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	"github.com/kubebao/openbao-operator/internal/platform/observability"
+	portsecurity "github.com/kubebao/openbao-operator/internal/port/security"
 )
 
 func TestSetupWithManager_ReconcilesClusterInSingleTenantMode(t *testing.T) {

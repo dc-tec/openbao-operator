@@ -1,8 +1,8 @@
 package raftops
 
 import (
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	openbaoapi "github.com/kubebao/openbao-operator/internal/adapter/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // OpenBaoClientFactory creates OpenBao API clients for connecting to cluster pods.

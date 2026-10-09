@@ -21,16 +21,16 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
-	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceidentity"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
+	bootstrapmanager "github.com/kubebao/openbao-operator/internal/service/bootstrap"
+	networkingmanager "github.com/kubebao/openbao-operator/internal/service/networking"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
+	workloadsvc "github.com/kubebao/openbao-operator/internal/service/workload"
 )
 
 type scaleDownRuntimeStub struct {
@@ -551,7 +551,7 @@ func TestInfraReconciler_VerifyInitContainerImageDigest_UsesResolvedDefaultImage
 		ImageVerification: InfraImageVerificationRuntime{
 			VerifyOperatorImage: func(_ context.Context, _ logr.Logger, _ imageverify.Verifier, _ *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
 				verifiedImage = imageRef
-				return "ghcr.io/dc-tec/openbao-init@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", nil
+				return "ghcr.io/kubebao/openbao-init@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", nil
 			},
 		},
 	}}
@@ -560,15 +560,15 @@ func TestInfraReconciler_VerifyInitContainerImageDigest_UsesResolvedDefaultImage
 	if err != nil {
 		t.Fatalf("resolveInitContainerImage() error = %v", err)
 	}
-	if initImage != "ghcr.io/dc-tec/openbao-init:1.2.3" {
-		t.Fatalf("resolveInitContainerImage() = %q, want %q", initImage, "ghcr.io/dc-tec/openbao-init:1.2.3")
+	if initImage != "ghcr.io/kubebao/openbao-init:1.2.3" {
+		t.Fatalf("resolveInitContainerImage() = %q, want %q", initImage, "ghcr.io/kubebao/openbao-init:1.2.3")
 	}
 
 	digest, err := r.verifyInitContainerImageDigest(context.Background(), logr.Discard(), cluster, initImage)
 	if err != nil {
 		t.Fatalf("verifyInitContainerImageDigest() error = %v", err)
 	}
-	if digest != "ghcr.io/dc-tec/openbao-init@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+	if digest != "ghcr.io/kubebao/openbao-init@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
 		t.Fatalf("verifyInitContainerImageDigest() = %q", digest)
 	}
 	if verifiedImage != initImage {

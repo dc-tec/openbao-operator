@@ -242,7 +242,7 @@ func TestRunHousekeepingEnforceStopsAboveSafetyBrake(t *testing.T) {
 	}
 
 	opts := options{
-		Owner:               "dc-tec",
+		Owner:               "kubebao",
 		OwnerKind:           ownerKindOrg,
 		Packages:            []string{"openbao-operator"},
 		Mode:                modeEnforce,
@@ -288,7 +288,7 @@ func TestRunHousekeepingDryRunNeverDeletes(t *testing.T) {
 	}
 
 	opts := options{
-		Owner:               "dc-tec",
+		Owner:               "kubebao",
 		OwnerKind:           ownerKindOrg,
 		Packages:            []string{"openbao-operator"},
 		Mode:                modeDryRun,
@@ -330,7 +330,7 @@ func TestRunHousekeepingEnforceAbortsAllDeletesWhenOnePackageExceedsSafetyBrake(
 	}
 
 	opts := options{
-		Owner:               "dc-tec",
+		Owner:               "kubebao",
 		OwnerKind:           ownerKindOrg,
 		Packages:            []string{"openbao-operator", "openbao-init"},
 		Mode:                modeEnforce,
@@ -367,7 +367,7 @@ func TestRunHousekeepingTracksUnknownBreakdown(t *testing.T) {
 	}
 
 	opts := options{
-		Owner:               "dc-tec",
+		Owner:               "kubebao",
 		OwnerKind:           ownerKindOrg,
 		Packages:            []string{"openbao-operator"},
 		Mode:                modeDryRun,
@@ -473,7 +473,7 @@ func TestGitHubClientPaginatesVersions(t *testing.T) {
 		},
 	}
 
-	got, err := client.ListPackageVersions(context.Background(), ownerKindOrg, "dc-tec", "openbao-operator")
+	got, err := client.ListPackageVersions(context.Background(), ownerKindOrg, "kubebao", "openbao-operator")
 	if err != nil {
 		t.Fatalf("ListPackageVersions() error = %v", err)
 	}
@@ -500,7 +500,7 @@ func TestGitHubClientListPackageVersionsMissingPackageReturnsEmpty(t *testing.T)
 		},
 	}
 
-	got, err := client.ListPackageVersions(context.Background(), ownerKindOrg, "dc-tec", "ci-e2e-openbao-operator")
+	got, err := client.ListPackageVersions(context.Background(), ownerKindOrg, "kubebao", "ci-e2e-openbao-operator")
 	if err != nil {
 		t.Fatalf("ListPackageVersions() error = %v", err)
 	}
@@ -610,7 +610,7 @@ func TestRenderSummaryIncludesTable(t *testing.T) {
 		Run: runReport{
 			Mode:                modeDryRun,
 			TimestampUTC:        "2026-03-04T12:00:00Z",
-			Owner:               "dc-tec",
+			Owner:               "kubebao",
 			OwnerKind:           ownerKindOrg,
 			MaxDeletePerPackage: 100,
 		},
@@ -639,12 +639,12 @@ func TestRenderSummaryIncludesTable(t *testing.T) {
 }
 
 func TestOwnerScopePath(t *testing.T) {
-	got, err := ownerScopePath(ownerKindOrg, "dc-tec")
+	got, err := ownerScopePath(ownerKindOrg, "kubebao")
 	if err != nil {
 		t.Fatalf("ownerScopePath(org) error = %v", err)
 	}
-	if got != "orgs/dc-tec" {
-		t.Fatalf("got %q, want orgs/dc-tec", got)
+	if got != "orgs/kubebao" {
+		t.Fatalf("got %q, want orgs/kubebao", got)
 	}
 
 	got, err = ownerScopePath(ownerKindUser, "alice")
@@ -655,7 +655,7 @@ func TestOwnerScopePath(t *testing.T) {
 		t.Fatalf("got %q, want users/alice", got)
 	}
 
-	_, err = ownerScopePath("team", "dc-tec")
+	_, err = ownerScopePath("team", "kubebao")
 	if err == nil {
 		t.Fatalf("expected error for unsupported owner kind")
 	}
@@ -713,7 +713,7 @@ func TestGitHubClientDeleteHandlesNotFoundAsSuccess(t *testing.T) {
 	if err := client.DeletePackageVersion(
 		context.Background(),
 		ownerKindOrg,
-		"dc-tec",
+		"kubebao",
 		"openbao-operator",
 		404,
 	); err != nil {

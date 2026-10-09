@@ -7,8 +7,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	certservice "github.com/dc-tec/openbao-operator/internal/service/certs"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	certservice "github.com/kubebao/openbao-operator/internal/service/certs"
 )
 
 // TLSReloadSignaler triggers an in-cluster reload when operator-managed TLS

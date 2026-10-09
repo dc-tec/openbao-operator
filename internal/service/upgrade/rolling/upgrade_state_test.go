@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/service/upgrade"
 )
 
 func TestDecideUpgrade(t *testing.T) {

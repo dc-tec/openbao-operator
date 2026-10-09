@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 	"github.com/go-logr/logr"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/port/imageverify"
+	portsecurity "github.com/kubebao/openbao-operator/internal/port/security"
 )
 
 func VerifyImageForCluster(ctx context.Context, logger logr.Logger, verifier imageverify.Verifier, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {

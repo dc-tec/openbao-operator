@@ -18,9 +18,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	provisionerpkg "github.com/dc-tec/openbao-operator/internal/service/provisioner"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	provisionerpkg "github.com/kubebao/openbao-operator/internal/service/provisioner"
 )
 
 func newPrivilegedImpersonatedClient(t *testing.T, username string) client.Client {

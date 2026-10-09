@@ -15,10 +15,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/kubebao/openbao-operator/internal/platform/errors"
+	"github.com/kubebao/openbao-operator/internal/platform/resourceidentity"
 )
 
 func TestStrategyTransitionManager_AcceptsIdleTransitionsWithoutRenamingStableWorkload(t *testing.T) {
@@ -308,7 +308,7 @@ func healthyStrategyTransitionCluster(
 			Upgrade: &openbaov1alpha1.UpgradeConfig{
 				Strategy:    desired,
 				JWTAuthRole: "upgrade-role",
-				Image:       "ghcr.io/dc-tec/openbao-upgrade:test",
+				Image:       "ghcr.io/kubebao/openbao-upgrade:test",
 			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{

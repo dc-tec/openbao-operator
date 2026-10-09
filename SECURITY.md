@@ -6,7 +6,7 @@ Please do **not** open public GitHub issues for security-sensitive reports.
 
 Instead, use GitHub Security Advisories:
 
-- https://github.com/dc-tec/openbao-operator/security/advisories/new
+- https://github.com/kubebao/openbao-operator/security/advisories/new
 
 If you are unable to use GitHub Security Advisories, open a minimal issue that requests a private contact channel and do not include exploit details.
 

@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
 )
 
 // stagedRestoreSnapshot owns the original file descriptor until submission ends.

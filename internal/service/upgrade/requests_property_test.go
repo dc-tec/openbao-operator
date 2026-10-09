@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/testutil/proptest"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/testutil/proptest"
 	"pgregory.net/rapid"
 )
 

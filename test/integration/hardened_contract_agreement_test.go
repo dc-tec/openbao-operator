@@ -11,9 +11,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
-	hardenedfixtures "github.com/dc-tec/openbao-operator/test/fixtures/hardenedcontract"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	"github.com/kubebao/openbao-operator/internal/platform/hardenedcontract"
+	hardenedfixtures "github.com/kubebao/openbao-operator/test/fixtures/hardenedcontract"
 )
 
 func TestVAP_OpenBaoCluster_HardenedContractCatalog(t *testing.T) {

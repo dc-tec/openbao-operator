@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
-	"github.com/dc-tec/openbao-operator/internal/platform/testutil/managerprobe"
+	appprovisioner "github.com/kubebao/openbao-operator/internal/app/provisioner"
+	"github.com/kubebao/openbao-operator/internal/platform/testutil/managerprobe"
 )
 
 func TestProvisionerReadinessCacheAndWatchContract(t *testing.T) {

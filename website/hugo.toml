@@ -1,4 +1,4 @@
-baseURL = "https://dc-tec.github.io/openbao-operator/"
+baseURL = "https://docs.kubebao.org/"
 locale = "en-US"
 title = "OpenBao Operator"
 enableGitInfo = true
@@ -8,8 +8,8 @@ defaultContentVersionInSubdir = false
 
 [params]
 description = "OpenBao Operator documentation for secure lifecycle management on Kubernetes."
-repository = "https://github.com/dc-tec/openbao-operator"
-repository_api = "https://api.github.com/repos/dc-tec/openbao-operator"
+repository = "https://github.com/kubebao/openbao-operator"
+repository_api = "https://api.github.com/repos/kubebao/openbao-operator"
 
 [versions."0.5.x"]
 weight = 1

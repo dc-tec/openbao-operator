@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	openbaotest "github.com/dc-tec/openbao-operator/internal/platform/testutil/openbao"
-	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	openbaotest "github.com/kubebao/openbao-operator/internal/platform/testutil/openbao"
+	"github.com/kubebao/openbao-operator/internal/port/blobstore"
 )
 
 type backupFlowBlobStore struct {

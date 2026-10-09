@@ -18,8 +18,8 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	portauth "github.com/kubebao/openbao-operator/internal/port/auth"
 )
 
 var _ = Describe("OpenBaoCluster OIDC Bootstrap", func() {

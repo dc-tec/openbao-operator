@@ -19,10 +19,10 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
-	"github.com/dc-tec/openbao-operator/test/e2e/framework"
-	"github.com/dc-tec/openbao-operator/test/utils"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	platformsemver "github.com/kubebao/openbao-operator/internal/platform/semver"
+	"github.com/kubebao/openbao-operator/test/e2e/framework"
+	"github.com/kubebao/openbao-operator/test/utils"
 )
 
 var _ = Describe("Cluster PKCS#11 Unseal", Label("cluster", "lifecycle", "unseal", "pkcs11", "hsm"), Ordered, func() {

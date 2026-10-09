@@ -11,8 +11,8 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
+	openbaov1alpha1 "github.com/kubebao/openbao-operator/api/v1alpha1"
+	appprovisioner "github.com/kubebao/openbao-operator/internal/app/provisioner"
 )
 
 type secretRBACSnapshot struct {

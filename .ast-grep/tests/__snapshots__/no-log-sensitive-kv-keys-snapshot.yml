@@ -2,6 +2,18 @@ id: no-log-sensitive-kv-keys
 snapshots:
   ? |
     package p
+    import "net/http"
+    type Logger interface { Info(string, ...any) }
+    func f(logger Logger, headers http.Header) {
+      logger.Info("request", "headers", headers)
+    }
+  : labels:
+    - source: logger.Info("request", "headers", headers)
+      style: primary
+      start: 122
+      end: 164
+  ? |
+    package p
     type Logger interface { Info(string, ...any) }
     func f(logger Logger, token string) {
       logger.Info("auth", "token", token)
@@ -22,15 +34,3 @@ snapshots:
       style: primary
       start: 97
       end: 160
-  ? |
-    package p
-    import "net/http"
-    type Logger interface { Info(string, ...any) }
-    func f(logger Logger, headers http.Header) {
-      logger.Info("request", "headers", headers)
-    }
-  : labels:
-    - source: logger.Info("request", "headers", headers)
-      style: primary
-      start: 122
-      end: 164

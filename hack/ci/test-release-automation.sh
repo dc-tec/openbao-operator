@@ -193,6 +193,8 @@ assert_contains "${ROOT_DIR}/.github/workflows/post-release-verification.yml" 'g
 assert_contains "${ROOT_DIR}/.github/workflows/post-release-verification.yml" "EXPECTED_CHART_FILE=dist/reviewed-Chart.yaml"
 assert_contains "${ROOT_DIR}/.github/workflows/post-release-verification.yml" "Setup Helm"
 
+python3 "${ROOT_DIR}/hack/ci/test-post-release.py"
+
 spdx_fixture="${tmp_dir}/normalizer.spdx.json"
 cat > "${spdx_fixture}" <<'EOF'
 {
@@ -348,7 +350,7 @@ write_chart_fixture "${rc_chart_dir}/Chart.yaml"
 CHART_DIR="${rc_chart_dir}" \
   CHANGELOG_FILE="${changelog_file}" \
   CHART_VERSION="0.5.0-rc.1" \
-  OWNER="dc-tec" \
+  OWNER="kubebao" \
   bash "${CHART_PREPARER}"
 
 assert_contains "${rc_chart_dir}/Chart.yaml" 'artifacthub.io/prerelease: "true"'
@@ -365,7 +367,7 @@ write_chart_fixture "${stable_chart_dir}/Chart.yaml"
 CHART_DIR="${stable_chart_dir}" \
   CHANGELOG_FILE="${changelog_file}" \
   CHART_VERSION="0.5.0" \
-  OWNER="dc-tec" \
+  OWNER="kubebao" \
   bash "${CHART_PREPARER}"
 
 stable_chart="${stable_chart_dir}/Chart.yaml"
@@ -392,21 +394,21 @@ PRESERVE_CHANGE_METADATA=true \
   CHART_DIR="${preserved_chart_dir}" \
   CHANGELOG_FILE="${changelog_file}" \
   CHART_VERSION="0.5.0-rc.2" \
-  OWNER="dc-tec" \
+  OWNER="kubebao" \
   bash "${CHART_PREPARER}"
 
 preserved_chart="${preserved_chart_dir}/Chart.yaml"
 assert_contains "${preserved_chart}" 'artifacthub.io/prerelease: "true"'
 assert_contains "${preserved_chart}" "artifacthub.io/containsSecurityUpdates: 'true'"
 assert_contains "${preserved_chart}" 'description: "reviewed security metadata"'
-assert_contains "${preserved_chart}" "image: ghcr.io/dc-tec/openbao-operator:0.5.0-rc.2"
+assert_contains "${preserved_chart}" "image: ghcr.io/kubebao/openbao-operator:0.5.0-rc.2"
 assert_not_contains "${preserved_chart}" "controller: add rc2-only reconciliation guard"
 
 if PRESERVE_CHANGE_METADATA=invalid \
   CHART_DIR="${preserved_chart_dir}" \
   CHANGELOG_FILE="${changelog_file}" \
   CHART_VERSION="0.5.0-rc.2" \
-  OWNER="dc-tec" \
+  OWNER="kubebao" \
   bash "${CHART_PREPARER}" >/dev/null 2>&1; then
   fail "invalid PRESERVE_CHANGE_METADATA value was accepted"
 fi

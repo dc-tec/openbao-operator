@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portopenbao "github.com/kubebao/openbao-operator/internal/port/openbao"
 )
 
 // JoinRaftClusterRequest represents the payload sent to PUT /v1/sys/storage/raft/join.
