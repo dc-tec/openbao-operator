@@ -109,29 +109,6 @@ spec:
       kmsKeyID: "arn:aws:kms:eu-west-1:<account>:key/<key-id>"
 {{< /command >}}
 
-For Azure Key Vault with Azure Workload Identity, set `authMethod: workload_identity`. Without it, OpenBao selects
-managed identity whenever a client ID is present, either from `clientID` or from the `AZURE_CLIENT_ID` that the
-workload identity webhook injects, and waits on the instance metadata service instead of exchanging the projected
-ServiceAccount token.
-
-{{< command label="configure" title="Use Azure Key Vault with workload identity" >}}
-spec:
-  serviceAccount:
-    annotations:
-      azure.workload.identity/client-id: "<managed-identity-client-id>"
-  podMetadata:
-    labels:
-      azure.workload.identity/use: "true"
-  unseal:
-    type: azurekeyvault
-    azureKeyVault:
-      vaultName: <vault-name>
-      keyName: <key-name>
-      tenantID: "<tenant-id>"
-      clientID: "<managed-identity-client-id>"
-      authMethod: workload_identity
-{{< /command >}}
-
 Grant only the KMS operations required by the provider. Confirm the workload identity can use the key before relying on
 it for a production bootstrap. Lifecycle Jobs have separate ServiceAccounts and do not inherit the main Pod's cloud
 identity automatically.
