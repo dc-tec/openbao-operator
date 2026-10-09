@@ -35,7 +35,7 @@ var _ = Describe("Minimal fresh restore and scheduled restore tests", Ordered, L
 	var source *api.OpenBaoCluster
 	var template *api.RestoreClusterTemplate
 	var snapshot api.RestoreSource
-	const image = "openbao/openbao:2.7.0"
+	const image = "openbao/openbao:2.7.1"
 
 	BeforeAll(func() {
 		var err error
@@ -58,7 +58,7 @@ var _ = Describe("Minimal fresh restore and scheduled restore tests", Ordered, L
 			Name:      "transit",
 			// The infrastructure helper uses file storage, which 2.7 removes.
 			// Source and restore targets still use the 2.7 image below.
-			Image: "openbao/openbao:2.6.3",
+			Image: "openbao/openbao:2.6.4",
 		}
 		Expect(helpers.EnsureInfraBao(ctx, config, c, infra)).To(Succeed())
 		address := fmt.Sprintf("https://transit.%s.svc:8200", sourceFW.Namespace)
@@ -94,7 +94,7 @@ var _ = Describe("Minimal fresh restore and scheduled restore tests", Ordered, L
 			},
 			Spec: api.OpenBaoClusterSpec{
 				Profile:  api.ProfileDevelopment,
-				Version:  "2.7.0",
+				Version:  "2.7.1",
 				Image:    image,
 				Replicas: 1,
 				InitContainer: &api.InitContainerConfig{
@@ -165,7 +165,7 @@ var _ = Describe("Minimal fresh restore and scheduled restore tests", Ordered, L
 			ExpectedSize:      summary.Size,
 		}
 		template = &api.RestoreClusterTemplate{
-			Version: "2.7.0",
+			Version: "2.7.1",
 			Image:   image,
 			Storage: source.Spec.Storage,
 			TLS:     source.Spec.TLS,

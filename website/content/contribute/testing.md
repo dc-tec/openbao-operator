@@ -56,8 +56,8 @@ Run `make test-policy-reconciliation-openbao` with Docker available. The test st
 on loopback and exercises the production policy client and reconciliation manager. It checks exact-content authorization,
 rejected extra parameters and legacy paths, deleted-policy repair, unchanged-policy writes, switching upgrade strategies
 under one approval, independent backup readiness, and retry cooldown after revocation.
-The Unit Tests CI job runs this check against OpenBao 2.6.3 and 2.7.0.
-The local command defaults to 2.6.3. Set `POLICY_TEST_OPENBAO_IMAGE` to test another OpenBao image.
+The Unit Tests CI job runs this check against OpenBao 2.6.4 and 2.7.1.
+The local command defaults to 2.6.4. Set `POLICY_TEST_OPENBAO_IMAGE` to test another OpenBao image.
 
 Run `make build-policy-approvals` to generate both release approval files in `dist/`. The generator uses the same policy
 definitions as bootstrap and runtime reconciliation. For a specific manifest, run
@@ -69,7 +69,7 @@ building these tools.
 Run `make test-controller-jwt-openbao` with Docker available. The test starts an EnvTest API server and two disposable
 OpenBao servers on loopback. It verifies Pod-bound token issuance, the controller's ServiceAccount permission boundary,
 mode migration, and rejected cross-target and shared JWT replay with both inline and standard authentication.
-The Envtest Integration CI job runs this check against OpenBao 2.6.3 and 2.7.0. The local command defaults to 2.6.3;
+The Envtest Integration CI job runs this check against OpenBao 2.6.4 and 2.7.1. The local command defaults to 2.6.4;
 set `OPENBAO_JWT_TEST_IMAGE` to select another image. The test removes its containers when it finishes.
 
 The `controller-jwt` E2E scenario runs the deployed controller against self-initialized OpenBao Pods. It verifies the

@@ -52,7 +52,7 @@ restoreTest:
     name: recovery-storage
   cleanupAfterSeconds: 300
   clusterTemplate:
-    version: "2.7.0"
+    version: "2.7.1"
     storage:
       size: 10Gi
     tls:

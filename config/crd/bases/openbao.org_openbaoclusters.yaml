@@ -1193,6 +1193,7 @@ spec:
                               snapshot source version.
                             enum:
                             - 2.7.0
+                            - 2.7.1
                             type: string
                         required:
                         - storage

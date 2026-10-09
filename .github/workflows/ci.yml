@@ -547,15 +547,15 @@ jobs:
       - name: Run unit tests
         run: make test
 
-      - name: Verify policy authorization and repair against OpenBao 2.6.3
+      - name: Verify policy authorization and repair against OpenBao 2.6.4
         run: make test-policy-reconciliation-openbao
 
-      - name: Verify policy authorization and repair against OpenBao 2.7.0
+      - name: Verify policy authorization and repair against OpenBao 2.7.1
         env:
-          POLICY_TEST_OPENBAO_IMAGE: openbao/openbao:2.7.0
+          POLICY_TEST_OPENBAO_IMAGE: openbao/openbao:2.7.1
         run: make test-policy-reconciliation-openbao
 
-      - name: Verify hybrid PQ TLS key exchange against OpenBao 2.7.0
+      - name: Verify hybrid PQ TLS key exchange against OpenBao 2.7.1
         run: make test-tls-key-exchange-openbao
 
   test-integration:
@@ -575,12 +575,12 @@ jobs:
       - name: Run unit, integration, and cluster-independent E2E support tests with coverage gate
         run: make test-ci
 
-      - name: Verify controller JWT isolation against OpenBao 2.6.3
+      - name: Verify controller JWT isolation against OpenBao 2.6.4
         run: make test-controller-jwt-openbao
 
-      - name: Verify controller JWT isolation against OpenBao 2.7.0
+      - name: Verify controller JWT isolation against OpenBao 2.7.1
         env:
-          OPENBAO_JWT_TEST_IMAGE: openbao/openbao:2.7.0
+          OPENBAO_JWT_TEST_IMAGE: openbao/openbao:2.7.1
         run: make test-controller-jwt-openbao
 
   fuzz:
@@ -632,7 +632,7 @@ jobs:
       - name: Run OpenBao config compatibility
         uses: ./.github/actions/run-openbao-config-compat
         with:
-          versions: 2.4.4 2.5.5 2.6.3 2.7.0
+          versions: 2.4.4 2.5.5 2.6.4 2.7.1
 
   docs:
     name: Docs Build

@@ -15,7 +15,7 @@ fi
 
 VERSIONS=("$@")
 if [ ${#VERSIONS[@]} -eq 0 ]; then
-  VERSIONS=("2.4.4" "2.5.5" "2.6.3" "2.7.0")
+  VERSIONS=("2.4.4" "2.5.5" "2.6.4" "2.7.1")
 fi
 
 FILES=( "$ROOT_DIR"/internal/adapter/config/testdata/*.hcl )
@@ -103,32 +103,48 @@ GO
     cd "${tmpdir}"
     go mod init "${harness_module}" >/dev/null 2>&1
 
-    # OpenBao tags submodules separately from the server module. Prefer the
-    # exact SDK release tag when it exists, but use its VCS commit instead of
-    # its SemVer name. A root tag with the same SemVer can otherwise cause Go
-    # to resolve the SDK path against the root module. Older patch releases do
-    # not always have a matching SDK tag, so retain the server SHA fallback.
-    sdk_ref="${sha}"
-    sdk_metadata="$(
-      GOFLAGS="${TMPMODULE_GOFLAGS}" go mod download -json \
-        "github.com/openbao/openbao/sdk/v2@v${version}" 2>/dev/null || true
-    )"
-    sdk_tag_sha="$(
-      printf '%s\n' "${sdk_metadata}" \
-        | sed -n 's/.*"Hash": "\([0-9a-f]\{40\}\)".*/\1/p' \
-        | head -n 1
-    )"
-    # From 2.7 onward the internal parser and profiles must use the SDK
-    # from the server commit. The separately published 2.7.0 SDK tag predates
-    # the server's CEL module migration and cannot compile this parser.
-    if [ "${module_path}" = "github.com/openbao/openbao" ] && [ -n "${sdk_tag_sha}" ]; then
-      sdk_ref="${sdk_tag_sha}"
+    go_get_args=("${module_path}@${sha}")
+    if [ "${module_path}" = "github.com/openbao/openbao" ]; then
+      # OpenBao tags submodules separately from the server module. Prefer the
+      # exact SDK release tag when it exists, but use its VCS commit instead of
+      # its SemVer name. A root tag with the same SemVer can otherwise cause Go
+      # to resolve the SDK path against the root module. Older patch releases
+      # do not always have a matching SDK tag, so retain the server SHA
+      # fallback.
+      sdk_ref="${sha}"
+      sdk_metadata="$(
+        GOFLAGS="${TMPMODULE_GOFLAGS}" go mod download -json \
+          "github.com/openbao/openbao/sdk/v2@v${version}" 2>/dev/null || true
+      )"
+      sdk_tag_sha="$(
+        printf '%s\n' "${sdk_metadata}" \
+          | sed -n 's/.*"Hash": "\([0-9a-f]\{40\}\)".*/\1/p' \
+          | head -n 1
+      )"
+      if [ -n "${sdk_tag_sha}" ]; then
+        sdk_ref="${sdk_tag_sha}"
+      fi
+      go_get_args+=("github.com/openbao/openbao/sdk/v2@${sdk_ref}")
+    else
+      # From 2.7 onward the internal parser and profiles must use the SDK
+      # from the server commit. The separately published 2.7.0 SDK tag
+      # predates the server's CEL module migration and cannot compile this
+      # parser. Build against the server commit's sdk directory, as the
+      # upstream `replace ... => ./sdk` directive does. A pseudo-version for
+      # the server commit is not usable: when that commit also carries the
+      # root release tag (2.7.1), Go rejects the derived SDK pseudo-version.
+      sdk_src="${tmpdir}/openbao-src"
+      git init -q "${sdk_src}"
+      git -C "${sdk_src}" sparse-checkout set --no-cone /sdk/
+      git -C "${sdk_src}" fetch -q --depth 1 --filter=blob:none \
+        https://github.com/openbao/openbao.git "${sha}"
+      git -C "${sdk_src}" -c advice.detachedHead=false checkout -q FETCH_HEAD
+      go mod edit -replace "github.com/openbao/openbao/sdk/v2=${sdk_src}/sdk"
     fi
 
     go_get_log="${tmpdir}/go-get.log"
     if ! GOFLAGS="${TMPMODULE_GOFLAGS}" go get \
-      "${module_path}@${sha}" \
-      "github.com/openbao/openbao/sdk/v2@${sdk_ref}" >"${go_get_log}" 2>&1; then
+      "${go_get_args[@]}" >"${go_get_log}" 2>&1; then
       cat "${go_get_log}" >&2
       exit 1
     fi
