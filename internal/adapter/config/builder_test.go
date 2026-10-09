@@ -1728,6 +1728,7 @@ func TestRenderHCL_AzureKeyVaultSeal(t *testing.T) {
 
 func TestRenderHCL_AzureKeyVaultSealWorkloadIdentity(t *testing.T) {
 	cluster := newMinimalCluster("azure-seal-wi", "default")
+	cluster.Spec.Version = "2.6.3"
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
 		Type: "azurekeyvault",
 		AzureKeyVault: &openbaov1alpha1.AzureKeyVaultSealConfig{

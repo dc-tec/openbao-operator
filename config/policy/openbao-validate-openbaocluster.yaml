@@ -3,7 +3,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: openbao-validate-openbaocluster
   annotations:
-    openbao.org/admission-policy-fingerprint: sha256:57b606ac5326679442a76aa837e28b90cd2f130c72a6e8d8e4064eca6b798f0f
+    openbao.org/admission-policy-fingerprint: sha256:adaa05dbbddde9dded957721499e49337a1eb2ed5a7c682a1340354e27730d8d
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -29,6 +29,10 @@ spec:
       expression: >-
         has(object.spec.configuration) && has(object.spec.configuration.listener) &&
         has(object.spec.configuration.listener.tlsKeyExchangePreferences)
+    - name: has_azure_key_vault_auth_method
+      expression: >-
+        has(object.spec.unseal) && has(object.spec.unseal.azureKeyVault) &&
+        has(object.spec.unseal.azureKeyVault.authMethod)
     - name: has_backup
       expression: has(object.spec.backup)
     - name: backup_target_provider
@@ -211,6 +215,21 @@ spec:
          (variables.current_version_parts[0] > 2 ||
           (variables.current_version_parts[0] == 2 && variables.current_version_parts[1] > 7) ||
           (variables.current_version_parts[0] == 2 && variables.current_version_parts[1] == 7 &&
+           (variables.current_version_parts[2] > 0 || variables.current_version_prerelease == ""))))
+    - name: azure_key_vault_auth_method_version_supported
+      expression: >-
+        variables.spec_version_valid &&
+        (variables.spec_version_parts[0] > 2 ||
+         (variables.spec_version_parts[0] == 2 && variables.spec_version_parts[1] > 6) ||
+         (variables.spec_version_parts[0] == 2 && variables.spec_version_parts[1] == 6 &&
+          (variables.spec_version_parts[2] > 0 || variables.spec_version_prerelease == "")))
+    - name: azure_key_vault_auth_method_current_version_supported
+      expression: >-
+        variables.current_version_normalized == "" ||
+        (variables.current_version_valid &&
+         (variables.current_version_parts[0] > 2 ||
+          (variables.current_version_parts[0] == 2 && variables.current_version_parts[1] > 6) ||
+          (variables.current_version_parts[0] == 2 && variables.current_version_parts[1] == 6 &&
            (variables.current_version_parts[2] > 0 || variables.current_version_prerelease == ""))))
     - name: rolling_target_version_normalized
       expression: >-
@@ -667,6 +686,12 @@ spec:
     - expression: >-
         !variables.has_listener_key_exchange || variables.listener_key_exchange_current_version_supported
       message: "Complete the OpenBao >= 2.7.0 upgrade before configuring spec.configuration.listener.tlsKeyExchangePreferences."
+    - expression: >-
+        !variables.has_azure_key_vault_auth_method || variables.azure_key_vault_auth_method_version_supported
+      message: "spec.unseal.azureKeyVault.authMethod requires OpenBao >= 2.6.0; earlier versions ignore it and select managed identity when a client ID is set."
+    - expression: >-
+        !variables.has_azure_key_vault_auth_method || variables.azure_key_vault_auth_method_current_version_supported
+      message: "Complete the OpenBao >= 2.6.0 upgrade before configuring spec.unseal.azureKeyVault.authMethod."
     - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||

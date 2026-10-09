@@ -113,6 +113,9 @@ managed identity whenever a client ID is present, either from `clientID` or from
 workload identity webhook injects, and waits on the instance metadata service instead of exchanging the projected
 ServiceAccount token.
 
+`authMethod` requires OpenBao 2.6.0 or newer for the built-in Azure Key Vault seal; earlier versions ignore it. The
+operator rejects it for older `spec.version` values, and during an upgrade until the running version is 2.6.0 or newer.
+
 {{< command label="configure" title="Use Azure Key Vault with workload identity" >}}
 spec:
   serviceAccount:

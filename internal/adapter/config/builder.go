@@ -250,6 +250,9 @@ func validateConfigVersionCompatibility(cluster *openbaov1alpha1.OpenBaoCluster)
 	if err := validateListenerTLSPolicy(cluster); err != nil {
 		return err
 	}
+	if err := validateAzureKeyVaultAuthMethod(cluster); err != nil {
+		return err
+	}
 
 	if cluster.Spec.Configuration == nil || cluster.Spec.Configuration.Plugin == nil {
 		return nil
