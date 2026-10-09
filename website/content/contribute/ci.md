@@ -16,6 +16,12 @@ verifiedBy:
 
 Pull-request CI routes checks by changed path and risk. Nightly and release workflows broaden compatibility, lifecycle, provenance, and reproducibility coverage.
 
+Docker-based jobs in `ci.yml` configure the runner's Docker daemon and the E2E image builder to use
+[Google's public Docker Hub cache](https://docs.cloud.google.com/artifact-registry/docs/pull-cached-dockerhub-images).
+Image references and digest pins stay unchanged. A cache miss falls back to Docker Hub and can still reach its
+anonymous pull limit. The setup action restarts Docker, so run it before creating containers or Buildx builders.
+This runner configuration does not configure registry mirrors inside Kind nodes.
+
 {{< command label="verify" title="Run the local pull-request baseline" >}}
 devenv test
 devenv tasks run operator:bootstrap

@@ -1,0 +1,29 @@
+name: Configure Docker Hub cache
+description: Use Google's public Docker Hub cache on a fresh Ubuntu runner before starting containers or Buildx builders.
+
+runs:
+  using: composite
+  steps:
+    - name: Configure the Docker daemon registry mirror
+      shell: bash
+      run: |
+        set -euo pipefail
+        config="$(mktemp)"
+        trap 'rm -f "${config}"' EXIT
+
+        if sudo test -f /etc/docker/daemon.json; then
+          daemon_config="$(sudo cat /etc/docker/daemon.json)"
+        else
+          daemon_config='{}'
+        fi
+
+        # Preserve runner settings and existing mirrors. Cache misses fall back to Docker Hub.
+        jq '."registry-mirrors" |=
+          (["https://mirror.gcr.io"] + ((. // []) |
+          map(select(. != "https://mirror.gcr.io" and . != "https://mirror.gcr.io/"))))' \
+          <<< "${daemon_config}" > "${config}"
+        sudo dockerd --validate --config-file "${config}"
+        sudo install -D -m 0644 "${config}" /etc/docker/daemon.json
+        sudo systemctl restart docker
+        docker info --format '{{json .RegistryConfig.Mirrors}}' |
+          jq -e 'any(.[]; . == "https://mirror.gcr.io/" or . == "https://mirror.gcr.io")'
