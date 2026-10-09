@@ -110,6 +110,12 @@ spec:
       expression: >-
         request.userInfo.username == "system:kube-scheduler" ||
         request.userInfo.username == "system:serviceaccount:kube-system:kube-scheduler"
+    # Azure Kubernetes Service runs its managed control plane, including the
+    # scheduler and the volume controllers, as the user "aksService". Only the
+    # narrowly scoped PVC binding update below accepts it.
+    - name: is_aks_control_plane
+      expression: >-
+        request.userInfo.username == "aksService"
     - name: is_storage_provisioner_serviceaccount
       expression: >-
         request.userInfo.username.matches("^system:serviceaccount:[^:]+:.*(csi|provisioner).*$")
@@ -346,6 +352,7 @@ spec:
         variables.is_pvc_request &&
         request.operation == "UPDATE" &&
         (variables.is_kube_scheduler ||
+          variables.is_aks_control_plane ||
           variables.is_kube_controller_manager ||
           variables.is_persistent_volume_binder ||
           variables.is_pvc_protection_controller ||
