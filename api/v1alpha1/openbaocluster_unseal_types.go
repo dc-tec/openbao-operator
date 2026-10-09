@@ -133,6 +133,15 @@ type AzureKeyVaultSealConfig struct {
 	// Environment is the Azure environment (e.g., "AzurePublicCloud", "AzureUSGovernmentCloud").
 	// +optional
 	Environment string `json:"environment,omitempty"`
+
+	// AuthMethod selects how the seal authenticates to Azure, rendered as the
+	// seal's auth_method. When empty, OpenBao chooses: a client ID without a
+	// client secret selects managed_identity, which uses the instance metadata
+	// service. Set workload_identity for Azure Workload Identity, where the
+	// workload identity webhook also injects AZURE_CLIENT_ID.
+	// +kubebuilder:validation:Enum=workload_identity;managed_identity;client_secret;environment;default
+	// +optional
+	AuthMethod string `json:"authMethod,omitempty"`
 }
 
 // GCPCloudKMSSealConfig configures the GCP Cloud KMS seal type.

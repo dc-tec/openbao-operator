@@ -470,6 +470,20 @@ spec:
                           AzureKeyVault configures the Azure Key Vault seal type.
                           Required when Type is "azurekeyvault".
                         properties:
+                          authMethod:
+                            description: |-
+                              AuthMethod selects how the seal authenticates to Azure, rendered as the
+                              seal's auth_method. When empty, OpenBao chooses: a client ID without a
+                              client secret selects managed_identity, which uses the instance metadata
+                              service. Set workload_identity for Azure Workload Identity, where the
+                              workload identity webhook also injects AZURE_CLIENT_ID.
+                            enum:
+                            - workload_identity
+                            - managed_identity
+                            - client_secret
+                            - environment
+                            - default
+                            type: string
                           clientID:
                             description: ClientID is the Azure client ID.
                             type: string

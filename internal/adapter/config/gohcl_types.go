@@ -192,6 +192,7 @@ type hclSealAzureKeyVault struct {
 	ClientSecret *string `hcl:"client_secret"`
 	Resource     *string `hcl:"resource"`
 	Environment  *string `hcl:"environment"`
+	AuthMethod   *string `hcl:"auth_method"`
 }
 
 type hclSealGCPCloudKMS struct {
