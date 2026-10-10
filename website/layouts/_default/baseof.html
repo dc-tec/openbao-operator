@@ -9,7 +9,7 @@
     {{ if eq site.Version.Name "next" }}<meta name="robots" content="noindex,follow">{{ end }}
     <title>{{ if not .IsHome }}{{ .Title }} · {{ end }}{{ if not site.Version.IsDefault }}{{ (index hugo.Data.version_lines site.Version.Name).label }} · {{ end }}{{ site.Title }}</title>
     <link rel="canonical" href="{{ .Permalink }}">
-    <link rel="icon" type="image/png" href="{{ "img/brand/favicon.png" | relURL }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ "img/brand/kubebao-github-avatar.png" | relURL }}">
     {{ $styles := resources.Get "css/site.css" | minify | fingerprint }}
     <link rel="stylesheet" href="{{ $styles.RelPermalink }}" integrity="{{ $styles.Data.Integrity }}">
     {{ $script := resources.Get "js/site.js" | minify | fingerprint }}

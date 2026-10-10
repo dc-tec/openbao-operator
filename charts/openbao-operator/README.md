@@ -1,6 +1,9 @@
 # OpenBao Operator Helm Chart
 
-![OpenBao Operator logo](https://raw.githubusercontent.com/kubebao/openbao-operator/main/website/static/img/brand/logo.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kubebao/openbao-operator/main/website/static/img/brand/kubebao-logo-dark.png" />
+  <img src="https://raw.githubusercontent.com/kubebao/openbao-operator/main/website/static/img/brand/kubebao-logo.png" alt="KubeBao" width="240" height="240" />
+</picture>
 
 This chart installs the OpenBao Operator and its cluster-scoped dependencies.
 

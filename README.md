@@ -1,7 +1,9 @@
 <div align="center">
 
-<img src="website/static/img/brand/logo.svg" alt="OpenBao Operator" width="520" />
-
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/static/img/brand/kubebao-logo-dark.png" />
+  <img src="website/static/img/brand/kubebao-logo.png" alt="KubeBao" width="320" height="320" />
+</picture>
 
 **Secure lifecycle management for OpenBao on Kubernetes.**
 
