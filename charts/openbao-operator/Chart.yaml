@@ -7,7 +7,7 @@ type: application
 version: 0.5.1
 appVersion: 0.5.1
 icon: >-
-  https://raw.githubusercontent.com/kubebao/openbao-operator/main/website/static/img/brand/logo.svg
+  https://raw.githubusercontent.com/kubebao/openbao-operator/main/website/static/img/brand/kubebao-github-avatar.png
 home: https://github.com/kubebao/openbao-operator
 sources:
   - https://github.com/kubebao/openbao-operator
