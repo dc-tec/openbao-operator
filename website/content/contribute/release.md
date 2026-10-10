@@ -186,6 +186,10 @@ For manual workflow runs, select `current` as the publisher for releases publish
 
 For local verification of a historical release, keep `REPO=kubebao/openbao-operator` and set `PUBLISHER_REPO=dc-tec/openbao-operator`. Set `EXPECTED_CHART_FILE` to the `charts/openbao-operator/Chart.yaml` extracted from that release's tag. The verifier reads tags, release assets, and PRs from `REPO`, but checks signatures, attestations, image paths, and chart paths against `PUBLISHER_REPO`. It records both repositories in the verification evidence and rejects provenance from a different publisher.
 
+The verifier retrieves image and chart attestations from their OCI registries and checksum provenance from the published `checksums.intoto.jsonl` asset. This avoids repository-scoped attestation lookup after a repository transfer. Each verification still requires the selected publisher, signer workflow, source ref, artifact digest, GitHub OIDC issuer, and GitHub-hosted runner.
+
+Release-please cleanup checks still apply to the current repository. An open release PR prevents an overall pass even when historical artifact verification succeeds.
+
 Use the provenance index to select digest-pinned subjects for additional checks:
 
 {{< command label="verify" title="Verify release identity and subjects" >}}
@@ -206,6 +210,7 @@ cosign verify \
 
 gh attestation verify \
   "oci://ghcr.io/kubebao/charts/openbao-operator@sha256:<digest>" \
+  --bundle-from-oci \
   --repo kubebao/openbao-operator \
   --signer-workflow kubebao/openbao-operator/.github/workflows/release.yml \
   --source-ref refs/tags/X.Y.Z \
